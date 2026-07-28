@@ -9,12 +9,12 @@ import com.payflow.repository.TransactionRepository;
 @Service
 public class TransactionService {
 
-    // Spring creates the TransactionRepository bean and injects it during
-    // application startup.
-    @Autowired
-    private TransactionRepository transactionRepository;
+	// Spring creates the TransactionRepository bean and injects it during
+	// application startup.
+	@Autowired
+	private TransactionRepository transactionRepository;
 
-    public Transaction sendMoney(Transaction transaction) {
-        return transactionRepository.save(transaction);
-    }
+	public Transaction sendMoney(Transaction transaction) {
+		return transactionRepository.save(transaction);
+	}
 }

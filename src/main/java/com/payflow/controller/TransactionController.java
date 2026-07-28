@@ -13,11 +13,11 @@ import com.payflow.service.TransactionService;
 @RequestMapping("/transactions")
 public class TransactionController {
 
-    @Autowired
-    private TransactionService transactionService;
+	@Autowired
+	private TransactionService transactionService;
 
-    @PostMapping
-    public Transaction sendMoney(@RequestBody Transaction transaction) {
-        return transactionService.sendMoney(transaction);
-    }
+	@PostMapping
+	public Transaction sendMoney(@RequestBody Transaction transaction) {
+		return transactionService.sendMoney(transaction);
+	}
 }
