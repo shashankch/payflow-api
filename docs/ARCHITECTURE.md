@@ -75,6 +75,15 @@ When transaction logic spans distributed systems (such as reserve balance operat
 - **Use Case**: Locking a payment request before database transactions begin, preventing thundering herds and duplicate submission processing at the gateway container boundaries.
 - **Failover**: Configured with a short lease time (TTL) to prevent permanent resource locking if a pod node crashes during transaction execution.
 
+### C. Append-Only Ledger Immutability
+All transaction entries are treated as immutable, append-only logs. Once a transaction is successfully written, it is never modified or deleted. Any adjustments, reversals, or refunds are executed by writing a *new* transaction entry of type `REFUND`, preserving the complete historical audit trail.
+
+### D. Database Indexing Strategy
+To ensure high database read throughput and statement generation speed, the following index constraints are established in migrations:
+- `CREATE INDEX idx_tx_sender_created ON transactions(sender_upi_id, created_at DESC);`
+- `CREATE INDEX idx_tx_receiver_created ON transactions(receiver_upi_id, created_at DESC);`
+These composite indexes optimize transaction statement history pages and eliminate expensive full-table scans.
+
 ---
 
 ## 4. JPA N+1 Query Resolution
@@ -185,17 +194,19 @@ To support smart financial features, the project includes an **AI spend assistan
 
 ---
 
-## 9. Resilience Policies
+## 9. Resilience Policies & Thread Tuning
 
 System stability under load is enforced using **Resilience4j** configurations:
 
 * **Rate Limiting**: Enforced at the controller layer via a Redis-backed Token Bucket algorithm. Limits mutations to prevent denial-of-service attempts.
-* **Connection & Read Timeouts**: Explicit timeouts configured on the HTTP clients and database connections to prevent thread pool depletion:
-  ```properties
-  spring.datasource.hikari.connection-timeout=5000 # 5 seconds max connection wait
-  spring.datasource.hikari.maximum-pool-size=20     # Sized relative to virtual threads
-  ```
+* **Connection & Read Timeouts**: Explicit timeouts configured on the HTTP clients and database connections to prevent thread pool depletion.
 * **Retries & Backoff**: Outbound requests (e.g. to third-party banking processors) are wrapped in Resilience4j Retry policies using **exponential backoff with random jitter** to prevent thundering herd requests on recovering downstream hosts.
+* **Virtual Threads Integration (Project Loom)**:
+  Java 25 virtual threads are enabled to handle high request-response volumes:
+  ```properties
+  spring.threads.virtual.enabled=true
+  ```
+  Since virtual threads do not block OS kernel threads, throughput scales efficiently. However, to prevent database pool exhaustion, HikariCP's maximum pool size must be explicitly configured and aligned with Postgres threshold capabilities (e.g., `maximum-pool-size=20`).
 
 ---
 
@@ -218,3 +229,40 @@ The application complies with cloud-native deployment requirements when running 
 
 * **Log Correlation (MDC)**: The logger is configured with a standard pattern using Spring Boot's Mapped Diagnostic Context (MDC). Every log line includes `traceId`, `spanId`, and `userId` context, enabling automated log correlation in tracing systems.
 * **Prometheus Metrics**: Actuator exposes metrics under `/actuator/prometheus`, providing telemetry on transaction volumes, payment failures, JVM garbage collection, and database connection pool saturation.
+
+---
+
+## 12. Testing Strategy (Rigor, Concurrency & Unit Verification)
+
+To ensure maximum code coverage and high system reliability, the project defines a two-tier testing strategy consisting of isolated unit tests and full-stack integration tests.
+
+### A. Isolated Unit Testing Strategy
+Unit tests focus on isolating individual components and verifying business logic without booting the database or messaging middleware:
+
+1. **Controller Layer (MockMVC)**:
+   - Evaluates HTTP serialization, URL routing, request DTO validation constraints (e.g. invalid UPI patterns, blank fields), and custom error mapping to RFC 7807 payloads.
+   - Tested using Spring's `@WebMvcTest` paired with `@MockBean` (or `@MockitoBean` in newer Spring Boot releases) to stub the service layers, ensuring lightning-fast execution.
+2. **Service Layer (Mockito)**:
+   - Validates business rules, balance invariant checking, and custom exceptions throwing (e.g., `UserNotFoundException` or `InsufficientBalanceException`).
+   - Uses Mockito annotations (`@ExtendWith(MockitoExtension.class)`) to isolate business service operations from Spring lifecycle overhead.
+3. **Repository Layer (DataJpaTest)**:
+   - Confirms that custom derived queries or complex JPQL Fetch Joins compile and execute successfully.
+   - Executed via `@DataJpaTest` running against an embedded H2 database instance.
+4. **Mocking External Services**:
+   - Outbound REST endpoints, the AI model assistant API, and Kafka brokers are mocked or stubbed during unit verification to prevent flaky test execution and external network dependence.
+
+### B. Advanced Integration Testing (Rigor & Concurrency Verification)
+Integration tests verify the full lifecycle of a transaction across actual container dependencies using **Testcontainers** to orchestrate PostgreSQL and Kafka instances during Maven build phases:
+
+1. **Concurrent Race Condition Testing**:
+   - To verify pessimistic row lock deadlocks and double-spend safety under high traffic contention:
+     - Initialize an `ExecutorService` with a thread pool (size: 10) and a `CountDownLatch` set to 10.
+     - Fire 10 concurrent threads at the same millisecond to withdraw $100 from a sender account holding $150.
+     - **Assertion**: Only 1 transaction commits successfully, 9 threads fail with validation or locking errors, and the final account balance is exactly $50.
+2. **Idempotency Key Lock Contention Testing**:
+   - To verify that gateway-level locks block dual-processing on duplicate submissions:
+     - Spin up two concurrent threads executing a transaction using the same `Idempotency-Key` and request payload.
+     - **Assertion**: Thread 1 succeeds; Thread 2 is immediately rejected with a `409 Conflict` (custom `IdempotentRequestProcessingException`) without starting any database transaction, proving the gateway Redis lock isolated the duplicate execution path.
+3. **Asynchronous Outbox Publisher Testing**:
+   - Confirms the outbox poller successfully dispatches records to Kafka.
+   - **Assertion**: Write an outbox record, wait for the scheduled poller execution, read the event from the Testcontainers Kafka consumer, and verify the message matches the expected transaction schema.

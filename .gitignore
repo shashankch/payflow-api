@@ -34,3 +34,6 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Internal docs (not committed) ###
+internal/

@@ -11,59 +11,59 @@ import jakarta.persistence.Table;
 @Table(name = "users")
 public class User {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long userId;
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long userId;
 
-    private String name;
+	private String name;
 
-    @Column(unique = true)
-    private String upiId;
+	@Column(unique = true)
+	private String upiId;
 
-    private Double balance;
+	private Double balance;
 
-    private String phoneNumber;
+	private String phoneNumber;
 
-    public User() {
-    }
+	public User() {
+	}
 
-    public Long getUserId() {
-        return userId;
-    }
+	public Long getUserId() {
+		return userId;
+	}
 
-    public void setUserId(Long userId) {
-        this.userId = userId;
-    }
+	public void setUserId(Long userId) {
+		this.userId = userId;
+	}
 
-    public String getName() {
-        return name;
-    }
+	public String getName() {
+		return name;
+	}
 
-    public void setName(String name) {
-        this.name = name;
-    }
+	public void setName(String name) {
+		this.name = name;
+	}
 
-    public String getUpiId() {
-        return upiId;
-    }
+	public String getUpiId() {
+		return upiId;
+	}
 
-    public void setUpiId(String upiId) {
-        this.upiId = upiId;
-    }
+	public void setUpiId(String upiId) {
+		this.upiId = upiId;
+	}
 
-    public Double getBalance() {
-        return balance;
-    }
+	public Double getBalance() {
+		return balance;
+	}
 
-    public void setBalance(Double balance) {
-        this.balance = balance;
-    }
+	public void setBalance(Double balance) {
+		this.balance = balance;
+	}
 
-    public String getPhoneNumber() {
-        return phoneNumber;
-    }
+	public String getPhoneNumber() {
+		return phoneNumber;
+	}
 
-    public void setPhoneNumber(String phoneNumber) {
-        this.phoneNumber = phoneNumber;
-    }
+	public void setPhoneNumber(String phoneNumber) {
+		this.phoneNumber = phoneNumber;
+	}
 }
