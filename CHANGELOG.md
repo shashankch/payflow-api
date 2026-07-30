@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Repository contribution guidelines and branch protection rules (`CONTRIBUTING.md`).
 - GitHub status badges in `README.md`.
 
+### Fixed
+- Dockerfile JDK version mismatch: `eclipse-temurin:21-jre` → `eclipse-temurin:25-jre` to align with project's `java.version`.
+- Broken GraalVM native profile in `pom.xml`: removed invalid dependency declaration with undefined property reference.
+- Removed `System.out.println` debug statement from `UserController`.
+- README updated to accurately reflect current project status.
+
 ---
 
 ## [0.1.0] - 2026-07-27

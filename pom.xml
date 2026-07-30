@@ -139,14 +139,6 @@
                 <repackage.classifier>exec</repackage.classifier>
                 <skipTests>true</skipTests>
             </properties>
-            <dependencies>
-                <dependency>
-                    <groupId>org.graalvm.buildtools</groupId>
-                    <artifactId>native-maven-plugin</artifactId>
-                    <version>${graalvm-native-maven-plugin.version}</version>
-                    <scope>provided</scope>
-                </dependency>
-            </dependencies>
             <build>
                 <plugins>
                     <plugin>
