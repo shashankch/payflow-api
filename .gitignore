@@ -37,3 +37,4 @@ build/
 
 ### Internal docs (not committed) ###
 internal/
+internal/*

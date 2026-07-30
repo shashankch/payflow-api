@@ -23,7 +23,6 @@ public class UserController {
 
 	@PostMapping
 	public User registerUser(@RequestBody User user) {
-		System.out.println("User object with @RequestBody: " + user.getName());
 		return userService.registerUser(user);
 	}
 
