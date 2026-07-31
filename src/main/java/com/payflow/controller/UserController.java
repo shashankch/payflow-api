@@ -1,9 +1,9 @@
 package com.payflow.controller;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,8 +18,11 @@ import com.payflow.service.UserService;
 @RequestMapping("/users")
 public class UserController {
 
-	@Autowired
-	private UserService userService;
+	private final UserService userService;
+
+	public UserController(UserService userService) {
+		this.userService = userService;
+	}
 
 	@PostMapping
 	public User registerUser(@RequestBody User user) {
@@ -42,7 +45,7 @@ public class UserController {
 	}
 
 	@GetMapping("/balance/{amount}")
-	public List<User> getUsersWithBalanceAbove(@PathVariable Double amount) {
+	public List<User> getUsersWithBalanceAbove(@PathVariable BigDecimal amount) {
 		return userService.getUsersWithBalanceAbove(amount);
 	}
 }
