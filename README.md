@@ -20,14 +20,18 @@ The project is evolving through a phased implementation roadmap. See the full pl
 |-------|-------------|--------|
 | **Phase 0** | Baseline REST API — User & Transaction CRUD with H2 in-memory storage | ✅ Complete |
 | **Phase 1** | Project hygiene — Spotless, Checkstyle, GitHub Actions CI | ✅ Complete |
-| **Phase 2** | Domain model hardening, DTO layer, validation, error handling | ⬜ Not Started |
-| **Phase 3+** | Concurrency control, Flyway, security, observability, and more | ⬜ Not Started |
+| **Phase 2A** | Domain model hardening — `BigDecimal` financials, rich domain methods, audit timestamps | ✅ Complete |
+| **Phase 2B+** | DTO layer, validation, error handling, concurrency control, security, observability | 🔄 In Progress |
 
 ---
 
 ## Implemented Features
 
-- **REST API**: Basic CRUD endpoints for User registration and Transaction creation.
+- **Rich Domain Model**: Entities encapsulate domain invariants (`User.debit()`, `User.credit()`) and balance validation.
+- **Financial Precision**: All monetary values mapped using `BigDecimal` (`precision = 19, scale = 4`) to prevent floating-point rounding errors.
+- **Entity Hardening**: Audit timestamps (`createdAt`, `updatedAt`), optimistic locking (`@Version`), JPA `@ManyToOne` foreign key constraints, UUID reference IDs, and transaction status/type enums.
+- **Constructor Injection**: Enforced across all service and controller components for immutability and testability.
+- **REST API**: CRUD endpoints for User registration and Transaction creation.
 - **Layered Architecture**: Controller → Service → Repository pattern with Spring Data JPA.
 - **In-Memory Database**: H2 with auto-generated schema for zero-dependency local development.
 - **Code Quality**: Spotless (Eclipse formatter) + Checkstyle enforced at Maven `validate` phase.

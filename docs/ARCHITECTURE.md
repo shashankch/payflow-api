@@ -266,3 +266,24 @@ Integration tests verify the full lifecycle of a transaction across actual conta
 3. **Asynchronous Outbox Publisher Testing**:
    - Confirms the outbox poller successfully dispatches records to Kafka.
    - **Assertion**: Write an outbox record, wait for the scheduled poller execution, read the event from the Testcontainers Kafka consumer, and verify the message matches the expected transaction schema.
+
+---
+
+## 13. Entity Model & Rich Domain Architecture
+
+To establish robust domain boundaries and prevent corrupt data state, the entity layer adheres to Rich Domain Model principles and precise database constraints:
+
+### A. Financial Precision (`BigDecimal`)
+All monetary columns (`balance`, `amount`) are represented using `BigDecimal` mapped to database column definition `@Column(precision = 19, scale = 4, nullable = false)`. Floating-point binary arithmetic primitives (`double`, `float`) are prohibited to eliminate representation error accumulation.
+
+### B. Rich Domain Invariants
+Entities encapsulate their own business invariants and state transitions:
+- **`User.debit(BigDecimal amount)`**: Enforces positive debit amounts and verifies balance adequacy (`balance >= amount`). Throws `IllegalStateException` or domain exceptions if invariants fail.
+- **`User.credit(BigDecimal amount)`**: Enforces positive credit amounts and updates account balance atomically in-memory.
+
+### C. Auditability & Optimistic Locking
+- **Audit Timestamps**: `@CreationTimestamp Instant createdAt` and `@UpdateTimestamp Instant updatedAt` automatically track record creation and updates.
+- **Optimistic Locking**: `@Version Long version` enables Hibernate to prevent lost updates during concurrent non-locking state updates.
+
+### D. Relational Foreign Key Integrity
+The `Transaction` entity maintains explicit JPA `@ManyToOne(fetch = FetchType.LAZY)` foreign key relationships to `User` for `sender` and `receiver`, while retaining denormalized `senderUpiId` and `receiverUpiId` fields for index-optimized queries.

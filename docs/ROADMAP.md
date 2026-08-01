@@ -29,9 +29,9 @@ Dockerfile JDK alignment, GraalVM profile fix, README cleanup.
 
 ---
 
-## Phase 2 — Domain Model & API Hardening ⬜
+## Phase 2 — Domain Model & API Hardening 🔄
 
-### 2A — Entity Model & Rich Domain ⬜
+### 2A — Entity Model & Rich Domain ✅
 `BigDecimal` financials, `@Column` constraints, JPA FK relationships, audit timestamps, status/type enums, rich domain methods (`debit`/`credit`), constructor injection.
 
 ### 2B — DTO Layer & Validation ⬜

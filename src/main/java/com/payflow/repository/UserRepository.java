@@ -1,5 +1,6 @@
 package com.payflow.repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -16,5 +17,5 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
 	// JPQL query to find users with balance greater than a specified amount
 	@Query("SELECT u FROM User u WHERE u.balance > :amount")
-	List<User> findUsersWithBalanceGreaterThan(@Param("amount") Double amount);
+	List<User> findUsersWithBalanceGreaterThan(@Param("amount") BigDecimal amount);
 }
