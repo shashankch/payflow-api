@@ -34,7 +34,7 @@ Dockerfile JDK alignment, GraalVM profile fix, README cleanup.
 ### 2A — Entity Model & Rich Domain ✅
 `BigDecimal` financials, `@Column` constraints, JPA FK relationships, audit timestamps, status/type enums, rich domain methods (`debit`/`credit`), constructor injection.
 
-### 2B — DTO Layer & Validation ⬜
+### 2B — DTO Layer & Validation ✅
 Request/response DTOs, Jakarta validation, `/api/v1/` versioning, pagination with max limits.
 
 ### 2C — Mappers & API Docs ⬜
