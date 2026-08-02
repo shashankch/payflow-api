@@ -3,7 +3,7 @@
 <p align="left">
   <a href="https://github.com/shashankch/payflow-api/actions/workflows/ci.yml"><img src="https://github.com/shashankch/payflow-api/actions/workflows/ci.yml/badge.svg" alt="Build"></a>
   <a href="https://dev.java/"><img src="https://img.shields.io/badge/Java-25-ED8B00?logo=openjdk&logoColor=white" alt="Java 25"></a>
-  <a href="https://spring.io/projects/spring-boot"><img src="https://img.shields.io/badge/Spring%20Boot-4.0.6-6DB33F?logo=springboot&logoColor=white" alt="Spring Boot"></a>
+  <a href="https://spring.io/projects/spring-boot"><img src="https://img.shields.io/badge/Spring%20Boot-4.1.0-6DB33F?logo=springboot&logoColor=white" alt="Spring Boot"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"></a>
 </p>
@@ -21,17 +21,20 @@ The project is evolving through a phased implementation roadmap. See the full pl
 | **Phase 0** | Baseline REST API — User & Transaction CRUD with H2 in-memory storage | ✅ Complete |
 | **Phase 1** | Project hygiene — Spotless, Checkstyle, GitHub Actions CI | ✅ Complete |
 | **Phase 2A** | Domain model hardening — `BigDecimal` financials, rich domain methods, audit timestamps | ✅ Complete |
-| **Phase 2B+** | DTO layer, validation, error handling, concurrency control, security, observability | 🔄 In Progress |
+| **Phase 2B** | DTO layer, Jakarta validation, URI versioning (`/api/v1/`), response records | ✅ Complete |
+| **Phase 2C+** | Custom exception handling, RFC 7807 problem details, optimistic locking, security, observability | 🔄 In Progress |
 
 ---
 
 ## Implemented Features
 
+- **DTO Isolation & API Versioning**: `/api/v1/` URI paths using Java records (`UserResponse`, `TransactionResponse`, `PagedResponse`) and validated request DTOs (`CreateUserRequest`, `TransferMoneyRequest`).
+- **Input Validation**: Enforced via Jakarta Validation (`@Valid`, `@NotBlank`, `@Pattern`, `@DecimalMin`, `@Size`, `@Min`, `@Max`).
 - **Rich Domain Model**: Entities encapsulate domain invariants (`User.debit()`, `User.credit()`) and balance validation.
 - **Financial Precision**: All monetary values mapped using `BigDecimal` (`precision = 19, scale = 4`) to prevent floating-point rounding errors.
 - **Entity Hardening**: Audit timestamps (`createdAt`, `updatedAt`), optimistic locking (`@Version`), JPA `@ManyToOne` foreign key constraints, UUID reference IDs, and transaction status/type enums.
 - **Constructor Injection**: Enforced across all service and controller components for immutability and testability.
-- **REST API**: CRUD endpoints for User registration and Transaction creation.
+- **REST API**: CRUD endpoints under `/api/v1/users` and `/api/v1/transactions`.
 - **Layered Architecture**: Controller → Service → Repository pattern with Spring Data JPA.
 - **In-Memory Database**: H2 with auto-generated schema for zero-dependency local development.
 - **Code Quality**: Spotless (Eclipse formatter) + Checkstyle enforced at Maven `validate` phase.

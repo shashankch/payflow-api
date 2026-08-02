@@ -13,19 +13,9 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 @Entity
 @Table(name = "users")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
 public class User {
 
 	@Id
@@ -55,6 +45,85 @@ public class User {
 	@Column(nullable = false)
 	private Instant updatedAt;
 
+	public User() {
+	}
+
+	public User(Long userId, String name, String upiId, BigDecimal balance, String phoneNumber, Long version,
+			Instant createdAt, Instant updatedAt) {
+		this.userId = userId;
+		this.name = name;
+		this.upiId = upiId;
+		this.balance = balance;
+		this.phoneNumber = phoneNumber;
+		this.version = version;
+		this.createdAt = createdAt;
+		this.updatedAt = updatedAt;
+	}
+
+	public Long getUserId() {
+		return userId;
+	}
+
+	public void setUserId(Long userId) {
+		this.userId = userId;
+	}
+
+	public String getName() {
+		return name;
+	}
+
+	public void setName(String name) {
+		this.name = name;
+	}
+
+	public String getUpiId() {
+		return upiId;
+	}
+
+	public void setUpiId(String upiId) {
+		this.upiId = upiId;
+	}
+
+	public BigDecimal getBalance() {
+		return balance;
+	}
+
+	public void setBalance(BigDecimal balance) {
+		this.balance = balance;
+	}
+
+	public String getPhoneNumber() {
+		return phoneNumber;
+	}
+
+	public void setPhoneNumber(String phoneNumber) {
+		this.phoneNumber = phoneNumber;
+	}
+
+	public Long getVersion() {
+		return version;
+	}
+
+	public void setVersion(Long version) {
+		this.version = version;
+	}
+
+	public Instant getCreatedAt() {
+		return createdAt;
+	}
+
+	public void setCreatedAt(Instant createdAt) {
+		this.createdAt = createdAt;
+	}
+
+	public Instant getUpdatedAt() {
+		return updatedAt;
+	}
+
+	public void setUpdatedAt(Instant updatedAt) {
+		this.updatedAt = updatedAt;
+	}
+
 	public void debit(BigDecimal amount) {
 		if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
 			throw new IllegalArgumentException("Debit amount must be positive");
@@ -73,5 +142,64 @@ public class User {
 			this.balance = BigDecimal.ZERO;
 		}
 		this.balance = this.balance.add(amount);
+	}
+
+	public static UserBuilder builder() {
+		return new UserBuilder();
+	}
+
+	public static class UserBuilder {
+		private Long userId;
+		private String name;
+		private String upiId;
+		private BigDecimal balance;
+		private String phoneNumber;
+		private Long version;
+		private Instant createdAt;
+		private Instant updatedAt;
+
+		public UserBuilder userId(Long userId) {
+			this.userId = userId;
+			return this;
+		}
+
+		public UserBuilder name(String name) {
+			this.name = name;
+			return this;
+		}
+
+		public UserBuilder upiId(String upiId) {
+			this.upiId = upiId;
+			return this;
+		}
+
+		public UserBuilder balance(BigDecimal balance) {
+			this.balance = balance;
+			return this;
+		}
+
+		public UserBuilder phoneNumber(String phoneNumber) {
+			this.phoneNumber = phoneNumber;
+			return this;
+		}
+
+		public UserBuilder version(Long version) {
+			this.version = version;
+			return this;
+		}
+
+		public UserBuilder createdAt(Instant createdAt) {
+			this.createdAt = createdAt;
+			return this;
+		}
+
+		public UserBuilder updatedAt(Instant updatedAt) {
+			this.updatedAt = updatedAt;
+			return this;
+		}
+
+		public User build() {
+			return new User(userId, name, upiId, balance, phoneNumber, version, createdAt, updatedAt);
+		}
 	}
 }

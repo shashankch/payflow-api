@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Phase 2B DTO Layer, Input Validation & API Versioning:
+  - Versioned REST controllers under `/api/v1/users` and `/api/v1/transactions`.
+  - Added `spring-boot-starter-validation` dependency for Jakarta Validation (`@Valid`, `@NotBlank`, `@Pattern`, `@DecimalMin`, `@Size`, `@Min`, `@Max`).
+  - Implemented request DTOs: `CreateUserRequest` and `TransferMoneyRequest` with strict validation rules.
+  - Implemented response DTO records: `UserResponse`, `TransactionResponse`, and generic `PagedResponse<T>` pagination wrapper.
+  - Added controller web slice tests (`UserControllerTest`, `TransactionControllerTest`) verifying HTTP status codes and input validation enforcement.
+  - Added `ADR-004` (URI-based API Versioning and DTO Isolation Layer) to `docs/ADR.md`.
 - Phase 2A Entity Model Hardening & Rich Domain:
   - Replaced `Double` primitives with `BigDecimal` (`precision = 19, scale = 4`) across `User` and `Transaction` entities.
   - Implemented Rich Domain methods (`User.debit()`, `User.credit()`) encapsulating balance invariants and state validation.
@@ -43,5 +50,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Basic User (`/users`) and Transaction (`/transactions`) REST endpoints.
 - Spring Data JPA entities (`User`, `Transaction`) and repositories.
 - In-memory H2 database persistence for local development builds.
-- Initial Spring Boot 4.0.6 project configuration with Java 25.
+- Initial Spring Boot 4.1.0 project configuration with Java 25.
 - System Architecture documentation (`docs/ARCHITECTURE.md`), API Specification (`docs/API_SPECIFICATION.md`), and Phased Roadmap (`docs/ROADMAP.md`).

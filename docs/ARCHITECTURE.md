@@ -241,7 +241,7 @@ Unit tests focus on isolating individual components and verifying business logic
 
 1. **Controller Layer (MockMVC)**:
    - Evaluates HTTP serialization, URL routing, request DTO validation constraints (e.g. invalid UPI patterns, blank fields), and custom error mapping to RFC 7807 payloads.
-   - Tested using Spring's `@WebMvcTest` paired with `@MockBean` (or `@MockitoBean` in newer Spring Boot releases) to stub the service layers, ensuring lightning-fast execution.
+   - Tested using Spring's `@WebMvcTest` paired with `@MockitoBean` (standard in Spring Boot 4.1.x) to stub the service layers, ensuring lightning-fast execution.
 2. **Service Layer (Mockito)**:
    - Validates business rules, balance invariant checking, and custom exceptions throwing (e.g., `UserNotFoundException` or `InsufficientBalanceException`).
    - Uses Mockito annotations (`@ExtendWith(MockitoExtension.class)`) to isolate business service operations from Spring lifecycle overhead.
