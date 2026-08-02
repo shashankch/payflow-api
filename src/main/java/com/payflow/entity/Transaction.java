@@ -38,10 +38,10 @@ public class Transaction {
 	@JoinColumn(name = "receiver_id")
 	private User receiver;
 
-	@Column(nullable = false, length = 30)
+	@Column(nullable = false, length = 100)
 	private String senderUpiId;
 
-	@Column(nullable = false, length = 30)
+	@Column(nullable = false, length = 100)
 	private String receiverUpiId;
 
 	@Column(precision = 19, scale = 4, nullable = false)

@@ -22,12 +22,15 @@ The project is evolving through a phased implementation roadmap. See the full pl
 | **Phase 1** | Project hygiene — Spotless, Checkstyle, GitHub Actions CI | ✅ Complete |
 | **Phase 2A** | Domain model hardening — `BigDecimal` financials, rich domain methods, audit timestamps | ✅ Complete |
 | **Phase 2B** | DTO layer, Jakarta validation, URI versioning (`/api/v1/`), response records | ✅ Complete |
-| **Phase 2C+** | Custom exception handling, RFC 7807 problem details, optimistic locking, security, observability | 🔄 In Progress |
+| **Phase 2C** | MapStruct compile-time DTO mappers, interactive OpenAPI/Swagger UI (`/swagger-ui.html`) | ✅ Complete |
+| **Phase 2D+** | Custom exception handling, RFC 7807 problem details, optimistic locking, security, observability | 🔄 In Progress |
 
 ---
 
 ## Implemented Features
 
+- **Interactive API Docs & Swagger UI**: Auto-generated live OpenAPI 3.0 specs via Springdoc at `http://localhost:8080/swagger-ui.html` and `/v3/api-docs`.
+- **MapStruct Compile-Time Mapping**: Zero-reflection type-safe DTO <-> Entity mappings generated during Maven build.
 - **DTO Isolation & API Versioning**: `/api/v1/` URI paths using Java records (`UserResponse`, `TransactionResponse`, `PagedResponse`) and validated request DTOs (`CreateUserRequest`, `TransferMoneyRequest`).
 - **Input Validation**: Enforced via Jakarta Validation (`@Valid`, `@NotBlank`, `@Pattern`, `@DecimalMin`, `@Size`, `@Min`, `@Max`).
 - **Rich Domain Model**: Entities encapsulate domain invariants (`User.debit()`, `User.credit()`) and balance validation.
@@ -93,6 +96,8 @@ mvn clean verify
 mvn spring-boot:run
 ```
 
+- **Swagger UI (Interactive API Docs)**: `http://localhost:8080/swagger-ui.html`
+- **OpenAPI 3.0 JSON Spec**: `http://localhost:8080/v3/api-docs`
 - **H2 Console**: `http://localhost:8080/h2-console`
   - JDBC URL: `jdbc:h2:mem:payupidb`
   - Credentials: `user` / `user`

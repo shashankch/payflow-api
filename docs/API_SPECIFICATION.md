@@ -15,6 +15,14 @@ This document details the REST API endpoints, request/response models, input val
 
 ---
 
+## Interactive OpenAPI & Swagger Documentation
+
+Payflow API auto-generates live, interactive OpenAPI 3.0 documentation using **Springdoc OpenAPI 3.0.3**:
+- **Swagger UI (Interactive Playground)**: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
+- **OpenAPI 3.0 JSON Specification**: [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs)
+
+---
+
 ## Global Error Response Model (RFC 7807)
 
 When an API error occurs (validation error, resource not found, conflict, etc.), the service returns a standardized error payload in compliance with RFC 7807 (Problem Details for HTTP APIs):
@@ -46,7 +54,7 @@ Registers a new client profile with an initial balance.
 - **Authentication**: None (Public Registration)
 - **Request Body DTO (`CreateUserRequest`)**:
   - `name`: String, required (`@NotBlank`), max 100 chars (`@Size(max = 100)`).
-  - `upiId`: String, required (`@NotBlank`), valid UPI format (`@Pattern(regexp = "^[a-zA-Z0-9.\\-_]{2,256}@[a-zA-Z]{2,64}$")`).
+  - `upiId`: String, required (`@NotBlank`), max 100 chars (`@Size(max = 100)`), valid UPI format (`@Pattern(regexp = "^[a-zA-Z0-9.\\-_]{2,64}@[a-zA-Z]{2,32}$")`).
   - `phoneNumber`: String, required (`@NotBlank`), exactly 10 digits (`@Pattern(regexp = "^\\d{10}$")`).
   - `balance`: BigDecimal, required (`@NotNull`), non-negative (`@DecimalMin("0.0")`).
 
@@ -168,8 +176,8 @@ Executes a fund transfer request.
 - **HTTP Method**: `POST`
 - **Path**: `/api/v1/transactions`
 - **Request Body DTO (`TransferMoneyRequest`)**:
-  - `senderUpiId`: String, required (`@NotBlank`), valid UPI format (`@Pattern(...)`).
-  - `receiverUpiId`: String, required (`@NotBlank`), valid UPI format (`@Pattern(...)`).
+  - `senderUpiId`: String, required (`@NotBlank`), max 100 chars (`@Size(max = 100)`), valid UPI format (`@Pattern(...)`).
+  - `receiverUpiId`: String, required (`@NotBlank`), max 100 chars (`@Size(max = 100)`), valid UPI format (`@Pattern(...)`).
   - `amount`: BigDecimal, required (`@NotNull`), minimum `0.01` (`@DecimalMin("0.01")`).
   - `note`: String, optional, max 255 characters (`@Size(max = 255)`).
 
