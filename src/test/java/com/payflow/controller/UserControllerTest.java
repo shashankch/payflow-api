@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Optional;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,7 +15,9 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import tools.jackson.databind.ObjectMapper;
 import com.payflow.dto.request.CreateUserRequest;
+import com.payflow.dto.response.UserResponse;
 import com.payflow.entity.User;
+import com.payflow.mapper.UserMapper;
 import com.payflow.service.UserService;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -36,6 +39,21 @@ class UserControllerTest {
 
 	@MockitoBean
 	private UserService userService;
+
+	@MockitoBean
+	private UserMapper userMapper;
+
+	@BeforeEach
+	void setUpMapperMock() {
+		given(userMapper.toResponse(any())).willAnswer(invocation -> {
+			User user = invocation.getArgument(0);
+			if (user == null) {
+				return null;
+			}
+			return new UserResponse(user.getUserId(), user.getName(), user.getUpiId(), user.getBalance(),
+					user.getPhoneNumber(), user.getCreatedAt(), user.getUpdatedAt());
+		});
+	}
 
 	@Test
 	@DisplayName("POST /api/v1/users — Should register user and return 201 Created")

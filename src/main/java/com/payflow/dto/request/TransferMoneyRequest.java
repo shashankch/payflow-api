@@ -11,11 +11,13 @@ import jakarta.validation.constraints.Size;
 public class TransferMoneyRequest {
 
 	@NotBlank(message = "Sender UPI ID cannot be blank")
-	@Pattern(regexp = "^[a-zA-Z0-9.\\-_]{2,256}@[a-zA-Z]{2,64}$", message = "Invalid sender UPI ID format")
+	@Size(max = 100, message = "Sender UPI ID must not exceed 100 characters")
+	@Pattern(regexp = "^[a-zA-Z0-9.\\-_]{2,64}@[a-zA-Z]{2,32}$", message = "Invalid sender UPI ID format")
 	private String senderUpiId;
 
 	@NotBlank(message = "Receiver UPI ID cannot be blank")
-	@Pattern(regexp = "^[a-zA-Z0-9.\\-_]{2,256}@[a-zA-Z]{2,64}$", message = "Invalid receiver UPI ID format")
+	@Size(max = 100, message = "Receiver UPI ID must not exceed 100 characters")
+	@Pattern(regexp = "^[a-zA-Z0-9.\\-_]{2,64}@[a-zA-Z]{2,32}$", message = "Invalid receiver UPI ID format")
 	private String receiverUpiId;
 
 	@NotNull(message = "Amount cannot be null")

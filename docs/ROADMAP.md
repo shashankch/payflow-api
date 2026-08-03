@@ -37,7 +37,7 @@ Dockerfile JDK alignment, GraalVM profile fix, README cleanup.
 ### 2B — DTO Layer & Validation ✅
 Request/response DTOs, Jakarta validation, `/api/v1/` versioning, pagination with max limits.
 
-### 2C — Mappers & API Docs ⬜
+### 2C — Mappers & API Docs ✅
 MapStruct compile-time mappers, OpenAPI/Swagger UI via `springdoc-openapi`.
 
 ### 2D — Error Handling ⬜

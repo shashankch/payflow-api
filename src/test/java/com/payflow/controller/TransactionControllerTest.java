@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,9 +15,11 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import tools.jackson.databind.ObjectMapper;
 import com.payflow.dto.request.TransferMoneyRequest;
+import com.payflow.dto.response.TransactionResponse;
 import com.payflow.entity.Transaction;
 import com.payflow.entity.TransactionStatus;
 import com.payflow.entity.TransactionType;
+import com.payflow.mapper.TransactionMapper;
 import com.payflow.service.TransactionService;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -38,34 +41,49 @@ class TransactionControllerTest {
 	@MockitoBean
 	private TransactionService transactionService;
 
+	@MockitoBean
+	private TransactionMapper transactionMapper;
+
+	@BeforeEach
+	void setUpMapperMock() {
+		given(transactionMapper.toResponse(any())).willAnswer(invocation -> {
+			Transaction tx = invocation.getArgument(0);
+			if (tx == null) {
+				return null;
+			}
+			return new TransactionResponse(tx.getTransactionId(), tx.getReferenceId(), tx.getSenderUpiId(),
+					tx.getReceiverUpiId(), tx.getAmount(), tx.getStatus(), tx.getType(), tx.getNote(),
+					tx.getCreatedAt());
+		});
+	}
+
 	@Test
 	@DisplayName("POST /api/v1/transactions — Should execute transfer and return 201 Created")
-	void shouldSendMoney_whenRequestIsValid() throws Exception {
+	void shouldExecuteTransfer_whenRequestIsValid() throws Exception {
 		TransferMoneyRequest request = TransferMoneyRequest.builder().senderUpiId("alice@upi").receiverUpiId("bob@upi")
-				.amount(new BigDecimal("150.00")).note("Dinner split").build();
+				.amount(new BigDecimal("100.00")).note("Dinner payment").build();
 
-		Transaction transaction = Transaction.builder().transactionId(101L).referenceId(UUID.randomUUID())
-				.senderUpiId("alice@upi").receiverUpiId("bob@upi").amount(new BigDecimal("150.00"))
-				.status(TransactionStatus.COMPLETED).type(TransactionType.TRANSFER).note("Dinner split")
+		UUID refId = UUID.randomUUID();
+		Transaction createdTransaction = Transaction.builder().transactionId(10L).referenceId(refId)
+				.senderUpiId("alice@upi").receiverUpiId("bob@upi").amount(new BigDecimal("100.00"))
+				.status(TransactionStatus.COMPLETED).type(TransactionType.TRANSFER).note("Dinner payment")
 				.createdAt(Instant.now()).build();
 
-		given(transactionService.sendMoney(any(TransferMoneyRequest.class))).willReturn(transaction);
+		given(transactionService.sendMoney(any(TransferMoneyRequest.class))).willReturn(createdTransaction);
 
 		mockMvc.perform(post("/api/v1/transactions").contentType(MediaType.APPLICATION_JSON)
 				.content(objectMapper.writeValueAsString(request))).andExpect(status().isCreated())
-				.andExpect(header().exists("Location")).andExpect(jsonPath("$.transactionId").value(101))
+				.andExpect(header().exists("Location")).andExpect(jsonPath("$.transactionId").value(10))
 				.andExpect(jsonPath("$.senderUpiId").value("alice@upi"))
-				.andExpect(jsonPath("$.receiverUpiId").value("bob@upi")).andExpect(jsonPath("$.amount").value(150.00))
+				.andExpect(jsonPath("$.receiverUpiId").value("bob@upi")).andExpect(jsonPath("$.amount").value(100.00))
 				.andExpect(jsonPath("$.status").value("COMPLETED"));
 	}
 
 	@Test
-	@DisplayName("POST /api/v1/transactions — Should return 400 Bad Request when validation fails")
-	void shouldReturn400_whenTransferValidationFails() throws Exception {
-		TransferMoneyRequest invalidRequest = TransferMoneyRequest.builder().senderUpiId("") // Blank sender
-				.receiverUpiId("invalid-upi") // Invalid format
-				.amount(new BigDecimal("0.00")) // Amount < 0.01
-				.build();
+	@DisplayName("POST /api/v1/transactions — Should return 400 Bad Request when amount is non-positive")
+	void shouldReturn400_whenTransferAmountIsZeroOrNegative() throws Exception {
+		TransferMoneyRequest invalidRequest = TransferMoneyRequest.builder().senderUpiId("alice@upi")
+				.receiverUpiId("bob@upi").amount(new BigDecimal("0.00")).build();
 
 		mockMvc.perform(post("/api/v1/transactions").contentType(MediaType.APPLICATION_JSON)
 				.content(objectMapper.writeValueAsString(invalidRequest))).andExpect(status().isBadRequest());

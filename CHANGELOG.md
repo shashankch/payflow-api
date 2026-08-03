@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Phase 2C Mapper Layer & API Documentation:
+  - Integrated MapStruct `1.6.3` compile-time mappers (`UserMapper`, `TransactionMapper`) for type-safe DTO <-> Entity conversions.
+  - Integrated Springdoc OpenAPI `3.0.3` (`springdoc-openapi-starter-webmvc-ui`) for live interactive Swagger UI (`/swagger-ui.html`) and OpenAPI JSON specs (`/v3/api-docs`).
+  - Added OpenAPI configuration bean (`OpenApiConfig`) and controller OpenAPI annotations (`@Tag`, `@Operation`, `@ApiResponse`).
+  - Added MapStruct mapper unit test suite (`UserMapperTest`, `TransactionMapperTest`).
+  - Added `ADR-005` (MapStruct for compile-time type-safe DTO mapping) to `docs/ADR.md`.
 - Phase 2B DTO Layer, Input Validation & API Versioning:
   - Versioned REST controllers under `/api/v1/users` and `/api/v1/transactions`.
   - Added `spring-boot-starter-validation` dependency for Jakarta Validation (`@Valid`, `@NotBlank`, `@Pattern`, `@DecimalMin`, `@Size`, `@Min`, `@Max`).

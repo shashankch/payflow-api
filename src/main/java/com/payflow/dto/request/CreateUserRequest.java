@@ -15,7 +15,8 @@ public class CreateUserRequest {
 	private String name;
 
 	@NotBlank(message = "UPI ID cannot be blank")
-	@Pattern(regexp = "^[a-zA-Z0-9.\\-_]{2,256}@[a-zA-Z]{2,64}$", message = "Invalid UPI ID format")
+	@Size(max = 100, message = "UPI ID must not exceed 100 characters")
+	@Pattern(regexp = "^[a-zA-Z0-9.\\-_]{2,64}@[a-zA-Z]{2,32}$", message = "Invalid UPI ID format")
 	private String upiId;
 
 	@NotBlank(message = "Phone number cannot be blank")
