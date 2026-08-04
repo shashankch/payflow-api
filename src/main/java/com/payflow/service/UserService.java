@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import com.payflow.dto.request.CreateUserRequest;
 import com.payflow.entity.User;
+import com.payflow.exception.DuplicateUpiIdException;
 import com.payflow.repository.UserRepository;
 
 @Service
@@ -22,6 +23,9 @@ public class UserService {
 	}
 
 	public User registerUser(CreateUserRequest request) {
+		if (userRepository.findByUpiId(request.getUpiId()).isPresent()) {
+			throw new DuplicateUpiIdException(request.getUpiId());
+		}
 		User user = User.builder().name(request.getName()).upiId(request.getUpiId())
 				.phoneNumber(request.getPhoneNumber()).balance(request.getBalance()).build();
 		return userRepository.save(user);

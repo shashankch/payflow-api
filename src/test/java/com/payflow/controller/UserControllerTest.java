@@ -74,15 +74,15 @@ class UserControllerTest {
 	}
 
 	@Test
-	@DisplayName("POST /api/v1/users — Should return 400 Bad Request when validation fails")
-	void shouldReturn400_whenCreateUserValidationFails() throws Exception {
+	@DisplayName("POST /api/v1/users — Should return 422 Unprocessable Entity when validation fails")
+	void shouldReturn422_whenCreateUserValidationFails() throws Exception {
 		CreateUserRequest invalidRequest = CreateUserRequest.builder().name("") // Blank name
 				.upiId("invalid-upi-format").phoneNumber("123") // Not 10 digits
 				.balance(new BigDecimal("-50.00")) // Negative balance
 				.build();
 
 		mockMvc.perform(post("/api/v1/users").contentType(MediaType.APPLICATION_JSON)
-				.content(objectMapper.writeValueAsString(invalidRequest))).andExpect(status().isBadRequest());
+				.content(objectMapper.writeValueAsString(invalidRequest))).andExpect(status().isUnprocessableEntity());
 	}
 
 	@Test

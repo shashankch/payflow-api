@@ -209,12 +209,35 @@ Headers: `Location: /api/v1/transactions/1`
 
 ---
 
+## Centralized Error Handling & RFC 7807 ProblemDetail
+
+All API errors return standardized RFC 7807 `application/problem+json` response bodies enriched with timestamp and `requestId` (`X-Request-Id` correlation tracking header):
+
+```json
+{
+  "type": "https://api.payflow.com/errors/validation-error",
+  "title": "Validation Failure",
+  "status": 422,
+  "detail": "Validation failed for request parameters",
+  "instance": "/api/v1/users",
+  "timestamp": "2026-08-03T16:25:00Z",
+  "requestId": "a6b8c9d0-1234-5678-9abc-def012345678",
+  "errors": {
+    "phoneNumber": "Phone number must be exactly 10 digits"
+  }
+}
+```
+
+---
+
 ## HTTP Status Codes Reference
 
 | Code | Status | Trigger Condition |
 | :--- | :--- | :--- |
 | **200** | `OK` | Standard successful read or lookup. |
 | **201** | `Created` | Successfully registered a user or created a transaction. |
-| **400** | `Bad Request` | Validation failure (`@Valid`) or invalid request query params. |
-| **404** | `Not Found` | User or transaction lookup returned no records. |
-| **500** | `Internal Error` | Server error. |
+| **400** | `Bad Request` | Illegal business arguments (e.g. self-transfer attempt). |
+| **404** | `Not Found` | User or transaction lookup returned no matching records (`UserNotFoundException`). |
+| **409** | `Conflict` | Resource conflict (e.g. duplicate UPI ID registration or database constraint violation). |
+| **422** | `Unprocessable Entity` | Jakarta validation constraint violation or insufficient account balance (`InsufficientBalanceException`). |
+| **500** | `Internal Error` | Unexpected server error (sanitized, stack traces suppressed). |

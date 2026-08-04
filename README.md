@@ -23,12 +23,15 @@ The project is evolving through a phased implementation roadmap. See the full pl
 | **Phase 2A** | Domain model hardening — `BigDecimal` financials, rich domain methods, audit timestamps | ✅ Complete |
 | **Phase 2B** | DTO layer, Jakarta validation, URI versioning (`/api/v1/`), response records | ✅ Complete |
 | **Phase 2C** | MapStruct compile-time DTO mappers, interactive OpenAPI/Swagger UI (`/swagger-ui.html`) | ✅ Complete |
-| **Phase 2D+** | Custom exception handling, RFC 7807 problem details, optimistic locking, security, observability | 🔄 In Progress |
+| **Phase 2D** | Domain exception hierarchy, RFC 7807 problem details, `X-Request-Id` correlation tracking | ✅ Complete |
+| **Phase 2E+** | Optimistic locking verification, idempotency headers, rate limiting, security, observability | 🔄 In Progress |
 
 ---
 
 ## Implemented Features
 
+- **RFC 7807 Exception Framework**: Centralized `@RestControllerAdvice` handling domain exceptions (`UserNotFoundException`, `InsufficientBalanceException`, `DuplicateUpiIdException`, `SelfTransferException`) and field-level validation errors.
+- **Request Correlation Tracking**: `RequestIdFilter` (`OncePerRequestFilter`) injecting `X-Request-Id` UUID into MDC context and HTTP response headers.
 - **Interactive API Docs & Swagger UI**: Auto-generated live OpenAPI 3.0 specs via Springdoc at `http://localhost:8080/swagger-ui.html` and `/v3/api-docs`.
 - **MapStruct Compile-Time Mapping**: Zero-reflection type-safe DTO <-> Entity mappings generated during Maven build.
 - **DTO Isolation & API Versioning**: `/api/v1/` URI paths using Java records (`UserResponse`, `TransactionResponse`, `PagedResponse`) and validated request DTOs (`CreateUserRequest`, `TransferMoneyRequest`).

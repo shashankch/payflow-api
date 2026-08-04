@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Phase 2D Error Handling & RFC 7807 Exception Framework:
+  - Implemented custom domain exception hierarchy (`PayflowException`, `UserNotFoundException`, `TransactionNotFoundException`, `InsufficientBalanceException`, `DuplicateUpiIdException`, `SelfTransferException`).
+  - Implemented global exception handling via `@RestControllerAdvice` (`GlobalExceptionHandler`) producing standardized RFC 7807 `ProblemDetail` responses.
+  - Implemented `RequestIdFilter` (`OncePerRequestFilter`) for `X-Request-Id` MDC logging and response header correlation tracking.
+  - Updated domain services (`UserService`, `TransactionService`) and controllers to throw domain exceptions for clean, centralized handling.
+  - Added unit test suites for `GlobalExceptionHandlerTest` and `RequestIdFilterTest`.
+  - Added `ADR-006` (RFC 7807 ProblemDetail & Centralized Exception Handling) to `docs/ADR.md`.
 - Phase 2C Mapper Layer & API Documentation:
   - Integrated MapStruct `1.6.3` compile-time mappers (`UserMapper`, `TransactionMapper`) for type-safe DTO <-> Entity conversions.
   - Integrated Springdoc OpenAPI `3.0.3` (`springdoc-openapi-starter-webmvc-ui`) for live interactive Swagger UI (`/swagger-ui.html`) and OpenAPI JSON specs (`/v3/api-docs`).

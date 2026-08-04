@@ -40,7 +40,7 @@ Request/response DTOs, Jakarta validation, `/api/v1/` versioning, pagination wit
 ### 2C — Mappers & API Docs ✅
 MapStruct compile-time mappers, OpenAPI/Swagger UI via `springdoc-openapi`.
 
-### 2D — Error Handling ⬜
+### 2D — Error Handling ✅
 Custom exception hierarchy, RFC 7807 `ProblemDetail` responses, `X-Request-Id` correlation.
 
 ---

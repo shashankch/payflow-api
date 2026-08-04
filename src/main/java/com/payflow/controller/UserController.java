@@ -23,6 +23,7 @@ import com.payflow.dto.request.CreateUserRequest;
 import com.payflow.dto.response.PagedResponse;
 import com.payflow.dto.response.UserResponse;
 import com.payflow.entity.User;
+import com.payflow.exception.UserNotFoundException;
 import com.payflow.mapper.UserMapper;
 import com.payflow.service.UserService;
 
@@ -77,8 +78,8 @@ public class UserController {
 	@ApiResponse(responseCode = "200", description = "User found and returned")
 	@ApiResponse(responseCode = "404", description = "User not found")
 	public ResponseEntity<UserResponse> getUserById(@PathVariable Long id) {
-		return userService.getUserById(id).map(userMapper::toResponse).map(ResponseEntity::ok)
-				.orElseGet(() -> ResponseEntity.notFound().build());
+		User user = userService.getUserById(id).orElseThrow(() -> new UserNotFoundException(id));
+		return ResponseEntity.ok(userMapper.toResponse(user));
 	}
 
 	@GetMapping("/upi/{upiId}")
@@ -86,8 +87,9 @@ public class UserController {
 	@ApiResponse(responseCode = "200", description = "User found and returned")
 	@ApiResponse(responseCode = "404", description = "User not found")
 	public ResponseEntity<UserResponse> getUserByUpiId(@PathVariable String upiId) {
-		return userService.findByUpiId(upiId).map(userMapper::toResponse).map(ResponseEntity::ok)
-				.orElseGet(() -> ResponseEntity.notFound().build());
+		User user = userService.findByUpiId(upiId)
+				.orElseThrow(() -> new UserNotFoundException("User not found with UPI ID: " + upiId));
+		return ResponseEntity.ok(userMapper.toResponse(user));
 	}
 
 	@GetMapping("/balance/{amount}")

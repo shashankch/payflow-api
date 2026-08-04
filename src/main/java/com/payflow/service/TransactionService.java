@@ -1,31 +1,63 @@
 package com.payflow.service;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.payflow.dto.request.TransferMoneyRequest;
 import com.payflow.entity.Transaction;
 import com.payflow.entity.TransactionStatus;
 import com.payflow.entity.TransactionType;
+import com.payflow.entity.User;
+import com.payflow.exception.InsufficientBalanceException;
+import com.payflow.exception.SelfTransferException;
+import com.payflow.exception.UserNotFoundException;
 import com.payflow.repository.TransactionRepository;
+import com.payflow.repository.UserRepository;
 
 @Service
 public class TransactionService {
 
 	private final TransactionRepository transactionRepository;
+	private final UserRepository userRepository;
 
-	public TransactionService(TransactionRepository transactionRepository) {
+	public TransactionService(TransactionRepository transactionRepository, UserRepository userRepository) {
 		this.transactionRepository = transactionRepository;
+		this.userRepository = userRepository;
 	}
 
+	@Transactional
 	public Transaction sendMoney(TransferMoneyRequest request) {
+		String senderUpi = request.getSenderUpiId();
+		String receiverUpi = request.getReceiverUpiId();
+
+		if (senderUpi.equalsIgnoreCase(receiverUpi)) {
+			throw new SelfTransferException(senderUpi);
+		}
+
+		User sender = userRepository.findByUpiId(senderUpi)
+				.orElseThrow(() -> new UserNotFoundException("Sender not found: " + senderUpi));
+		User receiver = userRepository.findByUpiId(receiverUpi)
+				.orElseThrow(() -> new UserNotFoundException("Receiver not found: " + receiverUpi));
+
+		if (sender.getBalance().compareTo(request.getAmount()) < 0) {
+			throw new InsufficientBalanceException("Sender has insufficient balance (" + sender.getBalance()
+					+ ") for transfer of " + request.getAmount());
+		}
+
+		sender.debit(request.getAmount());
+		receiver.credit(request.getAmount());
+		userRepository.save(sender);
+		userRepository.save(receiver);
+
 		Transaction.TransactionBuilder builder = Transaction.builder();
+		builder.sender(sender);
+		builder.receiver(receiver);
 		builder.senderUpiId(request.getSenderUpiId());
 		builder.receiverUpiId(request.getReceiverUpiId());
 		builder.amount(request.getAmount());
 		builder.status(TransactionStatus.COMPLETED);
 		builder.type(TransactionType.TRANSFER);
 		builder.note(request.getNote());
-		Transaction transaction = builder.build();
-		return transactionRepository.save(transaction);
+		return transactionRepository.save(builder.build());
 	}
 }

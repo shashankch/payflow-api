@@ -80,12 +80,12 @@ class TransactionControllerTest {
 	}
 
 	@Test
-	@DisplayName("POST /api/v1/transactions — Should return 400 Bad Request when amount is non-positive")
-	void shouldReturn400_whenTransferAmountIsZeroOrNegative() throws Exception {
+	@DisplayName("POST /api/v1/transactions — Should return 422 Unprocessable Entity when amount is non-positive")
+	void shouldReturn422_whenTransferAmountIsZeroOrNegative() throws Exception {
 		TransferMoneyRequest invalidRequest = TransferMoneyRequest.builder().senderUpiId("alice@upi")
 				.receiverUpiId("bob@upi").amount(new BigDecimal("0.00")).build();
 
 		mockMvc.perform(post("/api/v1/transactions").contentType(MediaType.APPLICATION_JSON)
-				.content(objectMapper.writeValueAsString(invalidRequest))).andExpect(status().isBadRequest());
+				.content(objectMapper.writeValueAsString(invalidRequest))).andExpect(status().isUnprocessableEntity());
 	}
 }
