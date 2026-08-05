@@ -2,6 +2,7 @@ package com.payflow.mapper;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,13 +22,15 @@ class UserMapperTest {
 	@DisplayName("Should correctly map User entity to UserResponse record")
 	void shouldMapUserEntityToUserResponse() {
 		Instant now = Instant.now();
-		User user = User.builder().userId(100L).name("Alice Smith").upiId("alice@upi").phoneNumber("9876543210")
-				.balance(new BigDecimal("1500.50")).version(1L).createdAt(now).updatedAt(now).build();
+		UUID refId = UUID.randomUUID();
+		User user = User.builder().userId(100L).referenceId(refId).name("Alice Smith").upiId("alice@upi")
+				.phoneNumber("9876543210").balance(new BigDecimal("1500.50")).version(1L).createdAt(now).updatedAt(now)
+				.build();
 
 		UserResponse response = userMapper.toResponse(user);
 
 		assertThat(response).isNotNull();
-		assertThat(response.userId()).isEqualTo(100L);
+		assertThat(response.referenceId()).isEqualTo(refId);
 		assertThat(response.name()).isEqualTo("Alice Smith");
 		assertThat(response.upiId()).isEqualTo("alice@upi");
 		assertThat(response.phoneNumber()).isEqualTo("9876543210");

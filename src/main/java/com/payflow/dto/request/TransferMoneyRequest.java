@@ -2,6 +2,7 @@ package com.payflow.dto.request;
 
 import java.math.BigDecimal;
 
+import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -22,6 +23,7 @@ public class TransferMoneyRequest {
 
 	@NotNull(message = "Amount cannot be null")
 	@DecimalMin(value = "0.01", message = "Transfer amount must be at least 0.01")
+	@DecimalMax(value = "1000000.00", message = "Transfer amount must not exceed 1,000,000")
 	private BigDecimal amount;
 
 	@Size(max = 255, message = "Note must not exceed 255 characters")

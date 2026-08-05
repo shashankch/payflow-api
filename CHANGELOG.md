@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Phase 2E Model Refinements & Service Hardening:
+  - Added non-enumerable `UUID referenceId` to `User` entity to insulate REST APIs from auto-increment primary keys (`userId`).
+  - Added `@Transactional(readOnly = true)` annotations across all `UserService` read methods for Hibernate dirty-checking optimization.
+  - Consolidated balance check validation directly inside `User.debit()` throwing `InsufficientBalanceException`.
+  - Enforced transfer upper bound cap (`@DecimalMax("1000000.00")`) on `TransferMoneyRequest`.
+  - Added MDC `%X{requestId}` tracking pattern to application console logger.
+  - Removed obsolete static `fromEntity()` factories from response DTO records.
+  - Added `ADR-007` (UUID Reference IDs over Auto-Increment Primary Keys in APIs) to `docs/ADR.md`.
 - Phase 2D Error Handling & RFC 7807 Exception Framework:
   - Implemented custom domain exception hierarchy (`PayflowException`, `UserNotFoundException`, `TransactionNotFoundException`, `InsufficientBalanceException`, `DuplicateUpiIdException`, `SelfTransferException`).
   - Implemented global exception handling via `@RestControllerAdvice` (`GlobalExceptionHandler`) producing standardized RFC 7807 `ProblemDetail` responses.

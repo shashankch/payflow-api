@@ -6,6 +6,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import com.payflow.exception.InsufficientBalanceException;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -27,11 +29,11 @@ class UserTest {
 	}
 
 	@Test
-	@DisplayName("Should throw IllegalStateException when debiting more than current balance")
+	@DisplayName("Should throw InsufficientBalanceException when debiting more than current balance")
 	void shouldThrowException_whenDebitingMoreThanBalance() {
-		IllegalStateException exception = assertThrows(IllegalStateException.class,
+		InsufficientBalanceException exception = assertThrows(InsufficientBalanceException.class,
 				() -> user.debit(new BigDecimal("600.00")));
-		assertEquals("Insufficient balance for UPI ID: john@upi", exception.getMessage());
+		assertEquals("Insufficient balance (500.00) for transfer of 600.00", exception.getMessage());
 	}
 
 	@Test

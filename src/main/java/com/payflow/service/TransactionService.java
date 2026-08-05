@@ -8,7 +8,6 @@ import com.payflow.entity.Transaction;
 import com.payflow.entity.TransactionStatus;
 import com.payflow.entity.TransactionType;
 import com.payflow.entity.User;
-import com.payflow.exception.InsufficientBalanceException;
 import com.payflow.exception.SelfTransferException;
 import com.payflow.exception.UserNotFoundException;
 import com.payflow.repository.TransactionRepository;
@@ -38,11 +37,6 @@ public class TransactionService {
 				.orElseThrow(() -> new UserNotFoundException("Sender not found: " + senderUpi));
 		User receiver = userRepository.findByUpiId(receiverUpi)
 				.orElseThrow(() -> new UserNotFoundException("Receiver not found: " + receiverUpi));
-
-		if (sender.getBalance().compareTo(request.getAmount()) < 0) {
-			throw new InsufficientBalanceException("Sender has insufficient balance (" + sender.getBalance()
-					+ ") for transfer of " + request.getAmount());
-		}
 
 		sender.debit(request.getAmount());
 		receiver.credit(request.getAmount());

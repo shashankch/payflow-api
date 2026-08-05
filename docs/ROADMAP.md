@@ -43,6 +43,9 @@ MapStruct compile-time mappers, OpenAPI/Swagger UI via `springdoc-openapi`.
 ### 2D — Error Handling ✅
 Custom exception hierarchy, RFC 7807 `ProblemDetail` responses, `X-Request-Id` correlation.
 
+### 2E — Model Refinements & Service Hardening ✅
+UUID reference IDs for users (replacing auto-increment exposure), `@Transactional(readOnly)` on reads, domain exception consolidation, `@DecimalMax` transfer cap, MDC logging pattern.
+
 ---
 
 ## Phase 3 — ACID Transactions & Concurrency ⬜

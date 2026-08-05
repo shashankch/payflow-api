@@ -15,6 +15,8 @@ ADRs document significant technical decisions, along with their context, rationa
 | [ADR-003](#adr-003-rich-domain-model-over-anemic-domain-model) | Rich Domain Model over Anemic Domain Model | 2026-08-01 | Accepted |
 | [ADR-004](#adr-004-uri-based-api-versioning-and-dto-isolation-layer) | URI-based API Versioning and DTO Isolation Layer | 2026-08-01 | Accepted |
 | [ADR-005](#adr-005-mapstruct-for-compile-time-type-safe-dto-mapping) | MapStruct for compile-time type-safe DTO mapping | 2026-08-02 | Accepted |
+| [ADR-006](#adr-006-rfc-7807-problemdetail--centralized-exception-handling) | RFC 7807 ProblemDetail & Centralized Exception Handling | 2026-08-03 | Accepted |
+| [ADR-007](#adr-007-uuid-reference-ids-over-auto-increment-primary-keys) | UUID Reference IDs over Auto-Increment Primary Keys | 2026-08-05 | Accepted |
 
 ---
 
@@ -183,3 +185,35 @@ Chosen Option: **RFC 7807 `ProblemDetail` via `@RestControllerAdvice`**
 - **Positive**: Consistent API error contract, enhanced security, production-grade observability and correlation tracing.
 - **Negative / Trade-offs**: Custom exceptions must be mapped in `@RestControllerAdvice`.
 - **Risks & Mitigations**: Ensure all domain services throw specific `PayflowException` subtypes rather than generic runtime exceptions.
+
+---
+
+### ADR-007: UUID Reference IDs over Auto-Increment Primary Keys in APIs
+
+**Date**: 2026-08-05  
+**Status**: Accepted  
+**Phase**: Phase 2E  
+
+#### Context & Problem Statement
+Exposing auto-increment database primary keys (`Long userId`) in external REST URLs (e.g. `/api/v1/users/1`) introduces significant security vulnerabilities:
+1. **Resource Enumeration Attacks**: Attackers can sequentially query `/users/1`, `/users/2`, `/users/3` to scrape all system user profiles.
+2. **Business Metric Leakage**: Competitors can determine total registered user growth rates by observing sequential ID progression over time.
+3. **Internal Key Coupling**: Exposing internal database sequence keys couples external client contracts directly to database storage strategies.
+
+#### Considered Options
+1. **Expose Auto-Increment Long Primary Keys (`userId`)**: Simple, but vulnerable to enumeration attacks and leaks business growth metrics.
+2. **Expose Friendly Handles Only (`upiId`)**: Human-readable (`shashank@kotak`), but handles can change over time as users re-link bank accounts.
+3. **Dual Identification Strategy (Internal `userId`, External `referenceId` UUID)**: Retain `Long userId` internally for fast database foreign key joins and indexing, but assign a non-enumerable `UUID referenceId` for all API responses and URL routing.
+
+#### Decision Outcome
+Chosen Option: **Dual Identification Strategy (Internal `userId`, External `referenceId` UUID)**
+
+##### Rationale
+- **Security & Privacy**: Cryptographically pseudo-random UUID v4 strings prevent resource enumeration attacks and hide user creation counts.
+- **Domain Flexibility**: `upiId` remains the friendly human-readable handle (`shashank@kotak`), while `referenceId` serves as the immutable internal system reference.
+- **Performance**: High-performance SQL joins continue to utilize numeric `BIGINT` primary/foreign keys (`user_id`), avoiding string join performance overhead in PostgreSQL.
+
+#### Consequences
+- **Positive**: Complete insulation against resource enumeration attacks, non-leaky API contracts, optimized database joins.
+- **Negative / Trade-offs**: Entities require a `@PrePersist` hook or column default to generate UUIDs upon creation.
+- **Risks & Mitigations**: Ensure secondary unique index (`idx_users_reference_id`) is maintained on `referenceId`.

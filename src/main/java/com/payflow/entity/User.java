@@ -2,15 +2,19 @@ package com.payflow.entity;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+
+import com.payflow.exception.InsufficientBalanceException;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
@@ -21,6 +25,9 @@ public class User {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long userId;
+
+	@Column(nullable = false, unique = true, updatable = false, columnDefinition = "UUID")
+	private UUID referenceId;
 
 	@Column(nullable = false, length = 100)
 	private String name;
@@ -48,9 +55,10 @@ public class User {
 	public User() {
 	}
 
-	public User(Long userId, String name, String upiId, BigDecimal balance, String phoneNumber, Long version,
-			Instant createdAt, Instant updatedAt) {
+	public User(Long userId, UUID referenceId, String name, String upiId, BigDecimal balance, String phoneNumber,
+			Long version, Instant createdAt, Instant updatedAt) {
 		this.userId = userId;
+		this.referenceId = referenceId;
 		this.name = name;
 		this.upiId = upiId;
 		this.balance = balance;
@@ -66,6 +74,14 @@ public class User {
 
 	public void setUserId(Long userId) {
 		this.userId = userId;
+	}
+
+	public UUID getReferenceId() {
+		return referenceId;
+	}
+
+	public void setReferenceId(UUID referenceId) {
+		this.referenceId = referenceId;
 	}
 
 	public String getName() {
@@ -124,12 +140,21 @@ public class User {
 		this.updatedAt = updatedAt;
 	}
 
+	@PrePersist
+	public void ensureReferenceId() {
+		if (this.referenceId == null) {
+			this.referenceId = UUID.randomUUID();
+		}
+	}
+
 	public void debit(BigDecimal amount) {
 		if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
 			throw new IllegalArgumentException("Debit amount must be positive");
 		}
 		if (this.balance == null || this.balance.compareTo(amount) < 0) {
-			throw new IllegalStateException("Insufficient balance for UPI ID: " + this.upiId);
+			BigDecimal currentBal = (this.balance == null) ? BigDecimal.ZERO : this.balance;
+			throw new InsufficientBalanceException(
+					"Insufficient balance (" + currentBal + ") for transfer of " + amount);
 		}
 		this.balance = this.balance.subtract(amount);
 	}
@@ -150,6 +175,7 @@ public class User {
 
 	public static class UserBuilder {
 		private Long userId;
+		private UUID referenceId;
 		private String name;
 		private String upiId;
 		private BigDecimal balance;
@@ -160,6 +186,11 @@ public class User {
 
 		public UserBuilder userId(Long userId) {
 			this.userId = userId;
+			return this;
+		}
+
+		public UserBuilder referenceId(UUID referenceId) {
+			this.referenceId = referenceId;
 			return this;
 		}
 
@@ -199,7 +230,17 @@ public class User {
 		}
 
 		public User build() {
-			return new User(userId, name, upiId, balance, phoneNumber, version, createdAt, updatedAt);
+			User u = new User();
+			u.setUserId(this.userId);
+			u.setReferenceId(this.referenceId);
+			u.setName(this.name);
+			u.setUpiId(this.upiId);
+			u.setBalance(this.balance);
+			u.setPhoneNumber(this.phoneNumber);
+			u.setVersion(this.version);
+			u.setCreatedAt(this.createdAt);
+			u.setUpdatedAt(this.updatedAt);
+			return u;
 		}
 	}
 }

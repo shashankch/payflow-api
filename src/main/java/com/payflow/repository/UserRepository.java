@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
+import java.util.UUID;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -14,6 +16,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
 	// Derived JPA query parsed from method name
 	Optional<User> findByUpiId(String upiId);
+
+	Optional<User> findByReferenceId(UUID referenceId);
 
 	// JPQL query to find users with balance greater than a specified amount
 	@Query("SELECT u FROM User u WHERE u.balance > :amount")

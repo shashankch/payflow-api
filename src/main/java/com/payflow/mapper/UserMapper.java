@@ -14,6 +14,7 @@ public interface UserMapper {
 	UserResponse toResponse(User user);
 
 	@Mapping(target = "userId", ignore = true)
+	@Mapping(target = "referenceId", ignore = true)
 	@Mapping(target = "version", ignore = true)
 	@Mapping(target = "createdAt", ignore = true)
 	@Mapping(target = "updatedAt", ignore = true)

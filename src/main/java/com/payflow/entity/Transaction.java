@@ -27,7 +27,7 @@ public class Transaction {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long transactionId;
 
-	@Column(nullable = false, unique = true, updatable = false)
+	@Column(nullable = false, unique = true, updatable = false, columnDefinition = "UUID")
 	private UUID referenceId;
 
 	@ManyToOne(fetch = FetchType.LAZY)

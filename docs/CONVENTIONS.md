@@ -66,3 +66,11 @@ This document outlines the coding standards, repository conventions, Git workflo
 - **Parity**: Every feature implemented in code must be documented in `README.md`, `docs/ARCHITECTURE.md`, and `docs/API_SPECIFICATION.md`.
 - **ADRs**: Any major architectural decision (e.g., locking strategy, caching library choice) must be recorded in `docs/ADR.md`.
 - **Changelog**: Every merged PR must include an entry in `CHANGELOG.md` under `[Unreleased]`.
+- **Design Document Structure**: All architectural design documents in `docs/` must incorporate standard design document sections:
+  - **Metadata Header**: Short title, author, creation date, status (Draft/Approved), and authoritative relative link.
+  - **Executive Summary & Background**: High-level problem statement, business motivation, and non-obvious domain context.
+  - **Goals & Non-Goals**: Explicit product/technical goals alongside explicit out-of-scope boundaries to prevent scope creep.
+  - **SLOs & Constraints**: Quantifiable availability, latency (P95/P99), throughput, and data retention metrics.
+  - **Threat Modeling & Security**: Threat matrix with architectural mitigations and compliance rules.
+  - **Alternatives Considered ("Cost of Getting It Wrong")**: Systematic evaluation of rejected options, trade-offs, and failure consequences.
+  - **Open & Resolved Issues**: Tracking resolved decisions and unresolved design questions.
