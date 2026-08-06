@@ -3,6 +3,7 @@ package com.payflow.controller;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -50,7 +51,7 @@ class UserControllerTest {
 			if (user == null) {
 				return null;
 			}
-			return new UserResponse(user.getUserId(), user.getName(), user.getUpiId(), user.getBalance(),
+			return new UserResponse(user.getReferenceId(), user.getName(), user.getUpiId(), user.getBalance(),
 					user.getPhoneNumber(), user.getCreatedAt(), user.getUpdatedAt());
 		});
 	}
@@ -58,17 +59,19 @@ class UserControllerTest {
 	@Test
 	@DisplayName("POST /api/v1/users — Should register user and return 201 Created")
 	void shouldRegisterUser_whenRequestIsValid() throws Exception {
+		UUID refId = UUID.randomUUID();
 		CreateUserRequest request = CreateUserRequest.builder().name("Alice Smith").upiId("alice@upi")
 				.phoneNumber("9876543210").balance(new BigDecimal("1000.00")).build();
 
-		User createdUser = User.builder().userId(1L).name("Alice Smith").upiId("alice@upi").phoneNumber("9876543210")
-				.balance(new BigDecimal("1000.00")).createdAt(Instant.now()).updatedAt(Instant.now()).build();
+		User createdUser = User.builder().userId(1L).referenceId(refId).name("Alice Smith").upiId("alice@upi")
+				.phoneNumber("9876543210").balance(new BigDecimal("1000.00")).createdAt(Instant.now())
+				.updatedAt(Instant.now()).build();
 
 		given(userService.registerUser(any(CreateUserRequest.class))).willReturn(createdUser);
 
 		mockMvc.perform(post("/api/v1/users").contentType(MediaType.APPLICATION_JSON)
 				.content(objectMapper.writeValueAsString(request))).andExpect(status().isCreated())
-				.andExpect(header().exists("Location")).andExpect(jsonPath("$.userId").value(1))
+				.andExpect(header().exists("Location")).andExpect(jsonPath("$.referenceId").value(refId.toString()))
 				.andExpect(jsonPath("$.name").value("Alice Smith")).andExpect(jsonPath("$.upiId").value("alice@upi"))
 				.andExpect(jsonPath("$.balance").value(1000.00));
 	}
@@ -88,20 +91,23 @@ class UserControllerTest {
 	@Test
 	@DisplayName("GET /api/v1/users/{id} — Should return user response when found")
 	void shouldReturnUser_whenFoundById() throws Exception {
-		User user = User.builder().userId(1L).name("Bob").upiId("bob@upi").phoneNumber("9876543211")
+		UUID refId = UUID.randomUUID();
+		User user = User.builder().userId(1L).referenceId(refId).name("Bob").upiId("bob@upi").phoneNumber("9876543211")
 				.balance(new BigDecimal("500.00")).createdAt(Instant.now()).updatedAt(Instant.now()).build();
 
-		given(userService.getUserById(1L)).willReturn(Optional.of(user));
+		given(userService.getUserByReferenceId(refId)).willReturn(Optional.of(user));
 
-		mockMvc.perform(get("/api/v1/users/1")).andExpect(status().isOk()).andExpect(jsonPath("$.userId").value(1))
+		mockMvc.perform(get("/api/v1/users/" + refId)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.referenceId").value(refId.toString()))
 				.andExpect(jsonPath("$.upiId").value("bob@upi"));
 	}
 
 	@Test
 	@DisplayName("GET /api/v1/users/{id} — Should return 404 Not Found when user does not exist")
 	void shouldReturn404_whenUserNotFound() throws Exception {
-		given(userService.getUserById(99L)).willReturn(Optional.empty());
+		UUID missingRefId = UUID.randomUUID();
+		given(userService.getUserByReferenceId(missingRefId)).willReturn(Optional.empty());
 
-		mockMvc.perform(get("/api/v1/users/99")).andExpect(status().isNotFound());
+		mockMvc.perform(get("/api/v1/users/" + missingRefId)).andExpect(status().isNotFound());
 	}
 }

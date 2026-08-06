@@ -18,13 +18,10 @@ The project is evolving through a phased implementation roadmap. See the full pl
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| **Phase 0** | Baseline REST API — User & Transaction CRUD with H2 in-memory storage | ✅ Complete |
-| **Phase 1** | Project hygiene — Spotless, Checkstyle, GitHub Actions CI | ✅ Complete |
-| **Phase 2A** | Domain model hardening — `BigDecimal` financials, rich domain methods, audit timestamps | ✅ Complete |
-| **Phase 2B** | DTO layer, Jakarta validation, URI versioning (`/api/v1/`), response records | ✅ Complete |
 | **Phase 2C** | MapStruct compile-time DTO mappers, interactive OpenAPI/Swagger UI (`/swagger-ui.html`) | ✅ Complete |
 | **Phase 2D** | Domain exception hierarchy, RFC 7807 problem details, `X-Request-Id` correlation tracking | ✅ Complete |
-| **Phase 2E+** | Optimistic locking verification, idempotency headers, rate limiting, security, observability | 🔄 In Progress |
+| **Phase 2E** | UUID reference IDs, service hardening, domain exception consolidation, transfer amount cap | ✅ Complete |
+| **Phase 3+** | ACID transfers, pessimistic locking, balance ledger, Flyway/PostgreSQL, security, observability | 🔄 In Progress |
 
 ---
 

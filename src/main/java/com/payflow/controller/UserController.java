@@ -3,6 +3,7 @@ package com.payflow.controller;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.util.List;
+import java.util.UUID;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -57,7 +58,7 @@ public class UserController {
 		User createdUser = userService.registerUser(request);
 		UserResponse response = userMapper.toResponse(createdUser);
 		URI location = ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}")
-				.buildAndExpand(createdUser.getUserId()).toUri();
+				.buildAndExpand(createdUser.getReferenceId()).toUri();
 		return ResponseEntity.created(location).body(response);
 	}
 
@@ -74,11 +75,12 @@ public class UserController {
 	}
 
 	@GetMapping("/{id}")
-	@Operation(summary = "Get user by ID", description = "Fetches details of a user by their unique primary key ID")
+	@Operation(summary = "Get user by reference ID", description = "Fetches user details by UUID reference ID")
 	@ApiResponse(responseCode = "200", description = "User found and returned")
 	@ApiResponse(responseCode = "404", description = "User not found")
-	public ResponseEntity<UserResponse> getUserById(@PathVariable Long id) {
-		User user = userService.getUserById(id).orElseThrow(() -> new UserNotFoundException(id));
+	public ResponseEntity<UserResponse> getUserById(@PathVariable UUID id) {
+		User user = userService.getUserByReferenceId(id)
+				.orElseThrow(() -> new UserNotFoundException("User not found: " + id));
 		return ResponseEntity.ok(userMapper.toResponse(user));
 	}
 

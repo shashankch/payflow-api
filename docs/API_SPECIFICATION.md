@@ -1,5 +1,14 @@
 # Payflow API — REST API Specification
 
+> **Document Metadata**
+> - **Title**: Payflow REST API Interface & Schema Specification
+> - **Author**: Payflow Engineering (`shashankchandel@gmail.com`)
+> - **Status**: Approved / Living Specification
+> - **Created Date**: 2026-08-01
+> - **Last Updated**: 2026-08-05
+> - **Authoritative Location**: [API_SPECIFICATION.md](API_SPECIFICATION.md)
+> - **Related Documents**: [System Architecture](ARCHITECTURE.md) | [Architecture Decisions (ADRs)](ADR.md) | [Phased Roadmap](ROADMAP.md) | [Engineering Conventions](CONVENTIONS.md)
+
 This document details the REST API endpoints, request/response models, input validation rules, and error handling behaviors for the Payflow API service.
 
 ---
@@ -69,15 +78,14 @@ Registers a new client profile with an initial balance.
 ```
 
 #### Response Example (`201 Created`)
-Headers: `Location: /api/v1/users/1`
+Headers: `Location: /api/v1/users/a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d`
 ```json
 {
-  "userId": 1,
+  "referenceId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
   "name": "Jane Doe",
   "upiId": "janedoe@upi",
   "phoneNumber": "9876543210",
   "balance": 1000.0000,
-  "version": 0,
   "createdAt": "2026-08-01T16:00:00Z",
   "updatedAt": "2026-08-01T16:00:00Z"
 }
@@ -101,12 +109,11 @@ Retrieves a paginated list of registered users.
 {
   "content": [
     {
-      "userId": 1,
+      "referenceId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
       "name": "Jane Doe",
       "upiId": "janedoe@upi",
       "phoneNumber": "9876543210",
       "balance": 1000.0000,
-      "version": 0,
       "createdAt": "2026-08-01T16:00:00Z",
       "updatedAt": "2026-08-01T16:00:00Z"
     }
@@ -122,8 +129,8 @@ Retrieves a paginated list of registered users.
 
 ---
 
-### 3. Retrieve User by ID
-Fetches a single user record by its primary database key.
+### 3. Retrieve User by Reference ID
+Fetches a single user record by their unique UUID reference ID.
 
 - **HTTP Method**: `GET`
 - **Path**: `/api/v1/users/{id}`
@@ -132,12 +139,11 @@ Fetches a single user record by its primary database key.
 #### Response Example (`200 OK`)
 ```json
 {
-  "userId": 1,
+  "referenceId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
   "name": "Jane Doe",
   "upiId": "janedoe@upi",
   "phoneNumber": "9876543210",
   "balance": 1000.0000,
-  "version": 0,
   "createdAt": "2026-08-01T16:00:00Z",
   "updatedAt": "2026-08-01T16:00:00Z"
 }
@@ -178,7 +184,7 @@ Executes a fund transfer request.
 - **Request Body DTO (`TransferMoneyRequest`)**:
   - `senderUpiId`: String, required (`@NotBlank`), max 100 chars (`@Size(max = 100)`), valid UPI format (`@Pattern(...)`).
   - `receiverUpiId`: String, required (`@NotBlank`), max 100 chars (`@Size(max = 100)`), valid UPI format (`@Pattern(...)`).
-  - `amount`: BigDecimal, required (`@NotNull`), minimum `0.01` (`@DecimalMin("0.01")`).
+  - `amount`: BigDecimal, required (`@NotNull`), minimum `0.01` (`@DecimalMin("0.01")`), maximum `1,000,000` (`@DecimalMax("1000000.00")`).
   - `note`: String, optional, max 255 characters (`@Size(max = 255)`).
 
 #### Request Example

@@ -1,6 +1,65 @@
-# Payflow API — System Architecture
+# Payflow API — System Architecture & Design Document
 
-This document describes the runtime design, technical patterns, and architecture conventions of the Payflow API payment backend.
+> **Document Metadata**
+> - **Title**: Payflow API Core System Architecture & Payment Engine Design
+> - **Author**: Payflow Engineering (`shashankchandel@gmail.com`)
+> - **Status**: Approved / Living Design Document
+> - **Created Date**: 2026-08-01
+> - **Last Updated**: 2026-08-05
+> - **Authoritative Location**: [ARCHITECTURE.md](ARCHITECTURE.md)
+> - **Related Documents**: [API Specification](API_SPECIFICATION.md) | [Architecture Decisions (ADRs)](ADR.md) | [Phased Roadmap](ROADMAP.md) | [Engineering Conventions](CONVENTIONS.md)
+
+---
+
+## Executive Summary & Objective
+
+Payflow API is an enterprise-grade peer-to-peer (P2P) payment backend and transaction ledger designed to process high-concurrency financial transfers with zero double-spending, guaranteed idempotency, and full auditability.
+
+The core objective of this system design is to solve the fundamental challenges of payment processing — race conditions during concurrent balance mutations, partial failures during dual-writes (database vs event broker), entity enumeration security risks, and non-deterministic floating-point financial arithmetic — while providing an extensible, cloud-native architecture adaptable from single-server deployments (`prod-light`) to distributed Kubernetes microservice clusters (`prod`).
+
+---
+
+## Business Background & Context
+
+In financial payment systems, balance state corruption or double-spending causes direct monetary loss and loss of customer trust. Traditional CRUD architectures fail under concurrent payment spikes (e.g. flash sales or bill splitting) because uncoordinated database reads and writes lead to race conditions where two simultaneous transactions debit the same starting balance twice.
+
+Furthermore, communicating transaction state to downstream services (such as notification push, fraud monitoring, or rewards engines) via direct HTTP/message calls within a database transaction causes the **dual-write problem**: if the DB commit succeeds but the network call fails, or vice versa, the system enters an inconsistent state.
+
+Payflow solves these challenges through:
+1. **Deterministic Lock Ordering**: Alphabetical pessimistic row locking on user accounts to prevent deadlocks and race conditions.
+2. **Double-Entry Balance Ledger**: Immutable, append-only ledger entries preserving complete audit trails.
+3. **Transactional Outbox Pattern**: Writing outbound events to the database in the same ACID transaction as the state change, eliminating network dual-write failures.
+4. **Durable Idempotency Engine**: SHA-256 request payload hashing to intercept and safely replay duplicate network submissions.
+
+---
+
+## Goals & Non-Goals
+
+### Goals
+- **Zero Double-Spending**: Guarantee absolute atomicity and isolation for balance transfers under concurrent requests.
+- **Financial Precision**: Enforce exact base-10 arithmetic (`BigDecimal`, `precision = 19, scale = 4`) with banker's rounding (`HALF_EVEN`).
+- **Exactly-Once Mutation Semantics**: Enforce idempotency on payment endpoints via unique `Idempotency-Key` headers and SHA-256 payload verification.
+- **Auditability**: Maintain an append-only transaction and balance ledger history where balances can be independently audited and reconciled.
+- **Sub-100ms P95 Latency**: Deliver fast transfer execution under peak concurrent load.
+- **Non-Enumerable Entities**: Protect internal primary keys (`Long userId`) by exposing immutable UUID reference IDs (`referenceId`) across all external APIs.
+
+### Non-Goals
+- **Multi-Currency / Forex Conversion Engine**: Version 1 is scoped strictly to single-currency transactions (INR). Multi-currency conversion is explicitly out of scope for v1.
+- **Physical ATM / Card Issuance Protocol**: Card network rails (Visa/Mastercard ISO 8583) are out of scope.
+- **Direct Banking Clearing House Clearing**: Core banking settlement protocols (NPCI/ISO 20022) are mocked via clean domain adapter interfaces.
+
+---
+
+## Service Level Objectives (SLOs) & System Constraints
+
+| Metric | Target / Limit | Enforcement Mechanism |
+| :--- | :--- | :--- |
+| **Availability** | `99.99%` uptime | Kubernetes multi-pod deployment with health probes |
+| **P95 Latency (Transfer)** | `< 100ms` | Index-optimized SQL queries, connection pool tuning |
+| **P99 Latency (Transfer)** | `< 250ms` | Deterministic lock ordering, minimal transaction holding time |
+| **Throughput Baseline** | `500 TPS` / node | HikariCP pool optimization & Virtual Threads (`Project Loom`) |
+| **Double-Spend Tolerance** | `0` (Zero tolerance) | Database pessimistic write locks (`SELECT ... FOR UPDATE`) |
+| **Data Retention** | `7 Years` (Audit requirement) | Append-only database ledger & historical partition tables |
 
 ---
 
@@ -287,3 +346,48 @@ Entities encapsulate their own business invariants and state transitions:
 
 ### D. Relational Foreign Key Integrity
 The `Transaction` entity maintains explicit JPA `@ManyToOne(fetch = FetchType.LAZY)` foreign key relationships to `User` for `sender` and `receiver`, while retaining denormalized `senderUpiId` and `receiverUpiId` fields for index-optimized queries.
+
+---
+
+## 14. Security, Privacy & Threat Modeling
+
+Payment backends operate under strict security and regulatory requirements. The system architecture addresses key threat vectors:
+
+### A. Threat Matrix & Mitigations
+| Threat Vector | Severity | Architectural Mitigation |
+| :--- | :--- | :--- |
+| **Resource Enumeration** | High | Non-enumerable `UUID referenceId` used in all external URLs and API response payloads instead of auto-incrementing database IDs (`userId`). |
+| **Double-Spending / Race Condition** | Catastrophic | Pessimistic DB write locks (`SELECT ... FOR UPDATE`) with deterministic lock acquisition order (alphabetical sorting by UPI ID). |
+| **Replay Attacks** | High | Mandatory `Idempotency-Key` headers on mutation endpoints backed by SHA-256 request body hashing. |
+| **Unauthorized Transfers** | Critical | JWT bearer token verification matching authenticated subject against sender identity (Phase 7B). |
+| **Log Data Leakage (PII/Financial)** | Medium | MDC logging filter strips sensitive fields (card numbers, PINs) and loggers only log `X-Request-Id` correlation context. |
+
+### B. Privacy & Compliance Controls
+- **TLS 1.3 Transport Security**: Mandatory for all external gateway ingress traffic.
+- **Sanitized Error Responses**: Production error handlers return standard RFC 7807 `ProblemDetail` bodies without exposing raw SQL errors, stack traces, or internal server directory paths.
+
+---
+
+## 15. Alternatives Considered & Trade-off Analysis
+
+Documenting rejected alternatives and evaluating the penalty ("cost of getting it wrong") is critical to preventing architectural regressions.
+
+| Decision Area | Chosen Solution | Alternative Considered | Cost of Getting It Wrong (Penalty) | Why Alternative Was Rejected |
+| :--- | :--- | :--- | :--- | :--- |
+| **Financial Precision** | `BigDecimal` | `double` / `float` | **Catastrophic**: Cumulative floating-point rounding errors lead to un-reconcilable ledger balances. | Binary floating-point cannot represent base-10 decimals exactly (`0.1 + 0.2 != 0.3`). |
+| **Concurrency Control** | Deterministic Pessimistic Locking | Optimistic Locking (`@Version`) | **High**: Under flash-sale high concurrency, optimistic lock collisions cause high transaction abort/retry rates and poor user experience. | Optimistic locking is ideal for read-heavy workloads; money transfers are write-contended on popular seller accounts. |
+| **Event Publishing** | Transactional Outbox Pattern | Direct Publish (Service calls Kafka inside `@Transactional`) | **High**: Network failure to Kafka causes rollback of DB transaction or lost events (Dual-write problem). | Direct publishing breaks transactional atomicity between DB state and messaging topics. |
+| **API Identification** | Opaque `UUID referenceId` | Exposed `Long userId` | **Medium**: Attackers enumerate total user count and scrape user data via `/api/v1/users/1`, `/2`, `/3`. | Auto-increment IDs leak business metrics and expose predictable resource endpoints. |
+| **DTO Serialization** | MapStruct (Compile-time) | Reflection (e.g. `BeanUtils.copyProperties`) | **Medium**: Runtime reflection errors, zero compile-time safety, poor performance under high TPS. | MapStruct generates clean, zero-reflection Java bytecode during Maven build with strict type checking. |
+
+---
+
+## 16. Open & Resolved Design Issues
+
+### Resolved Design Decisions
+- **`RES-001`: MapStruct for DTO Mapping** — Resolved in Phase 2C. Replaced custom manual factories with type-safe MapStruct mappers.
+- **`RES-002`: RFC 7807 Error Standard** — Resolved in Phase 2D. Standardized all exception responses on Spring `ProblemDetail`.
+- **`RES-003`: User Reference IDs** — Resolved in Phase 2E. Added `UUID referenceId` to `User` entity to insulate API boundaries from auto-increment IDs.
+
+### Open Questions & Future Evaluation
+- **`OPEN-001`: Transfer Amount Cap Configuration** — Default cap set to ₹1,00,000 (`100,000.00`). Evaluating whether per-user dynamic velocity caps should be stored in Redis.
