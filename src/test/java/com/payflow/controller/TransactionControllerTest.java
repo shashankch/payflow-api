@@ -24,6 +24,7 @@ import com.payflow.service.TransactionService;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -87,5 +88,47 @@ class TransactionControllerTest {
 
 		mockMvc.perform(post("/api/v1/transactions").contentType(MediaType.APPLICATION_JSON)
 				.content(objectMapper.writeValueAsString(invalidRequest))).andExpect(status().isUnprocessableEntity());
+	}
+
+	@Test
+	@DisplayName("GET /api/v1/transactions/{id} — Should return transaction details when found")
+	void shouldReturnTransaction_whenFoundByReferenceId() throws Exception {
+		UUID refId = UUID.randomUUID();
+		Transaction tx = Transaction.builder().transactionId(10L).referenceId(refId).senderUpiId("alice@upi")
+				.receiverUpiId("bob@upi").amount(new BigDecimal("100.00")).status(TransactionStatus.COMPLETED)
+				.type(TransactionType.TRANSFER).createdAt(Instant.now()).build();
+
+		given(transactionService.getTransactionByReferenceId(refId)).willReturn(java.util.Optional.of(tx));
+
+		mockMvc.perform(get("/api/v1/transactions/" + refId)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.referenceId").value(refId.toString()))
+				.andExpect(jsonPath("$.senderUpiId").value("alice@upi")).andExpect(jsonPath("$.amount").value(100.00));
+	}
+
+	@Test
+	@DisplayName("GET /api/v1/transactions/{id} — Should return 404 Not Found when transaction missing")
+	void shouldReturn404_whenTransactionNotFound() throws Exception {
+		UUID missingRefId = UUID.randomUUID();
+		given(transactionService.getTransactionByReferenceId(missingRefId)).willReturn(java.util.Optional.empty());
+
+		mockMvc.perform(get("/api/v1/transactions/" + missingRefId)).andExpect(status().isNotFound());
+	}
+
+	@Test
+	@DisplayName("GET /api/v1/transactions/user/{upiId} — Should return paginated transaction history")
+	void shouldReturnPaginatedUserTransactions() throws Exception {
+		Transaction tx = Transaction.builder().transactionId(1L).referenceId(UUID.randomUUID()).senderUpiId("alice@upi")
+				.receiverUpiId("bob@upi").amount(new BigDecimal("50.00")).status(TransactionStatus.COMPLETED)
+				.type(TransactionType.TRANSFER).createdAt(Instant.now()).build();
+
+		org.springframework.data.domain.Page<Transaction> page = new org.springframework.data.domain.PageImpl<>(
+				java.util.List.of(tx));
+
+		given(transactionService.getUserTransactions(org.mockito.ArgumentMatchers.eq("alice@upi"), any()))
+				.willReturn(page);
+
+		mockMvc.perform(get("/api/v1/transactions/user/alice@upi")).andExpect(status().isOk())
+				.andExpect(jsonPath("$.content[0].senderUpiId").value("alice@upi"))
+				.andExpect(jsonPath("$.totalElements").value(1));
 	}
 }

@@ -17,11 +17,11 @@ Payflow is a transactional payments backend built using **Java 25** and **Spring
 The project is evolving through a phased implementation roadmap. See the full plan in **[Phased Roadmap](docs/ROADMAP.md)**.
 
 | Phase | Description | Status |
-|-------|-------------|--------|
-| **Phase 2C** | MapStruct compile-time DTO mappers, interactive OpenAPI/Swagger UI (`/swagger-ui.html`) | ✅ Complete |
-| **Phase 2D** | Domain exception hierarchy, RFC 7807 problem details, `X-Request-Id` correlation tracking | ✅ Complete |
-| **Phase 2E** | UUID reference IDs, service hardening, domain exception consolidation, transfer amount cap | ✅ Complete |
-| **Phase 3+** | ACID transfers, pessimistic locking, balance ledger, Flyway/PostgreSQL, security, observability | 🔄 In Progress |
+| :--- | :--- | :--- |
+| **Phase 1: Foundation & Project Hygiene** | Spring Boot 4.1, JDK 25, H2, DevTools, Checkstyle, Spotless | ✅ Complete |
+| **Phase 2: Domain Modeling & Data Access Layer** | Entities, Repositories, DTOs, Mappers, OpenAPI Docs, Error Handling, UUIDs | ✅ Complete |
+| **Phase 3: Business Logic & Transaction Management** | Money Transfer Orchestration (`@Transactional`), Pagination, Isolation, Auditing | 🔄 In Progress (3A Done) |
+| **Phase 4: Idempotency & Concurrency Control** | Idempotency Keys, Pessimistic Locking, Optimistic Locking, Race Conditions | ⏳ Planned |
 
 ---
 

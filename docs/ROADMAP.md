@@ -48,9 +48,9 @@ UUID reference IDs for users (replacing auto-increment exposure), `@Transactiona
 
 ---
 
-## Phase 3 — ACID Transactions & Concurrency ⬜
+## Phase 3 — ACID Transactions & Concurrency 🔄
 
-### 3A — Transfer & Refund Logic ⬜
+### 3A — Transfer & Refund Logic ✅
 End-to-end transfer orchestration within `@Transactional` boundaries, append-only refund semantics.
 
 ### 3B — Pessimistic Locking ⬜

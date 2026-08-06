@@ -198,7 +198,7 @@ Executes a fund transfer request.
 ```
 
 #### Response Example (`201 Created`)
-Headers: `Location: /api/v1/transactions/1`
+Headers: `Location: /api/v1/transactions/550e8400-e29b-41d4-a716-446655440000`
 ```json
 {
   "transactionId": 1,
@@ -210,6 +210,68 @@ Headers: `Location: /api/v1/transactions/1`
   "type": "TRANSFER",
   "note": "Dinner bill split",
   "createdAt": "2026-08-01T16:05:00Z"
+}
+```
+
+---
+
+### 6. Retrieve Transaction by Reference ID
+Fetches details of a single transaction by its unique UUID reference ID.
+
+- **HTTP Method**: `GET`
+- **Path**: `/api/v1/transactions/{id}`
+- **Authentication**: None
+
+#### Response Example (`200 OK`)
+```json
+{
+  "transactionId": 1,
+  "referenceId": "550e8400-e29b-41d4-a716-446655440000",
+  "senderUpiId": "janedoe@upi",
+  "receiverUpiId": "johnsmith@upi",
+  "amount": 150.0000,
+  "status": "COMPLETED",
+  "type": "TRANSFER",
+  "note": "Dinner bill split",
+  "createdAt": "2026-08-01T16:05:00Z"
+}
+```
+*If not found, returns `404 Not Found` (`TransactionNotFoundException`).*
+
+---
+
+### 7. Retrieve User Transaction History (Paginated)
+Retrieves paginated transfer history (sent and received) for a given UPI ID.
+
+- **HTTP Method**: `GET`
+- **Path**: `/api/v1/transactions/user/{upiId}`
+- **Query Parameters**:
+  - `page` (optional, default: `0`) — Zero-based page index.
+  - `size` (optional, default: `10`, max: `100`) — Page size limit.
+  - `sortBy` (optional, default: `createdAt`) — Field name to sort by (descending).
+
+#### Response Example (`200 OK`)
+```json
+{
+  "content": [
+    {
+      "transactionId": 1,
+      "referenceId": "550e8400-e29b-41d4-a716-446655440000",
+      "senderUpiId": "janedoe@upi",
+      "receiverUpiId": "johnsmith@upi",
+      "amount": 150.0000,
+      "status": "COMPLETED",
+      "type": "TRANSFER",
+      "note": "Dinner bill split",
+      "createdAt": "2026-08-01T16:05:00Z"
+    }
+  ],
+  "page": 0,
+  "size": 10,
+  "totalElements": 1,
+  "totalPages": 1,
+  "first": true,
+  "last": true
 }
 ```
 
