@@ -17,6 +17,8 @@ ADRs document significant technical decisions, along with their context, rationa
 | [ADR-005](#adr-005-mapstruct-for-compile-time-type-safe-dto-mapping) | MapStruct for compile-time type-safe DTO mapping | 2026-08-02 | Accepted |
 | [ADR-006](#adr-006-rfc-7807-problemdetail--centralized-exception-handling) | RFC 7807 ProblemDetail & Centralized Exception Handling | 2026-08-03 | Accepted |
 | [ADR-007](#adr-007-uuid-reference-ids-over-auto-increment-primary-keys) | UUID Reference IDs over Auto-Increment Primary Keys | 2026-08-05 | Accepted |
+| [ADR-008](#adr-008-spring-modulith-modular-monolith-over-distributed-microservices) | Spring Modulith Modular Monolith over Distributed Microservices | 2026-08-07 | Accepted |
+| [ADR-009](#adr-009-opentelemetry-distributed-tracing-via-micrometer-bridge) | OpenTelemetry Distributed Tracing via Micrometer Bridge | 2026-08-07 | Accepted |
 
 ---
 
@@ -217,3 +219,65 @@ Chosen Option: **Dual Identification Strategy (Internal `userId`, External `refe
 - **Positive**: Complete insulation against resource enumeration attacks, non-leaky API contracts, optimized database joins.
 - **Negative / Trade-offs**: Entities require a `@PrePersist` hook or column default to generate UUIDs upon creation.
 - **Risks & Mitigations**: Ensure secondary unique index (`idx_users_reference_id`) is maintained on `referenceId`.
+
+---
+
+### ADR-008: Spring Modulith Modular Monolith over Distributed Microservices
+
+**Date**: 2026-08-07  
+**Status**: Accepted  
+**Phase**: Phase 6B (Architecture Review)  
+
+#### Context & Problem Statement
+Payflow processes peer-to-peer financial transfers where a single operation involves debiting the sender, crediting the receiver, recording a transaction, writing ledger entries, and publishing domain events. Splitting these into separate microservices (e.g., `User Service`, `Transfer Service`, `Ledger Service`) would lose local database ACID transactions, requiring distributed saga orchestration or two-phase commit (2PC) to maintain consistency. This introduces significant complexity, dual-write bugs, and split-brain risks before the domain rules are even stable.
+
+#### Considered Options
+1. **Distributed Microservices (HTTP/gRPC)**: Each domain concern runs as a separate deployable service. Requires distributed transactions (sagas, 2PC) for cross-service state consistency.
+2. **Plain Monolith (No Module Boundaries)**: Single deployable with no enforced package boundaries. Simple but leads to spaghetti coupling as the codebase grows.
+3. **Spring Modulith Modular Monolith**: Single deployable with strict, compile-time-verified module boundaries. Uses Spring's `ApplicationEventPublisher` for inter-module communication. Evolves to Kafka event streaming via `spring-modulith-events-kafka` without domain code changes.
+
+#### Decision Outcome
+Chosen Option: **Spring Modulith Modular Monolith**
+
+##### Rationale
+- **ACID Safety**: Sender debit, receiver credit, transaction record, ledger entries, and domain event all execute in a single `@Transactional` database transaction. Zero distributed transaction overhead.
+- **Enforced Boundaries**: `ApplicationModules.of(PayflowApiApplication.class).verify()` test validates strict package encapsulation at compile time, preventing accidental cross-module coupling.
+- **Event Publication Registry**: Spring Modulith's `spring-modulith-starter-jpa` persists domain events (e.g., `TransferCompletedEvent`) to an `event_publication` table atomically within the same DB transaction. This is a framework-managed transactional outbox.
+- **Evolutionary Path**: Adding `spring-modulith-events-kafka` in Phase 9A auto-externalizes events to Kafka topics with zero changes to `TransactionService` domain code. The service continues to call `applicationEventPublisher.publishEvent()` — the framework bridges to Kafka transparently.
+- **Architectural Simplicity**: Avoids premature microservice distribution and preserves single-database transaction boundaries until physical service isolation is explicitly required.
+
+#### Consequences
+- **Positive**: Single-database ACID safety, zero distributed transaction complexity, compile-time boundary enforcement, seamless Kafka evolution path.
+- **Negative / Trade-offs**: All modules share a single database and JVM. Horizontal scaling is per-application-instance, not per-module.
+- **Risks & Mitigations**: If individual modules need independent scaling (unlikely at Payflow's scale), Spring Modulith modules can be extracted to standalone services along their already-enforced API boundaries.
+
+---
+
+### ADR-009: OpenTelemetry Distributed Tracing via Micrometer Bridge
+
+**Date**: 2026-08-07  
+**Status**: Accepted  
+**Phase**: Phase 8A (Architecture Review)  
+
+#### Context & Problem Statement
+Payflow needs distributed tracing to correlate requests across HTTP controllers, database queries, async event listeners, and (in production) Kafka consumers. The existing `X-Request-Id` MDC pattern (Phase 2D) provides basic request correlation but does not follow W3C trace propagation standards, making it incompatible with industry-standard tracing backends (Grafana Tempo, Jaeger, Zipkin).
+
+#### Considered Options
+1. **Custom `X-Request-Id` only (Current State)**: Simple UUID injected via `RequestIdFilter`. No W3C standard compliance, no automatic span propagation across async boundaries.
+2. **Vendor-Specific Tracing SDK (e.g., Datadog, New Relic)**: Proprietary SDKs with deep integration but vendor lock-in and paid tiers.
+3. **Micrometer Tracing + OpenTelemetry Bridge**: Uses `micrometer-tracing-bridge-otel` to bridge Spring Boot's native Micrometer Observation API to the OpenTelemetry SDK. Exports traces via OTLP to any compatible backend. W3C `traceparent` propagation standard.
+
+#### Decision Outcome
+Chosen Option: **Micrometer Tracing + OpenTelemetry Bridge**
+
+##### Rationale
+- **W3C Standard**: `traceparent` headers (`traceId`, `spanId`) are automatically injected into HTTP requests, database queries, and async thread pools. Compatible with any OTLP backend.
+- **Zero Vendor Lock-in**: Micrometer Tracing is the Spring Boot native abstraction. The OTel bridge can export to Grafana Tempo (free/open-source), Jaeger, Zipkin, or any commercial APM.
+- **Coexistence with X-Request-Id**: The existing `RequestIdFilter` and MDC `requestId` are preserved. Both `requestId` and `traceId` appear in structured log output, providing layered correlation.
+- **Automatic Instrumentation**: `@Observed` annotation on service methods (e.g., `sendMoney()`) creates spans with business-relevant names and tags automatically.
+- **All Open-Source**: `micrometer-tracing-bridge-otel` and `opentelemetry-exporter-otlp` are fully open-source with no paid tiers.
+
+#### Consequences
+- **Positive**: Industry-standard distributed tracing, portable across backends, automatic span propagation, zero vendor lock-in.
+- **Negative / Trade-offs**: Additional dependencies (`micrometer-tracing-bridge-otel`, `opentelemetry-exporter-otlp`). Trace sampling must be configured to avoid excessive overhead in production.
+- **Risks & Mitigations**: Set `management.tracing.sampling.probability` to `1.0` for dev/staging (100% traces) and `0.1` for production (10% sampling) to balance observability with performance.

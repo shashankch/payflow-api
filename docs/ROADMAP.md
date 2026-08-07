@@ -86,12 +86,12 @@ Full lifecycle tests on Testcontainers PG, 10-thread race condition tests, balan
 ### 6A — Idempotency Engine ⬜
 `Idempotency-Key` header filter, SHA-256 payload hashing, cached response replay, TTL cleanup.
 
-### 6B — Transactional Outbox ⬜
-Outbox table with `SKIP LOCKED` polling, pluggable event publisher interface, in-memory default.
+### 6B — Spring Modulith Events & Transactional Outbox ⬜
+Spring Modulith event publication registry (`spring-modulith-starter-jpa`), domain events via `ApplicationEventPublisher`, module boundary verification, in-process async event listeners.
 
 ---
 
-## Phase 7 — Security ⬜
+## Phase 7 — Security & External Integration ⬜
 
 ### 7A — JWT Authentication ⬜
 Spring Security, stateless JWT, auth/login endpoint, CORS configuration.
@@ -99,12 +99,15 @@ Spring Security, stateless JWT, auth/login endpoint, CORS configuration.
 ### 7B — Authorization ⬜
 Sender verification, transaction/ledger history access control.
 
+### 7C — RestClient, HTTP Interface Client & External Service Integration ⬜
+Declarative HTTP Interface Client (`@GetExchange`/`@PostExchange`) backed by `RestClient` for UPI validation. Framework 7 native `@Retryable` with exponential backoff + jitter. Graceful fallback on service unavailability.
+
 ---
 
 ## Phase 8 — Observability, Resilience & Caching ⬜
 
-### 8A — Logging & Metrics ⬜
-JSON-structured logging, MDC trace correlation, Prometheus metrics, HikariCP monitoring.
+### 8A — Logging, Metrics & Tracing ⬜
+JSON-structured logging, MDC trace correlation, Prometheus metrics (`micrometer-registry-prometheus`), OpenTelemetry distributed tracing (`micrometer-tracing-bridge-otel`), custom business metrics (transfer TPS, latency percentiles), HikariCP monitoring.
 
 ### 8B — Resilience4j ⬜
 Per-user rate limiting, retry with exponential backoff, timeout policies.
@@ -119,8 +122,8 @@ Redisson Redlock for multi-instance idempotency coordination, NoOp fallback.
 
 ## Phase 9 — Event Streaming ⬜
 
-### 9A — Kafka Integration ⬜
-Kafka event publisher (`acks=all`, idempotent producer), Testcontainers Kafka tests.
+### 9A — Kafka via Spring Modulith Event Externalization ⬜
+Spring Modulith `spring-modulith-events-kafka` auto-externalizes domain events to Kafka topics with zero domain code changes. Kafka producer (`acks=all`, idempotent), Testcontainers Kafka tests. Local/test profiles remain in-process.
 
 ---
 

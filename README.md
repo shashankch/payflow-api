@@ -52,16 +52,18 @@ The following features are planned and will be implemented across future phases:
 
 - ACID transaction hardening with pessimistic locking and deadlock avoidance
 - Balance ledger with double-entry bookkeeping for auditability
-- DTO layer with input validation and RFC 7807 error responses
 - PostgreSQL with Flyway-managed schema migrations
 - Durable idempotency engine with SHA-256 payload hashing
-- Transactional outbox pattern for reliable event streaming
+- Spring Modulith modular monolith with event publication registry (transactional outbox)
 - JWT authentication and authorization
-- Resilience4j fault tolerance (rate limiting, retry, circuit breaker)
+- RestClient + HTTP Interface Client (`@GetExchange`/`@PostExchange`) for outbound service calls
+- Framework 7 native `@Retryable` with exponential backoff + jitter for external service resilience
+- Resilience4j fault tolerance (per-user rate limiting, circuit breaker)
 - Redis caching and distributed locking
-- Kafka event streaming
+- Apache Kafka event streaming via Spring Modulith event externalization
 - Structured logging with MDC trace correlation and Prometheus metrics
-- Multi-stage Docker build with full-stack Docker Compose
+- OpenTelemetry distributed tracing via Micrometer bridge (W3C `traceparent`)
+- Multi-stage Docker build with full-stack Docker Compose (PostgreSQL, Redis, Kafka, Prometheus, Grafana)
 - Kubernetes manifests with health probes and graceful shutdown
 - Gen-AI spend insights with Spring AI
 

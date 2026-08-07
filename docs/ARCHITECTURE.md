@@ -5,7 +5,7 @@
 > - **Author**: Payflow Engineering (`shashankchandel@gmail.com`)
 > - **Status**: Approved / Living Design Document
 > - **Created Date**: 2026-08-01
-> - **Last Updated**: 2026-08-05
+> - **Last Updated**: 2026-08-07
 > - **Authoritative Location**: [ARCHITECTURE.md](ARCHITECTURE.md)
 > - **Related Documents**: [API Specification](API_SPECIFICATION.md) | [Architecture Decisions (ADRs)](ADR.md) | [Phased Roadmap](ROADMAP.md) | [Engineering Conventions](CONVENTIONS.md)
 
@@ -15,7 +15,9 @@
 
 Payflow API is an enterprise-grade peer-to-peer (P2P) payment backend and transaction ledger designed to process high-concurrency financial transfers with zero double-spending, guaranteed idempotency, and full auditability.
 
-The core objective of this system design is to solve the fundamental challenges of payment processing — race conditions during concurrent balance mutations, partial failures during dual-writes (database vs event broker), entity enumeration security risks, and non-deterministic floating-point financial arithmetic — while providing an extensible, cloud-native architecture adaptable from single-server deployments (`prod-light`) to distributed Kubernetes microservice clusters (`prod`).
+The system is built as a **Spring Modulith modular monolith** — enforcing strict package-level module boundaries while maintaining single-database ACID transactions for financial safety. Domain events are published via Spring's `ApplicationEventPublisher` and persisted atomically through Spring Modulith's Event Publication Registry, enabling a seamless evolutionary path from in-process event handling to Apache Kafka event streaming without modifying domain service code.
+
+The core objective of this system design is to solve the fundamental challenges of payment processing — race conditions during concurrent balance mutations, partial failures during dual-writes (database vs event broker), entity enumeration security risks, and non-deterministic floating-point financial arithmetic — while providing an extensible, cloud-native architecture adaptable from single-server deployments (`prod-light`) to distributed Kubernetes clusters (`prod`).
 
 ---
 
@@ -74,25 +76,27 @@ graph TD
 
     subgraph "Kubernetes Pod / Spring Boot Container"
         Gateway --> Controller["UserController / TransactionController"]
-        Controller --> Service["TransactionService / UserService / AIService (LLM API)"]
+        Controller --> Service["TransactionService / UserService / AIService"]
         Service --> Locking["Pessimistic Lock / Redis Distributed Lock"]
         Service --> Idempotency["Idempotency Filter & Registry"]
-        Service --> OutboxWriter["Outbox DB Writer"]
+        Service --> EventPub["ApplicationEventPublisher"]
+        EventPub --> ModulithLog["Spring Modulith Event Publication Log"]
+        ModulithLog --> EventListener["@ApplicationModuleListener"]
         
-        %% Local telemetry
-        Logging["MDC Log Logger (Structured JSON)"] -.-> OutTrace["Log Output (with Trace/Span ID)"]
+        %% Observability
+        Tracing["Micrometer Tracing + OTel Bridge"] -.-> TraceOut["W3C traceparent propagation"]
+        Logging["MDC Logger (Structured JSON)"] -.-> LogOut["traceId / spanId / requestId"]
     end
 
     %% Databases & Cache
     Locking -- "SELECT ... FOR UPDATE" --> PostgresDB[("PostgreSQL DB")]
     Idempotency -- "Check / Save State" --> PostgresDB
-    OutboxWriter -- "Write Transaction & Event" --> PostgresDB
+    ModulithLog -- "Atomic write in same TX" --> PostgresDB
     
     Service -- "Cache-Aside / Token Bucket" --> Redis[("Redis Cache / Rate Limiter / Distributed Lock")]
 
-    %% Background processes
-    OutboxPoller["Outbox Dispatcher (Scheduled Worker)"] -- "Read unprocessed events" --> PostgresDB
-    OutboxPoller -- "Publish Transaction Events" --> Kafka["Apache Kafka Broker (KRaft Mode)"]
+    %% Kafka bridge (Phase 9A)
+    ModulithLog -- "spring-modulith-events-kafka" --> Kafka["Apache Kafka Broker (KRaft Mode)"]
 
     %% Observers
     Prometheus["Prometheus Server"] -.->|"/actuator/prometheus"| Controller
@@ -207,39 +211,39 @@ CREATE TABLE idempotency_registry (
 
 ---
 
-## 7. Transactional Outbox Pattern
+## 7. Spring Modulith Event Publication & Transactional Outbox
 
-To achieve reliable event-driven messaging, Payflow separates business state updates from event publishing to ensure transactional integrity (solving the dual-write problem).
+To achieve reliable event-driven messaging, Payflow uses **Spring Modulith's Event Publication Registry** to atomically persist domain events within the same database transaction as the business state change. This eliminates the dual-write problem without requiring custom outbox infrastructure.
 
-### Outbox Pattern Design
+### Event Publication Flow
 ```
-[Start Transaction]
+[Start @Transactional]
    │
    ├── 1. Update User Balance (SQL)
    ├── 2. Save Transaction Record (SQL)
-   ├── 3. Write Event to "outbox_table" (SQL)
+   ├── 3. applicationEventPublisher.publishEvent(TransferCompletedEvent)
+   │      └── Spring Modulith writes to `event_publication` table (same TX)
    │
 [Commit Transaction] --> Atomically persists everything locally
    │
-   └── [Asynchronous Process]
+   └── [Post-Commit Async Processing]
           │
-          ├── 1. Read unprocessed events from "outbox_table"
-          ├── 2. Publish events to Kafka topic
-          └── 3. Mark events as processed (or delete) in DB
+          ├── @ApplicationModuleListener receives event (in-process, local/test profiles)
+          │     └── Logging, audit trail, notification triggers
+          │
+          └── spring-modulith-events-kafka (prod profile, Phase 9A)
+                └── Auto-externalizes event to Kafka topic `payflow.transfers`
 ```
 
-### Outbox Table Schema
-```sql
-CREATE TABLE outbox_events (
-    event_id UUID PRIMARY KEY,
-    aggregate_type VARCHAR(100) NOT NULL, -- e.g., "TRANSACTION"
-    aggregate_id VARCHAR(100) NOT NULL,   -- e.g., transactionId
-    event_type VARCHAR(100) NOT NULL,     -- e.g., "TRANSACTION_COMPLETED"
-    payload JSONB NOT NULL,
-    status VARCHAR(50) NOT NULL,          -- PENDING, DISPATCHED, FAILED
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-```
+### Evolutionary Architecture Path
+
+| Stage | Profile | Event Handling | Kafka Required? |
+| :--- | :--- | :--- | :--- |
+| **Phase 6B** | `local` / `test` | In-process `@ApplicationModuleListener` | No |
+| **Phase 9A** | `prod` | Auto-externalized to Kafka via `spring-modulith-events-kafka` | Yes |
+| **Phase 12A** | `prod-light` | In-process (no Kafka, single-server deployment) | No |
+
+This design ensures that domain service code (`TransactionService.sendMoney()`) **never changes** regardless of whether events are consumed in-process or streamed to Kafka. The Spring Modulith framework handles the routing transparently based on active Spring profiles.
 
 ---
 
@@ -249,7 +253,7 @@ To support smart financial features, the project includes an **AI spend assistan
 
 - **AI Categorization**: An asynchronous listener or dedicated endpoint reads transaction metadata (amounts, merchant UPI names, transaction notes) and passes a structured prompt to the LLM to map the transaction into structured categories (e.g., `Groceries`, `Utilities`, `Entertainment`, `Dining`).
 - **Structured JSON Schema**: Prompts leverage the LLM's structured JSON output mode to force the response directly into a predefined JSON schema mapping, preventing formatting errors.
-- **Budgeting Insights**: Generates automated personal budgeting recommendations based on the user's recent transaction history, providing recruiters with an example of clean prompt engineering and LLM integrations.
+- **Budgeting Insights**: Generates automated personal budgeting recommendations based on the user's recent transaction history via clean prompt engineering and LLM integrations.
 
 ---
 
@@ -286,8 +290,21 @@ The application complies with cloud-native deployment requirements when running 
 
 ## 11. Observability Stack
 
-* **Log Correlation (MDC)**: The logger is configured with a standard pattern using Spring Boot's Mapped Diagnostic Context (MDC). Every log line includes `traceId`, `spanId`, and `userId` context, enabling automated log correlation in tracing systems.
-* **Prometheus Metrics**: Actuator exposes metrics under `/actuator/prometheus`, providing telemetry on transaction volumes, payment failures, JVM garbage collection, and database connection pool saturation.
+Payflow implements the **Three Pillars of Observability** — Metrics, Tracing, and Logging — using industry-standard open-source tooling:
+
+### A. Distributed Tracing (OpenTelemetry)
+- **Micrometer Tracing** with the **OpenTelemetry bridge** (`micrometer-tracing-bridge-otel`) automatically injects W3C-standard `traceparent` headers (`traceId`, `spanId`) across HTTP controllers, database queries, and async thread pools.
+- The existing `X-Request-Id` correlation (Phase 2D) is preserved and coexists with W3C trace context, providing both custom and standards-based correlation.
+- Compatible with **Grafana Tempo**, **Jaeger**, or any OTLP-compatible tracing backend.
+
+### B. Metrics (Prometheus + Grafana)
+- **System Metrics**: JVM garbage collection, thread pool depth, HikariCP connection pool saturation — all auto-exported via Micrometer.
+- **Business Metrics**: Custom counters and timers track real-time transfer TPS (`payflow.transfers.total`), latency percentiles (`payflow.transfers.latency` — p50/p95/p99), and failure breakdowns by exception type.
+- **Prometheus** scrapes `/actuator/prometheus`; **Grafana** dashboards visualize transfer volume, error rates, and infrastructure health.
+
+### C. Structured Logging (MDC Correlation)
+- Logback configured with JSON-structured output including MDC fields (`traceId`, `spanId`, `requestId`, `userId`).
+- Every log line is automatically correlated with the distributed trace, enabling click-through from a Grafana dashboard metric spike to the exact log lines across the request lifecycle.
 
 ---
 
@@ -308,7 +325,7 @@ Unit tests focus on isolating individual components and verifying business logic
    - Confirms that custom derived queries or complex JPQL Fetch Joins compile and execute successfully.
    - Executed via `@DataJpaTest` running against an embedded H2 database instance.
 4. **Mocking External Services**:
-   - Outbound REST endpoints, the AI model assistant API, and Kafka brokers are mocked or stubbed during unit verification to prevent flaky test execution and external network dependence.
+   - Outbound REST endpoints (UPI validation via HTTP Interface Client), the AI model assistant API, and Kafka brokers are mocked or stubbed during unit verification using WireMock and MockRestServiceServer to prevent flaky test execution and external network dependence.
 
 ### B. Advanced Integration Testing (Rigor & Concurrency Verification)
 Integration tests verify the full lifecycle of a transaction across actual container dependencies using **Testcontainers** to orchestrate PostgreSQL and Kafka instances during Maven build phases:
@@ -322,9 +339,9 @@ Integration tests verify the full lifecycle of a transaction across actual conta
    - To verify that gateway-level locks block dual-processing on duplicate submissions:
      - Spin up two concurrent threads executing a transaction using the same `Idempotency-Key` and request payload.
      - **Assertion**: Thread 1 succeeds; Thread 2 is immediately rejected with a `409 Conflict` (custom `IdempotentRequestProcessingException`) without starting any database transaction, proving the gateway Redis lock isolated the duplicate execution path.
-3. **Asynchronous Outbox Publisher Testing**:
-   - Confirms the outbox poller successfully dispatches records to Kafka.
-   - **Assertion**: Write an outbox record, wait for the scheduled poller execution, read the event from the Testcontainers Kafka consumer, and verify the message matches the expected transaction schema.
+3. **Spring Modulith Event Publication Testing**:
+   - Confirms domain events published via `ApplicationEventPublisher` are atomically persisted to the event publication log and consumed by `@ApplicationModuleListener` handlers.
+   - **Assertion**: Execute a transfer, verify `TransferCompletedEvent` appears in the event publication table within the same database transaction. Verify Kafka externalization (prod profile) via Testcontainers Kafka consumer.
 
 ---
 
@@ -349,7 +366,48 @@ The `Transaction` entity maintains explicit JPA `@ManyToOne(fetch = FetchType.LA
 
 ---
 
-## 14. Security, Privacy & Threat Modeling
+## 14. External Service Integration (RestClient & HTTP Interface Client)
+
+Payflow validates UPI IDs against an external validation service during user registration using modern Spring outbound HTTP communication patterns:
+
+### A. RestClient (Spring Framework 7)
+`RestClient` is the modern synchronous HTTP client that replaces the deprecated `RestTemplate`. It provides a fluent, immutable API with built-in error handling and serialization support.
+
+### B. HTTP Interface Client
+Payflow defines outbound API contracts as declarative Java interfaces using `@GetExchange` / `@PostExchange` annotations:
+
+```java
+public interface UpiValidationClient {
+    @GetExchange("/verify/{upiId}")
+    UpiVerificationResponse verify(@PathVariable String upiId);
+}
+```
+
+Spring generates the implementation proxy backed by `RestClient` at runtime — conceptually similar to OpenFeign but fully Spring-native with zero external dependencies.
+
+### C. Resilience (Framework 7 Native @Retryable)
+Outbound HTTP calls are wrapped with Framework 7's native `@Retryable` annotation (now part of `spring-core`) providing exponential backoff with jitter:
+
+```
+Attempt 1 → timeout → wait 500ms
+Attempt 2 → timeout → wait ~1000ms (with jitter)
+Attempt 3 → success or fallback
+```
+
+Graceful fallback: if the UPI validation service is unavailable, registration proceeds with a warning log — external service failures never block core user onboarding.
+
+### D. HTTP Client Comparison Matrix
+| Client | Era | Model | Use Case |
+| :--- | :--- | :--- | :--- |
+| `RestTemplate` | Spring 3 (deprecated in FW7) | Imperative, verbose | Legacy codebases |
+| `RestClient` | Spring 6.1+ | Fluent, synchronous | Modern blocking apps |
+| `WebClient` | Spring 5+ | Reactive, non-blocking | Reactive pipelines / streaming |
+| HTTP Interface Client | Spring 6+ (enhanced in FW7) | Declarative proxy | Clean API contracts, replaces Feign |
+| OpenFeign | Spring Cloud | Declarative proxy (external lib) | Legacy Cloud-native apps |
+
+---
+
+## 15. Security, Privacy & Threat Modeling
 
 Payment backends operate under strict security and regulatory requirements. The system architecture addresses key threat vectors:
 
@@ -368,7 +426,7 @@ Payment backends operate under strict security and regulatory requirements. The 
 
 ---
 
-## 15. Alternatives Considered & Trade-off Analysis
+## 16. Alternatives Considered & Trade-off Analysis
 
 Documenting rejected alternatives and evaluating the penalty ("cost of getting it wrong") is critical to preventing architectural regressions.
 
@@ -376,18 +434,23 @@ Documenting rejected alternatives and evaluating the penalty ("cost of getting i
 | :--- | :--- | :--- | :--- | :--- |
 | **Financial Precision** | `BigDecimal` | `double` / `float` | **Catastrophic**: Cumulative floating-point rounding errors lead to un-reconcilable ledger balances. | Binary floating-point cannot represent base-10 decimals exactly (`0.1 + 0.2 != 0.3`). |
 | **Concurrency Control** | Deterministic Pessimistic Locking | Optimistic Locking (`@Version`) | **High**: Under flash-sale high concurrency, optimistic lock collisions cause high transaction abort/retry rates and poor user experience. | Optimistic locking is ideal for read-heavy workloads; money transfers are write-contended on popular seller accounts. |
-| **Event Publishing** | Transactional Outbox Pattern | Direct Publish (Service calls Kafka inside `@Transactional`) | **High**: Network failure to Kafka causes rollback of DB transaction or lost events (Dual-write problem). | Direct publishing breaks transactional atomicity between DB state and messaging topics. |
+| **Event Publishing** | Spring Modulith Event Publication Registry | Direct Publish (Service calls Kafka inside `@Transactional`) | **High**: Network failure to Kafka causes rollback of DB transaction or lost events (Dual-write problem). | Direct publishing breaks transactional atomicity between DB state and messaging topics. |
+| **Event Publishing** | Spring Modulith Event Publication Registry | Hand-rolled outbox table + `SKIP LOCKED` polling | **Medium**: Custom outbox code requires boilerplate polling dispatcher, manual completion tracking, and retry logic. | Spring Modulith provides framework-managed event persistence, completion callbacks, and transparent Kafka bridging. |
 | **API Identification** | Opaque `UUID referenceId` | Exposed `Long userId` | **Medium**: Attackers enumerate total user count and scrape user data via `/api/v1/users/1`, `/2`, `/3`. | Auto-increment IDs leak business metrics and expose predictable resource endpoints. |
 | **DTO Serialization** | MapStruct (Compile-time) | Reflection (e.g. `BeanUtils.copyProperties`) | **Medium**: Runtime reflection errors, zero compile-time safety, poor performance under high TPS. | MapStruct generates clean, zero-reflection Java bytecode during Maven build with strict type checking. |
 
 ---
 
-## 16. Open & Resolved Design Issues
+## 17. Open & Resolved Design Issues
 
 ### Resolved Design Decisions
 - **`RES-001`: MapStruct for DTO Mapping** — Resolved in Phase 2C. Replaced custom manual factories with type-safe MapStruct mappers.
 - **`RES-002`: RFC 7807 Error Standard** — Resolved in Phase 2D. Standardized all exception responses on Spring `ProblemDetail`.
 - **`RES-003`: User Reference IDs** — Resolved in Phase 2E. Added `UUID referenceId` to `User` entity to insulate API boundaries from auto-increment IDs.
+- **`RES-004`: Modular Monolith over Microservices** — Resolved in architecture review. Spring Modulith enforces module boundaries while preserving single-database ACID safety for financial transactions.
+- **`RES-005`: OpenTelemetry over Vendor-Specific Tracing** — Resolved in architecture review. Micrometer Tracing + OTel bridge provides portable, W3C-standard distributed tracing.
+- **`RES-006`: RestClient + HTTP Interface Client over RestTemplate** — Resolved in architecture review. `RestTemplate` is deprecated in Framework 7; `RestClient` + declarative `@GetExchange`/`@PostExchange` interfaces are the modern standard.
+- **`RES-007`: Framework 7 @Retryable + Resilience4j Complementary Use** — Resolved in architecture review. Use spring-core native `@Retryable` for basic outbound HTTP retry; use Resilience4j for advanced patterns (per-user rate limiting, circuit breakers) not yet in spring-core.
 
 ### Open Questions & Future Evaluation
 - **`OPEN-001`: Transfer Amount Cap Configuration** — Default cap set to ₹1,00,000 (`100,000.00`). Evaluating whether per-user dynamic velocity caps should be stored in Redis.
