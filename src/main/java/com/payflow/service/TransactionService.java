@@ -1,6 +1,12 @@
 package com.payflow.service;
 
+import java.util.Optional;
+import java.util.UUID;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.payflow.dto.request.TransferMoneyRequest;
@@ -24,7 +30,7 @@ public class TransactionService {
 		this.userRepository = userRepository;
 	}
 
-	@Transactional
+	@Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class, timeout = 5)
 	public Transaction sendMoney(TransferMoneyRequest request) {
 		String senderUpi = request.getSenderUpiId();
 		String receiverUpi = request.getReceiverUpiId();
@@ -53,5 +59,15 @@ public class TransactionService {
 		builder.type(TransactionType.TRANSFER);
 		builder.note(request.getNote());
 		return transactionRepository.save(builder.build());
+	}
+
+	@Transactional(readOnly = true)
+	public Optional<Transaction> getTransactionByReferenceId(UUID referenceId) {
+		return transactionRepository.findByReferenceId(referenceId);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<Transaction> getUserTransactions(String upiId, Pageable pageable) {
+		return transactionRepository.findBySenderUpiIdOrReceiverUpiId(upiId, upiId, pageable);
 	}
 }

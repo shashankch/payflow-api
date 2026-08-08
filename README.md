@@ -17,11 +17,11 @@ Payflow is a transactional payments backend built using **Java 25** and **Spring
 The project is evolving through a phased implementation roadmap. See the full plan in **[Phased Roadmap](docs/ROADMAP.md)**.
 
 | Phase | Description | Status |
-|-------|-------------|--------|
-| **Phase 2C** | MapStruct compile-time DTO mappers, interactive OpenAPI/Swagger UI (`/swagger-ui.html`) | ✅ Complete |
-| **Phase 2D** | Domain exception hierarchy, RFC 7807 problem details, `X-Request-Id` correlation tracking | ✅ Complete |
-| **Phase 2E** | UUID reference IDs, service hardening, domain exception consolidation, transfer amount cap | ✅ Complete |
-| **Phase 3+** | ACID transfers, pessimistic locking, balance ledger, Flyway/PostgreSQL, security, observability | 🔄 In Progress |
+| :--- | :--- | :--- |
+| **Phase 1: Foundation & Project Hygiene** | Spring Boot 4.1, JDK 25, H2, DevTools, Checkstyle, Spotless | ✅ Complete |
+| **Phase 2: Domain Modeling & Data Access Layer** | Entities, Repositories, DTOs, Mappers, OpenAPI Docs, Error Handling, UUIDs | ✅ Complete |
+| **Phase 3: Business Logic & Transaction Management** | Money Transfer Orchestration (`@Transactional`), Pagination, Isolation, Auditing | 🔄 In Progress (3A Done) |
+| **Phase 4: Idempotency & Concurrency Control** | Idempotency Keys, Pessimistic Locking, Optimistic Locking, Race Conditions | ⏳ Planned |
 
 ---
 
@@ -52,16 +52,18 @@ The following features are planned and will be implemented across future phases:
 
 - ACID transaction hardening with pessimistic locking and deadlock avoidance
 - Balance ledger with double-entry bookkeeping for auditability
-- DTO layer with input validation and RFC 7807 error responses
 - PostgreSQL with Flyway-managed schema migrations
 - Durable idempotency engine with SHA-256 payload hashing
-- Transactional outbox pattern for reliable event streaming
+- Spring Modulith modular monolith with event publication registry (transactional outbox)
 - JWT authentication and authorization
-- Resilience4j fault tolerance (rate limiting, retry, circuit breaker)
+- RestClient + HTTP Interface Client (`@GetExchange`/`@PostExchange`) for outbound service calls
+- Framework 7 native `@Retryable` with exponential backoff + jitter for external service resilience
+- Resilience4j fault tolerance (per-user rate limiting, circuit breaker)
 - Redis caching and distributed locking
-- Kafka event streaming
+- Apache Kafka event streaming via Spring Modulith event externalization
 - Structured logging with MDC trace correlation and Prometheus metrics
-- Multi-stage Docker build with full-stack Docker Compose
+- OpenTelemetry distributed tracing via Micrometer bridge (W3C `traceparent`)
+- Multi-stage Docker build with full-stack Docker Compose (PostgreSQL, Redis, Kafka, Prometheus, Grafana)
 - Kubernetes manifests with health probes and graceful shutdown
 - Gen-AI spend insights with Spring AI
 

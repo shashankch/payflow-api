@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Phase 3A (Money Transfer Implementation)
+- Money transfer orchestration service (`TransactionService.sendMoney()`) executed under `@Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class, timeout = 5)`.
+- Domain level validation for self-transfer rejection (`SelfTransferException`), user verification (`UserNotFoundException`), and balance adequacy (`InsufficientBalanceException`).
+- `GET /api/v1/transactions/{id}` endpoint to fetch transaction details by UUID reference ID.
+- `GET /api/v1/transactions/user/{upiId}` endpoint to retrieve paginated transfer history for a given UPI ID.
+- Comprehensive unit tests (`TransactionServiceTest`) and mock controller tests (`TransactionControllerTest`) covering transfer orchestration and transaction queries.
+
 ### Added
 - Phase 2E Model Refinements & Service Hardening:
   - Added non-enumerable `UUID referenceId` to `User` entity to insulate REST APIs from auto-increment primary keys (`userId`).
