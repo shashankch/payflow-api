@@ -27,6 +27,9 @@ The project is evolving through a phased implementation roadmap. See the full pl
 
 ## Implemented Features
 
+- **Pessimistic Locking & Deadlock Avoidance**: Database-level write locking (`SELECT ... FOR UPDATE`) via `UserRepository.findByUpiIdWithLock()` with deterministic alphabetical lock ordering by UPI ID to prevent race conditions and cross-transfer deadlocks.
+- **JPA N+1 Resolution**: `@EntityGraph(attributePaths = {"sender", "receiver"})` on transaction repository queries ensuring single-query JOIN fetches.
+- **Money Transfer Orchestration**: `TransactionService.sendMoney()` executing under `@Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class, timeout = 5)` boundaries with balance debit/credit invariance.
 - **RFC 7807 Exception Framework**: Centralized `@RestControllerAdvice` handling domain exceptions (`UserNotFoundException`, `InsufficientBalanceException`, `DuplicateUpiIdException`, `SelfTransferException`) and field-level validation errors.
 - **Request Correlation Tracking**: `RequestIdFilter` (`OncePerRequestFilter`) injecting `X-Request-Id` UUID into MDC context and HTTP response headers.
 - **Interactive API Docs & Swagger UI**: Auto-generated live OpenAPI 3.0 specs via Springdoc at `http://localhost:8080/swagger-ui.html` and `/v3/api-docs`.

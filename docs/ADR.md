@@ -19,6 +19,8 @@ ADRs document significant technical decisions, along with their context, rationa
 | [ADR-007](#adr-007-uuid-reference-ids-over-auto-increment-primary-keys) | UUID Reference IDs over Auto-Increment Primary Keys | 2026-08-05 | Accepted |
 | [ADR-008](#adr-008-spring-modulith-modular-monolith-over-distributed-microservices) | Spring Modulith Modular Monolith over Distributed Microservices | 2026-08-07 | Accepted |
 | [ADR-009](#adr-009-opentelemetry-distributed-tracing-via-micrometer-bridge) | OpenTelemetry Distributed Tracing via Micrometer Bridge | 2026-08-07 | Accepted |
+| [ADR-010](#adr-010-pessimistic-locking-for-high-concurrency-balance-operations) | Pessimistic Locking for High-Concurrency Balance Operations | 2026-08-07 | Accepted |
+| [ADR-011](#adr-011-deterministic-lock-ordering-for-deadlock-prevention) | Deterministic Lock Ordering for Deadlock Prevention | 2026-08-07 | Accepted |
 
 ---
 
@@ -222,6 +224,7 @@ Chosen Option: **Dual Identification Strategy (Internal `userId`, External `refe
 
 ---
 
+<<<<<<< Updated upstream
 ### ADR-008: Spring Modulith Modular Monolith over Distributed Microservices
 
 **Date**: 2026-08-07  
@@ -281,3 +284,56 @@ Chosen Option: **Micrometer Tracing + OpenTelemetry Bridge**
 - **Positive**: Industry-standard distributed tracing, portable across backends, automatic span propagation, zero vendor lock-in.
 - **Negative / Trade-offs**: Additional dependencies (`micrometer-tracing-bridge-otel`, `opentelemetry-exporter-otlp`). Trace sampling must be configured to avoid excessive overhead in production.
 - **Risks & Mitigations**: Set `management.tracing.sampling.probability` to `1.0` for dev/staging (100% traces) and `0.1` for production (10% sampling) to balance observability with performance.
+=======
+### ADR-010: Pessimistic Locking for High-Concurrency Balance Operations
+
+**Date**: 2026-08-07  
+**Status**: Accepted  
+**Phase**: Phase 3B  
+
+#### Context & Problem Statement
+Money transfers require atomic balance updates (`sender.debit()`, `receiver.credit()`). Under concurrent execution, read-then-write patterns without explicit database locking lead to race conditions and lost updates (double-spending).
+
+#### Considered Options
+1. **Optimistic Locking (`@Version`)**: Detects concurrent modifications at commit time and throws `OptimisticLockException`. Requires retry loops in application code. Under high write contention (e.g. popular merchants receiving hundreds of transfers per second), optimistic locking results in high abort rates.
+2. **Pessimistic Write Locking (`SELECT ... FOR UPDATE`)**: Acquires exclusive row-level database locks when reading user balances inside the transaction boundary. Subsequent concurrent transactions attempting to read/lock the same account block until the holding transaction commits or rolls back.
+
+#### Decision Outcome
+Chosen Option: **Pessimistic Write Locking (`SELECT ... FOR UPDATE`)**
+
+##### Rationale
+- **Guaranteed Consistency**: Exclusive row locks prevent concurrent reads of stale balances during active transfers, eliminating double-spending race conditions.
+- **Predictable Execution**: Transactions execute sequentially per account without triggering application-level retry loops or transaction abort spikes under high write contention.
+
+#### Consequences
+- **Positive**: Guaranteed ACID balance integrity, zero double-spend window.
+- **Negative / Trade-offs**: Concurrent transfers targeting the same account wait on database row locks, increasing database connection hold times under load.
+- **Risks & Mitigations**: Set explicit `@Transactional(timeout = 5)` transaction timeouts to prevent lock wait deadlocks from holding connection pool resources indefinitely.
+
+---
+
+### ADR-011: Deterministic Lock Ordering for Deadlock Prevention
+
+**Date**: 2026-08-07  
+**Status**: Accepted  
+**Phase**: Phase 3B  
+
+#### Context & Problem Statement
+When acquiring pessimistic write locks on two database rows (sender and receiver accounts), non-deterministic lock acquisition order causes database deadlocks under concurrent cross-transfers (e.g. Tx 1: Alice sends to Bob; Tx 2: Bob sends to Alice). Tx 1 locks Alice then waits for Bob; Tx 2 locks Bob then waits for Alice, resulting in a cyclical lock dependency deadlock.
+
+#### Considered Options
+1. **Application Lock Ordering (Sender First, Receiver Second)**: Simple, but vulnerable to deadlocks whenever reciprocal transfers execute concurrently.
+2. **Deterministic Lock Ordering (Alphabetical by UPI ID)**: Sort sender and receiver UPI IDs lexicographically prior to lock acquisition. Both Tx 1 and Tx 2 acquire locks in the exact same sequence (`alice@payflow` first, then `bob@payflow`).
+
+#### Decision Outcome
+Chosen Option: **Deterministic Lock Ordering (Alphabetical by UPI ID)**
+
+##### Rationale
+- **Deadlock Elimination**: Strictly ordering lock requests prevents cyclical wait graphs at the database level. Both reciprocal transfers attempt to lock `alice@payflow` first; the second transaction cleanly blocks until the first completes.
+- **Zero Overhead**: Sorting two string references in memory takes negligible time (<1 microsecond).
+
+#### Consequences
+- **Positive**: Eliminates database deadlocks during reciprocal concurrent money transfers.
+- **Negative / Trade-offs**: Requires minor mapping logic to re-assign `sender` and `receiver` domain entity references after acquiring locks in sorted order.
+
+>>>>>>> Stashed changes

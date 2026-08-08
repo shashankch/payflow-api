@@ -53,7 +53,7 @@ UUID reference IDs for users (replacing auto-increment exposure), `@Transactiona
 ### 3A — Transfer & Refund Logic ✅
 End-to-end transfer orchestration within `@Transactional` boundaries, append-only refund semantics.
 
-### 3B — Pessimistic Locking ⬜
+### 3B — Pessimistic Locking ✅
 `SELECT ... FOR UPDATE` with deterministic lock ordering, `@EntityGraph` for N+1 resolution.
 
 ### 3C — Balance Ledger ⬜

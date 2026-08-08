@@ -98,7 +98,7 @@ class TransactionControllerTest {
 				.receiverUpiId("bob@upi").amount(new BigDecimal("100.00")).status(TransactionStatus.COMPLETED)
 				.type(TransactionType.TRANSFER).createdAt(Instant.now()).build();
 
-		given(transactionService.getTransactionByReferenceId(refId)).willReturn(java.util.Optional.of(tx));
+		given(transactionService.getTransactionByReferenceId(refId)).willReturn(tx);
 
 		mockMvc.perform(get("/api/v1/transactions/" + refId)).andExpect(status().isOk())
 				.andExpect(jsonPath("$.referenceId").value(refId.toString()))
@@ -109,7 +109,8 @@ class TransactionControllerTest {
 	@DisplayName("GET /api/v1/transactions/{id} — Should return 404 Not Found when transaction missing")
 	void shouldReturn404_whenTransactionNotFound() throws Exception {
 		UUID missingRefId = UUID.randomUUID();
-		given(transactionService.getTransactionByReferenceId(missingRefId)).willReturn(java.util.Optional.empty());
+		given(transactionService.getTransactionByReferenceId(missingRefId)).willThrow(
+				new com.payflow.exception.TransactionNotFoundException("Transaction not found: " + missingRefId));
 
 		mockMvc.perform(get("/api/v1/transactions/" + missingRefId)).andExpect(status().isNotFound());
 	}

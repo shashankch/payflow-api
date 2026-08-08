@@ -156,14 +156,16 @@ When loading transaction histories (e.g., querying users and their related list 
 - $N$ queries are executed to fetch the transactions for each individual user.
 
 ### Resolution Strategy
-To maintain a high-performance database connection pool, Payflow prevents this by using explicit **Fetch Joins** or `@EntityGraph` definitions in repositories:
+To maintain a high-performance database connection pool, Payflow resolves this using `@EntityGraph` annotations in Spring Data JPA repositories:
 ```java
-// In UserRepository.java
-@EntityGraph(attributePaths = {"transactions"})
-@Query("SELECT u FROM User u WHERE u.userId = :id")
-Optional<User> findUserWithTransactions(@Param("id") Long id);
+// In TransactionRepository.java
+@EntityGraph(attributePaths = {"sender", "receiver"})
+Optional<Transaction> findByReferenceId(UUID referenceId);
+
+@EntityGraph(attributePaths = {"sender", "receiver"})
+Page<Transaction> findBySenderUpiIdOrReceiverUpiId(String senderUpiId, String receiverUpiId, Pageable pageable);
 ```
-This forces Spring Data JPA to generate a single SQL query with an `INNER JOIN` or `LEFT JOIN`, retrieving the user and their associated transactions in a single database round-trip.
+This forces Spring Data JPA to generate a single SQL query with `LEFT OUTER JOIN`s, retrieving the transaction along with its associated `sender` and `receiver` `User` entities in a single database round-trip.
 
 ---
 

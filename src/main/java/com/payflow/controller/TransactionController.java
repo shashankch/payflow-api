@@ -22,7 +22,6 @@ import com.payflow.dto.request.TransferMoneyRequest;
 import com.payflow.dto.response.PagedResponse;
 import com.payflow.dto.response.TransactionResponse;
 import com.payflow.entity.Transaction;
-import com.payflow.exception.TransactionNotFoundException;
 import com.payflow.mapper.TransactionMapper;
 import com.payflow.service.TransactionService;
 
@@ -65,8 +64,7 @@ public class TransactionController {
 	@ApiResponse(responseCode = "200", description = "Transaction found and returned")
 	@ApiResponse(responseCode = "404", description = "Transaction not found")
 	public ResponseEntity<TransactionResponse> getTransactionByReferenceId(@PathVariable UUID id) {
-		Transaction tx = transactionService.getTransactionByReferenceId(id)
-				.orElseThrow(() -> new TransactionNotFoundException("Transaction not found: " + id));
+		Transaction tx = transactionService.getTransactionByReferenceId(id);
 		return ResponseEntity.ok(transactionMapper.toResponse(tx));
 	}
 

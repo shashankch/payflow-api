@@ -1,7 +1,6 @@
 package com.payflow.service;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -10,6 +9,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -25,14 +25,17 @@ import com.payflow.entity.TransactionType;
 import com.payflow.entity.User;
 import com.payflow.exception.InsufficientBalanceException;
 import com.payflow.exception.SelfTransferException;
+import com.payflow.exception.TransactionNotFoundException;
 import com.payflow.exception.UserNotFoundException;
 import com.payflow.repository.TransactionRepository;
 import com.payflow.repository.UserRepository;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class TransactionServiceTest {
@@ -51,105 +54,139 @@ class TransactionServiceTest {
 
 	@BeforeEach
 	void setUp() {
-		sender = User.builder().userId(1L).referenceId(UUID.randomUUID()).name("Alice").upiId("alice@upi")
-				.balance(new BigDecimal("1000.00")).phoneNumber("9876543210").build();
-
-		receiver = User.builder().userId(2L).referenceId(UUID.randomUUID()).name("Bob").upiId("bob@upi")
-				.balance(new BigDecimal("500.00")).phoneNumber("9876543211").build();
+		sender = new User(1L, UUID.randomUUID(), "Alice Smith", "alice@payflow", new BigDecimal("500.00"), "9876543210",
+				0L, null, null);
+		receiver = new User(2L, UUID.randomUUID(), "Bob Jones", "bob@payflow", new BigDecimal("200.00"), "9876543211",
+				0L, null, null);
 	}
 
 	@Test
-	@DisplayName("Should send money successfully when sender has sufficient balance")
-	void shouldSendMoneySuccessfully_whenRequestIsValid() {
-		TransferMoneyRequest request = TransferMoneyRequest.builder().senderUpiId("alice@upi").receiverUpiId("bob@upi")
-				.amount(new BigDecimal("200.00")).note("Dinner").build();
+	@DisplayName("Should complete transfer successfully when request is valid")
+	void shouldCompleteTransfer_whenValidRequest() {
+		TransferMoneyRequest request = new TransferMoneyRequest("alice@payflow", "bob@payflow",
+				new BigDecimal("100.00"), "Rent payment");
 
-		given(userRepository.findByUpiId("alice@upi")).willReturn(Optional.of(sender));
-		given(userRepository.findByUpiId("bob@upi")).willReturn(Optional.of(receiver));
-		given(transactionRepository.save(any(Transaction.class))).willAnswer(inv -> inv.getArgument(0));
+		when(userRepository.findByUpiIdWithLock("alice@payflow")).thenReturn(Optional.of(sender));
+		when(userRepository.findByUpiIdWithLock("bob@payflow")).thenReturn(Optional.of(receiver));
+		when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-		Transaction tx = transactionService.sendMoney(request);
+		Transaction result = transactionService.sendMoney(request);
 
-		assertThat(tx).isNotNull();
-		assertThat(sender.getBalance()).isEqualTo(new BigDecimal("800.00"));
-		assertThat(receiver.getBalance()).isEqualTo(new BigDecimal("700.00"));
-		assertThat(tx.getStatus()).isEqualTo(TransactionStatus.COMPLETED);
-		assertThat(tx.getType()).isEqualTo(TransactionType.TRANSFER);
+		assertThat(result).isNotNull();
+		assertThat(result.getAmount()).isEqualTo(new BigDecimal("100.00"));
+		assertThat(result.getStatus()).isEqualTo(TransactionStatus.COMPLETED);
+		assertThat(result.getType()).isEqualTo(TransactionType.TRANSFER);
+		assertThat(sender.getBalance()).isEqualTo(new BigDecimal("400.00"));
+		assertThat(receiver.getBalance()).isEqualTo(new BigDecimal("300.00"));
+		verify(userRepository).save(sender);
+		verify(userRepository).save(receiver);
 	}
 
 	@Test
-	@DisplayName("Should throw SelfTransferException when sender and receiver UPI IDs match")
-	void shouldThrowSelfTransferException_whenSenderAndReceiverAreSame() {
-		TransferMoneyRequest request = TransferMoneyRequest.builder().senderUpiId("alice@upi")
-				.receiverUpiId("ALICE@upi").amount(new BigDecimal("100.00")).build();
+	@DisplayName("Should lock accounts in alphabetical order to prevent deadlocks when sender > receiver")
+	void shouldLockAccountsInAlphabeticalOrder_whenSenderIsAlphabeticallyAfterReceiver() {
+		TransferMoneyRequest request = new TransferMoneyRequest("bob@payflow", "alice@payflow", new BigDecimal("50.00"),
+				"Reverse transfer");
 
-		assertThrows(SelfTransferException.class, () -> transactionService.sendMoney(request));
+		when(userRepository.findByUpiIdWithLock("alice@payflow")).thenReturn(Optional.of(sender));
+		when(userRepository.findByUpiIdWithLock("bob@payflow")).thenReturn(Optional.of(receiver));
+		when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+		transactionService.sendMoney(request);
+
+		InOrder inOrder = inOrder(userRepository);
+		inOrder.verify(userRepository).findByUpiIdWithLock("alice@payflow");
+		inOrder.verify(userRepository).findByUpiIdWithLock("bob@payflow");
+	}
+
+	@Test
+	@DisplayName("Should throw SelfTransferException when sender UPI equals receiver UPI")
+	void shouldThrowSelfTransferException_whenSenderEqualsReceiver() {
+		TransferMoneyRequest request = new TransferMoneyRequest("alice@payflow", "alice@payflow",
+				new BigDecimal("50.00"), "Self transfer");
+
+		assertThatThrownBy(() -> transactionService.sendMoney(request)).isInstanceOf(SelfTransferException.class)
+				.hasMessageContaining("alice@payflow");
 	}
 
 	@Test
 	@DisplayName("Should throw UserNotFoundException when sender is not found")
-	void shouldThrowUserNotFoundException_whenSenderDoesNotExist() {
-		TransferMoneyRequest request = TransferMoneyRequest.builder().senderUpiId("missing@upi")
-				.receiverUpiId("bob@upi").amount(new BigDecimal("100.00")).build();
+	void shouldThrowUserNotFoundException_whenSenderNotFound() {
+		TransferMoneyRequest request = new TransferMoneyRequest("unknown@payflow", "bob@payflow",
+				new BigDecimal("50.00"), "Test");
 
-		given(userRepository.findByUpiId("missing@upi")).willReturn(Optional.empty());
+		when(userRepository.findByUpiIdWithLock("bob@payflow")).thenReturn(Optional.of(receiver));
+		when(userRepository.findByUpiIdWithLock("unknown@payflow")).thenReturn(Optional.empty());
 
-		assertThrows(UserNotFoundException.class, () -> transactionService.sendMoney(request));
+		assertThatThrownBy(() -> transactionService.sendMoney(request)).isInstanceOf(UserNotFoundException.class)
+				.hasMessageContaining("Sender not found");
 	}
 
 	@Test
 	@DisplayName("Should throw UserNotFoundException when receiver is not found")
-	void shouldThrowUserNotFoundException_whenReceiverDoesNotExist() {
-		TransferMoneyRequest request = TransferMoneyRequest.builder().senderUpiId("alice@upi")
-				.receiverUpiId("missing@upi").amount(new BigDecimal("100.00")).build();
+	void shouldThrowUserNotFoundException_whenReceiverNotFound() {
+		TransferMoneyRequest request = new TransferMoneyRequest("alice@payflow", "unknown@payflow",
+				new BigDecimal("50.00"), "Test");
 
-		given(userRepository.findByUpiId("alice@upi")).willReturn(Optional.of(sender));
-		given(userRepository.findByUpiId("missing@upi")).willReturn(Optional.empty());
+		when(userRepository.findByUpiIdWithLock("alice@payflow")).thenReturn(Optional.of(sender));
+		when(userRepository.findByUpiIdWithLock("unknown@payflow")).thenReturn(Optional.empty());
 
-		assertThrows(UserNotFoundException.class, () -> transactionService.sendMoney(request));
+		assertThatThrownBy(() -> transactionService.sendMoney(request)).isInstanceOf(UserNotFoundException.class)
+				.hasMessageContaining("Receiver not found");
 	}
 
 	@Test
-	@DisplayName("Should throw InsufficientBalanceException when sender has low balance")
-	void shouldThrowInsufficientBalanceException_whenSenderHasLowBalance() {
-		TransferMoneyRequest request = TransferMoneyRequest.builder().senderUpiId("alice@upi").receiverUpiId("bob@upi")
-				.amount(new BigDecimal("1500.00")).build();
+	@DisplayName("Should throw InsufficientBalanceException when sender balance is lower than transfer amount")
+	void shouldThrowInsufficientBalanceException_whenSenderBalanceTooLow() {
+		TransferMoneyRequest request = new TransferMoneyRequest("alice@payflow", "bob@payflow",
+				new BigDecimal("1000.00"), "Big transfer");
 
-		given(userRepository.findByUpiId("alice@upi")).willReturn(Optional.of(sender));
-		given(userRepository.findByUpiId("bob@upi")).willReturn(Optional.of(receiver));
+		when(userRepository.findByUpiIdWithLock("alice@payflow")).thenReturn(Optional.of(sender));
+		when(userRepository.findByUpiIdWithLock("bob@payflow")).thenReturn(Optional.of(receiver));
 
-		assertThrows(InsufficientBalanceException.class, () -> transactionService.sendMoney(request));
+		assertThatThrownBy(() -> transactionService.sendMoney(request))
+				.isInstanceOf(InsufficientBalanceException.class);
 	}
 
 	@Test
-	@DisplayName("Should return transaction by reference ID when found")
-	void shouldGetTransactionByReferenceId() {
+	@DisplayName("Should return transaction when reference ID exists")
+	void shouldReturnTransaction_whenReferenceIdExists() {
 		UUID refId = UUID.randomUUID();
-		Transaction tx = Transaction.builder().transactionId(10L).referenceId(refId).senderUpiId("alice@upi")
-				.receiverUpiId("bob@upi").amount(new BigDecimal("100.00")).status(TransactionStatus.COMPLETED)
-				.type(TransactionType.TRANSFER).createdAt(Instant.now()).build();
+		Transaction tx = Transaction.builder().referenceId(refId).sender(sender).receiver(receiver)
+				.senderUpiId("alice@payflow").receiverUpiId("bob@payflow").amount(new BigDecimal("100.00"))
+				.status(TransactionStatus.COMPLETED).type(TransactionType.TRANSFER).build();
 
-		given(transactionRepository.findByReferenceId(refId)).willReturn(Optional.of(tx));
+		when(transactionRepository.findByReferenceId(refId)).thenReturn(Optional.of(tx));
 
-		Optional<Transaction> result = transactionService.getTransactionByReferenceId(refId);
+		Transaction result = transactionService.getTransactionByReferenceId(refId);
 
-		assertThat(result).isPresent();
-		assertThat(result.get().getReferenceId()).isEqualTo(refId);
+		assertThat(result).isNotNull();
+		assertThat(result.getReferenceId()).isEqualTo(refId);
 	}
 
 	@Test
-	@DisplayName("Should return paginated transactions for a user")
-	void shouldGetUserTransactionsPaginated() {
+	@DisplayName("Should throw TransactionNotFoundException when reference ID does not exist")
+	void shouldThrowTransactionNotFoundException_whenReferenceIdNotFound() {
+		UUID refId = UUID.randomUUID();
+		when(transactionRepository.findByReferenceId(refId)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> transactionService.getTransactionByReferenceId(refId))
+				.isInstanceOf(TransactionNotFoundException.class).hasMessageContaining(refId.toString());
+	}
+
+	@Test
+	@DisplayName("Should return paginated user transactions")
+	void shouldReturnUserTransactions_paginated() {
 		Pageable pageable = PageRequest.of(0, 10);
-		Transaction tx = Transaction.builder().transactionId(1L).referenceId(UUID.randomUUID()).senderUpiId("alice@upi")
-				.receiverUpiId("bob@upi").amount(new BigDecimal("50.00")).status(TransactionStatus.COMPLETED)
-				.type(TransactionType.TRANSFER).createdAt(Instant.now()).build();
-
+		Transaction tx = Transaction.builder().referenceId(UUID.randomUUID()).sender(sender).receiver(receiver)
+				.senderUpiId("alice@payflow").receiverUpiId("bob@payflow").amount(new BigDecimal("100.00"))
+				.status(TransactionStatus.COMPLETED).type(TransactionType.TRANSFER).build();
 		Page<Transaction> page = new PageImpl<>(List.of(tx), pageable, 1);
-		given(transactionRepository.findBySenderUpiIdOrReceiverUpiId("alice@upi", "alice@upi", pageable))
-				.willReturn(page);
 
-		Page<Transaction> result = transactionService.getUserTransactions("alice@upi", pageable);
+		when(transactionRepository.findBySenderUpiIdOrReceiverUpiId("alice@payflow", "alice@payflow", pageable))
+				.thenReturn(page);
+
+		Page<Transaction> result = transactionService.getUserTransactions("alice@payflow", pageable);
 
 		assertThat(result).isNotNull();
 		assertThat(result.getContent()).hasSize(1);
