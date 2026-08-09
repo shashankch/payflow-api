@@ -138,8 +138,15 @@ When transaction logic spans distributed systems (such as reserve balance operat
 - **Use Case**: Locking a payment request before database transactions begin, preventing thundering herds and duplicate submission processing at the gateway container boundaries.
 - **Failover**: Configured with a short lease time (TTL) to prevent permanent resource locking if a pod node crashes during transaction execution.
 
-### C. Append-Only Ledger Immutability
-All transaction entries are treated as immutable, append-only logs. Once a transaction is successfully written, it is never modified or deleted. Any adjustments, reversals, or refunds are executed by writing a *new* transaction entry of type `REFUND`, preserving the complete historical audit trail.
+### C. Append-Only Double-Entry Balance Ledger
+All financial balance operations execute double-entry bookkeeping by persisting two immutable `BalanceLedgerEntry` records (`DEBIT` for sender, `CREDIT` for receiver) within the same `@Transactional` database boundary as the money transfer:
+- **Audit Integrity**: Every ledger entry records `amount`, `balanceBefore`, and `balanceAfter`, providing an immutable audit trail for every user balance state transition.
+- **Balance Reconciliation**: `users.balance` functions as a high-performance denormalized field. The authoritative source of truth can be validated at any time by executing a reconciliation query over the `balance_ledger` table:
+  ```sql
+  SELECT COALESCE(SUM(CASE WHEN entry_type = 'CREDIT' THEN amount ELSE -amount END), 0)
+  FROM balance_ledger WHERE user_id = :userId;
+  ```
+- **Immutability**: Once written, ledger rows are never updated or deleted. Reversals or refunds append new `CREDIT`/`DEBIT` ledger rows.
 
 ### D. Database Indexing Strategy
 To ensure high database read throughput and statement generation speed, the following index constraints are established in migrations:

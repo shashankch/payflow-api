@@ -48,7 +48,7 @@ UUID reference IDs for users (replacing auto-increment exposure), `@Transactiona
 
 ---
 
-## Phase 3 — ACID Transactions & Concurrency 🔄
+## Phase 3 — ACID Transactions & Concurrency ✅
 
 ### 3A — Transfer & Refund Logic ✅
 End-to-end transfer orchestration within `@Transactional` boundaries, append-only refund semantics.
@@ -56,8 +56,8 @@ End-to-end transfer orchestration within `@Transactional` boundaries, append-onl
 ### 3B — Pessimistic Locking ✅
 `SELECT ... FOR UPDATE` with deterministic lock ordering, `@EntityGraph` for N+1 resolution.
 
-### 3C — Balance Ledger ⬜
-Double-entry bookkeeping (DEBIT/CREDIT entries), `balanceBefore`/`balanceAfter` audit trail.
+### 3C — Balance Ledger ✅
+Double-entry bookkeeping (DEBIT/CREDIT entries), `balanceBefore`/`balanceAfter` audit trail, balance reconciliation query.
 
 ---
 

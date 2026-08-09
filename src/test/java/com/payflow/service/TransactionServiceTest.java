@@ -9,6 +9,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -19,6 +21,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
 import com.payflow.dto.request.TransferMoneyRequest;
+import com.payflow.entity.BalanceLedgerEntry;
+import com.payflow.entity.LedgerEntryType;
 import com.payflow.entity.Transaction;
 import com.payflow.entity.TransactionStatus;
 import com.payflow.entity.TransactionType;
@@ -27,6 +31,7 @@ import com.payflow.exception.InsufficientBalanceException;
 import com.payflow.exception.SelfTransferException;
 import com.payflow.exception.TransactionNotFoundException;
 import com.payflow.exception.UserNotFoundException;
+import com.payflow.repository.BalanceLedgerRepository;
 import com.payflow.repository.TransactionRepository;
 import com.payflow.repository.UserRepository;
 
@@ -34,6 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -46,8 +52,14 @@ class TransactionServiceTest {
 	@Mock
 	private UserRepository userRepository;
 
+	@Mock
+	private BalanceLedgerRepository balanceLedgerRepository;
+
 	@InjectMocks
 	private TransactionService transactionService;
+
+	@Captor
+	private ArgumentCaptor<BalanceLedgerEntry> ledgerCaptor;
 
 	private User sender;
 	private User receiver;
@@ -61,7 +73,7 @@ class TransactionServiceTest {
 	}
 
 	@Test
-	@DisplayName("Should complete transfer successfully when request is valid")
+	@DisplayName("Should complete transfer successfully and write double-entry balance ledger entries")
 	void shouldCompleteTransfer_whenValidRequest() {
 		TransferMoneyRequest request = new TransferMoneyRequest("alice@payflow", "bob@payflow",
 				new BigDecimal("100.00"), "Rent payment");
@@ -80,6 +92,22 @@ class TransactionServiceTest {
 		assertThat(receiver.getBalance()).isEqualTo(new BigDecimal("300.00"));
 		verify(userRepository).save(sender);
 		verify(userRepository).save(receiver);
+
+		verify(balanceLedgerRepository, times(2)).save(ledgerCaptor.capture());
+		List<BalanceLedgerEntry> savedLedgers = ledgerCaptor.getAllValues();
+		assertThat(savedLedgers).hasSize(2);
+
+		BalanceLedgerEntry debitEntry = savedLedgers.get(0);
+		assertThat(debitEntry.getEntryType()).isEqualTo(LedgerEntryType.DEBIT);
+		assertThat(debitEntry.getAmount()).isEqualTo(new BigDecimal("100.00"));
+		assertThat(debitEntry.getBalanceBefore()).isEqualTo(new BigDecimal("500.00"));
+		assertThat(debitEntry.getBalanceAfter()).isEqualTo(new BigDecimal("400.00"));
+
+		BalanceLedgerEntry creditEntry = savedLedgers.get(1);
+		assertThat(creditEntry.getEntryType()).isEqualTo(LedgerEntryType.CREDIT);
+		assertThat(creditEntry.getAmount()).isEqualTo(new BigDecimal("100.00"));
+		assertThat(creditEntry.getBalanceBefore()).isEqualTo(new BigDecimal("200.00"));
+		assertThat(creditEntry.getBalanceAfter()).isEqualTo(new BigDecimal("300.00"));
 	}
 
 	@Test

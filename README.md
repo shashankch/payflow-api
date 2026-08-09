@@ -27,6 +27,7 @@ The project is evolving through a phased implementation roadmap. See the full pl
 
 ## Implemented Features
 
+- **Double-Entry Balance Ledger**: Immutable audit trail (`balance_ledger` table) recording `DEBIT` and `CREDIT` entries with `balanceBefore` and `balanceAfter` tracking per transaction for financial auditability and balance reconciliation.
 - **Pessimistic Locking & Deadlock Avoidance**: Database-level write locking (`SELECT ... FOR UPDATE`) via `UserRepository.findByUpiIdWithLock()` with deterministic alphabetical lock ordering by UPI ID to prevent race conditions and cross-transfer deadlocks.
 - **JPA N+1 Resolution**: `@EntityGraph(attributePaths = {"sender", "receiver"})` on transaction repository queries ensuring single-query JOIN fetches.
 - **Money Transfer Orchestration**: `TransactionService.sendMoney()` executing under `@Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class, timeout = 5)` boundaries with balance debit/credit invariance.

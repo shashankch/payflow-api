@@ -2,6 +2,7 @@ package com.payflow.controller;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -10,14 +11,21 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import tools.jackson.databind.ObjectMapper;
 import com.payflow.dto.request.CreateUserRequest;
+import com.payflow.dto.response.LedgerEntryResponse;
 import com.payflow.dto.response.UserResponse;
+import com.payflow.entity.BalanceLedgerEntry;
+import com.payflow.entity.LedgerEntryType;
 import com.payflow.entity.User;
+import com.payflow.mapper.LedgerMapper;
 import com.payflow.mapper.UserMapper;
 import com.payflow.service.UserService;
 
@@ -44,6 +52,9 @@ class UserControllerTest {
 	@MockitoBean
 	private UserMapper userMapper;
 
+	@MockitoBean
+	private LedgerMapper ledgerMapper;
+
 	@BeforeEach
 	void setUpMapperMock() {
 		given(userMapper.toResponse(any())).willAnswer(invocation -> {
@@ -53,6 +64,18 @@ class UserControllerTest {
 			}
 			return new UserResponse(user.getReferenceId(), user.getName(), user.getUpiId(), user.getBalance(),
 					user.getPhoneNumber(), user.getCreatedAt(), user.getUpdatedAt());
+		});
+
+		given(ledgerMapper.toResponse(any())).willAnswer(invocation -> {
+			BalanceLedgerEntry entry = invocation.getArgument(0);
+			if (entry == null) {
+				return null;
+			}
+			return new LedgerEntryResponse(entry.getLedgerId(),
+					entry.getUser() != null ? entry.getUser().getReferenceId() : null,
+					entry.getTransaction() != null ? entry.getTransaction().getReferenceId() : null,
+					entry.getEntryType(), entry.getAmount(), entry.getBalanceBefore(), entry.getBalanceAfter(),
+					entry.getCreatedAt());
 		});
 	}
 
@@ -109,5 +132,22 @@ class UserControllerTest {
 		given(userService.getUserByReferenceId(missingRefId)).willReturn(Optional.empty());
 
 		mockMvc.perform(get("/api/v1/users/" + missingRefId)).andExpect(status().isNotFound());
+	}
+
+	@Test
+	@DisplayName("GET /api/v1/users/{id}/ledger — Should return paginated ledger entries when user exists")
+	void shouldReturnUserLedger_whenUserExists() throws Exception {
+		UUID refId = UUID.randomUUID();
+		BalanceLedgerEntry entry = BalanceLedgerEntry.builder().ledgerId(1L).entryType(LedgerEntryType.DEBIT)
+				.amount(new BigDecimal("100.00")).balanceBefore(new BigDecimal("500.00"))
+				.balanceAfter(new BigDecimal("400.00")).createdAt(Instant.now()).build();
+		Page<BalanceLedgerEntry> page = new PageImpl<>(List.of(entry));
+
+		given(userService.getUserLedger(any(UUID.class), any(Pageable.class))).willReturn(page);
+
+		mockMvc.perform(get("/api/v1/users/" + refId + "/ledger")).andExpect(status().isOk())
+				.andExpect(jsonPath("$.content[0].ledgerId").value(1))
+				.andExpect(jsonPath("$.content[0].entryType").value("DEBIT"))
+				.andExpect(jsonPath("$.content[0].amount").value(100.00));
 	}
 }

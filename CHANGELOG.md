@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Phase 3C (Balance Ledger & Reconciliation)
+- Double-entry balance ledger (`balance_ledger` table & `BalanceLedgerEntry` entity) writing atomic `DEBIT` (sender) and `CREDIT` (receiver) records on money transfers.
+- Balance audit tracking capturing `amount`, `balanceBefore`, and `balanceAfter` state transitions for complete financial auditability.
+- Balance reconciliation aggregate SQL query `calculateReconciledBalanceByUserId()` in `BalanceLedgerRepository` allowing reconstruction of authoritative balance state from ledger rows.
+- `GET /api/v1/users/{id}/ledger` endpoint returning paginated balance ledger history for a user by UUID reference ID.
+- Added `ADR-012` (Double-Entry Balance Ledger as Immutable Audit Trail) to `docs/ADR.md`.
+
 ### Added - Phase 3B (Pessimistic Locking & Deadlock Avoidance)
 - Pessimistic write locking (`@Lock(LockModeType.PESSIMISTIC_WRITE)`) on `UserRepository.findByUpiIdWithLock()` generating `SELECT ... FOR UPDATE` SQL statements to prevent race conditions during high-concurrency balance mutations.
 - Deterministic alphabetical lock acquisition ordering by UPI ID in `TransactionService.sendMoney()` to prevent database deadlock cycles during concurrent reciprocal transfers.
