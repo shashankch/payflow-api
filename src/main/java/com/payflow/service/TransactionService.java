@@ -1,6 +1,5 @@
 package com.payflow.service;
 
-import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -15,6 +14,7 @@ import com.payflow.entity.TransactionStatus;
 import com.payflow.entity.TransactionType;
 import com.payflow.entity.User;
 import com.payflow.exception.SelfTransferException;
+import com.payflow.exception.TransactionNotFoundException;
 import com.payflow.exception.UserNotFoundException;
 import com.payflow.repository.TransactionRepository;
 import com.payflow.repository.UserRepository;
@@ -39,10 +39,23 @@ public class TransactionService {
 			throw new SelfTransferException(senderUpi);
 		}
 
-		User sender = userRepository.findByUpiId(senderUpi)
-				.orElseThrow(() -> new UserNotFoundException("Sender not found: " + senderUpi));
-		User receiver = userRepository.findByUpiId(receiverUpi)
-				.orElseThrow(() -> new UserNotFoundException("Receiver not found: " + receiverUpi));
+		// Deterministic lock acquisition order (alphabetical by UPI ID) to prevent
+		// database deadlocks
+		boolean senderFirst = senderUpi.compareToIgnoreCase(receiverUpi) < 0;
+		String firstUpi = senderFirst ? senderUpi : receiverUpi;
+		String secondUpi = senderFirst ? receiverUpi : senderUpi;
+
+		String firstRole = senderFirst ? "Sender" : "Receiver";
+		String secondRole = senderFirst ? "Receiver" : "Sender";
+
+		User firstUser = userRepository.findByUpiIdWithLock(firstUpi)
+				.orElseThrow(() -> new UserNotFoundException(firstRole + " not found: " + firstUpi));
+
+		User secondUser = userRepository.findByUpiIdWithLock(secondUpi)
+				.orElseThrow(() -> new UserNotFoundException(secondRole + " not found: " + secondUpi));
+
+		User sender = senderFirst ? firstUser : secondUser;
+		User receiver = senderFirst ? secondUser : firstUser;
 
 		sender.debit(request.getAmount());
 		receiver.credit(request.getAmount());
@@ -62,8 +75,10 @@ public class TransactionService {
 	}
 
 	@Transactional(readOnly = true)
-	public Optional<Transaction> getTransactionByReferenceId(UUID referenceId) {
-		return transactionRepository.findByReferenceId(referenceId);
+	public Transaction getTransactionByReferenceId(UUID referenceId) {
+		String msg = "Transaction not found: " + referenceId;
+		return transactionRepository.findByReferenceId(referenceId)
+				.orElseThrow(() -> new TransactionNotFoundException(msg));
 	}
 
 	@Transactional(readOnly = true)
