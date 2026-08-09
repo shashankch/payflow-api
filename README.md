@@ -18,10 +18,10 @@ The project is evolving through a phased implementation roadmap. See the full pl
 
 | Phase | Description | Status |
 | :--- | :--- | :--- |
-| **Phase 1: Foundation & Project Hygiene** | Spring Boot 4.1, JDK 25, H2, DevTools, Checkstyle, Spotless | ✅ Complete |
-| **Phase 2: Domain Modeling & Data Access Layer** | Entities, Repositories, DTOs, Mappers, OpenAPI Docs, Error Handling, UUIDs | ✅ Complete |
-| **Phase 3: Business Logic & Transaction Management** | Money Transfer Orchestration (`@Transactional`), Pagination, Isolation, Auditing | 🔄 In Progress (3A Done) |
-| **Phase 4: Idempotency & Concurrency Control** | Idempotency Keys, Pessimistic Locking, Optimistic Locking, Race Conditions | ⏳ Planned |
+| **Phase 1: Foundation & Project Hygiene** | Spring Boot 4.1, JDK 25, H2, DevTools, Checkstyle, Spotless, CI Pipeline | ✅ Complete |
+| **Phase 2: Domain Modeling & API Hardening** | Entities, Repositories, DTOs, Mappers, OpenAPI Docs, RFC 7807 Error Handling, UUIDs | ✅ Complete |
+| **Phase 3: ACID Transactions & Concurrency** | Money Transfer Orchestration (`@Transactional`), Pessimistic Locking (`FOR UPDATE`), Deadlock Avoidance, Double-Entry Balance Ledger | ✅ Complete |
+| **Phase 4: Database & Profiles** | Flyway Migrations, PostgreSQL Integration, Profile Configs (`local`/`test`/`prod`), Testcontainers | 🔄 Next Up |
 
 ---
 

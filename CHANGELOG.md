@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.3.0] - 2026-08-09
+
 ### Added - Phase 3C (Balance Ledger & Reconciliation)
 - Double-entry balance ledger (`balance_ledger` table & `BalanceLedgerEntry` entity) writing atomic `DEBIT` (sender) and `CREDIT` (receiver) records on money transfers.
 - Balance audit tracking capturing `amount`, `balanceBefore`, and `balanceAfter` state transitions for complete financial auditability.
@@ -28,44 +32,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `GET /api/v1/transactions/{id}` endpoint to fetch transaction details by UUID reference ID.
 - `GET /api/v1/transactions/user/{upiId}` endpoint to retrieve paginated transfer history for a given UPI ID.
 - Comprehensive unit tests (`TransactionServiceTest`) and mock controller tests (`TransactionControllerTest`) covering transfer orchestration and transaction queries.
-- Phase 2E Model Refinements & Service Hardening:
-  - Added non-enumerable `UUID referenceId` to `User` entity to insulate REST APIs from auto-increment primary keys (`userId`).
-  - Added `@Transactional(readOnly = true)` annotations across all `UserService` read methods for Hibernate dirty-checking optimization.
-  - Consolidated balance check validation directly inside `User.debit()` throwing `InsufficientBalanceException`.
-  - Enforced transfer upper bound cap (`@DecimalMax("1000000.00")`) on `TransferMoneyRequest`.
-  - Added MDC `%X{requestId}` tracking pattern to application console logger.
-  - Removed obsolete static `fromEntity()` factories from response DTO records.
-  - Added `ADR-007` (UUID Reference IDs over Auto-Increment Primary Keys in APIs) to `docs/ADR.md`.
-- Phase 2D Error Handling & RFC 7807 Exception Framework:
-  - Implemented custom domain exception hierarchy (`PayflowException`, `UserNotFoundException`, `TransactionNotFoundException`, `InsufficientBalanceException`, `DuplicateUpiIdException`, `SelfTransferException`).
-  - Implemented global exception handling via `@RestControllerAdvice` (`GlobalExceptionHandler`) producing standardized RFC 7807 `ProblemDetail` responses.
-  - Implemented `RequestIdFilter` (`OncePerRequestFilter`) for `X-Request-Id` MDC logging and response header correlation tracking.
-  - Updated domain services (`UserService`, `TransactionService`) and controllers to throw domain exceptions for clean, centralized handling.
-  - Added unit test suites for `GlobalExceptionHandlerTest` and `RequestIdFilterTest`.
-  - Added `ADR-006` (RFC 7807 ProblemDetail & Centralized Exception Handling) to `docs/ADR.md`.
-- Phase 2C Mapper Layer & API Documentation:
-  - Integrated MapStruct `1.6.3` compile-time mappers (`UserMapper`, `TransactionMapper`) for type-safe DTO <-> Entity conversions.
-  - Integrated Springdoc OpenAPI `3.0.3` (`springdoc-openapi-starter-webmvc-ui`) for live interactive Swagger UI (`/swagger-ui.html`) and OpenAPI JSON specs (`/v3/api-docs`).
-  - Added OpenAPI configuration bean (`OpenApiConfig`) and controller OpenAPI annotations (`@Tag`, `@Operation`, `@ApiResponse`).
-  - Added MapStruct mapper unit test suite (`UserMapperTest`, `TransactionMapperTest`).
-  - Added `ADR-005` (MapStruct for compile-time type-safe DTO mapping) to `docs/ADR.md`.
-- Phase 2B DTO Layer, Input Validation & API Versioning:
-  - Versioned REST controllers under `/api/v1/users` and `/api/v1/transactions`.
-  - Added `spring-boot-starter-validation` dependency for Jakarta Validation (`@Valid`, `@NotBlank`, `@Pattern`, `@DecimalMin`, `@Size`, `@Min`, `@Max`).
-  - Implemented request DTOs: `CreateUserRequest` and `TransferMoneyRequest` with strict validation rules.
-  - Implemented response DTO records: `UserResponse`, `TransactionResponse`, and generic `PagedResponse<T>` pagination wrapper.
-  - Added controller web slice tests (`UserControllerTest`, `TransactionControllerTest`) verifying HTTP status codes and input validation enforcement.
-  - Added `ADR-004` (URI-based API Versioning and DTO Isolation Layer) to `docs/ADR.md`.
-- Phase 2A Entity Model Hardening & Rich Domain:
-  - Replaced `Double` primitives with `BigDecimal` (`precision = 19, scale = 4`) across `User` and `Transaction` entities.
-  - Implemented Rich Domain methods (`User.debit()`, `User.credit()`) encapsulating balance invariants and state validation.
-  - Added audit timestamps (`createdAt`, `updatedAt`) and optimistic locking (`@Version version`) support to `User`.
-  - Added `TransactionStatus` (`INITIATED`, `COMPLETED`, `FAILED`, `REFUNDED`) and `TransactionType` (`TRANSFER`, `REFUND`) enums.
-  - Added JPA `@ManyToOne` foreign key relationships between `Transaction` and `User` entities with denormalized UPI strings.
-  - Added UUID `referenceId` auto-generation (`@PrePersist`) on `Transaction`.
-  - Refactored all services (`UserService`, `TransactionService`) and controllers (`UserController`, `TransactionController`) to use constructor injection.
-  - Unit test suite for `User` domain logic and `Transaction` reference ID auto-generation (`UserTest`, `TransactionTest`).
-  - Architectural Decision Records: `ADR-001` (BigDecimal), `ADR-002` (Constructor injection), `ADR-003` (Rich Domain Model).
+
+---
+
+## [0.2.0] - 2026-08-06
+
+### Added - Phase 2E (Model Refinements & Service Hardening)
+- Added non-enumerable `UUID referenceId` to `User` entity to insulate REST APIs from auto-increment primary keys (`userId`).
+- Added `@Transactional(readOnly = true)` annotations across all `UserService` read methods for Hibernate dirty-checking optimization.
+- Consolidated balance check validation directly inside `User.debit()` throwing `InsufficientBalanceException`.
+- Enforced transfer upper bound cap (`@DecimalMax("1000000.00")`) on `TransferMoneyRequest`.
+- Added MDC `%X{requestId}` tracking pattern to application console logger.
+- Removed obsolete static `fromEntity()` factories from response DTO records.
+- Added `ADR-007` (UUID Reference IDs over Auto-Increment Primary Keys in APIs) to `docs/ADR.md`.
+
+### Added - Phase 2D (Error Handling & RFC 7807 Exception Framework)
+- Implemented custom domain exception hierarchy (`PayflowException`, `UserNotFoundException`, `TransactionNotFoundException`, `InsufficientBalanceException`, `DuplicateUpiIdException`, `SelfTransferException`).
+- Implemented global exception handling via `@RestControllerAdvice` (`GlobalExceptionHandler`) producing standardized RFC 7807 `ProblemDetail` responses.
+- Implemented `RequestIdFilter` (`OncePerRequestFilter`) for `X-Request-Id` MDC logging and response header correlation tracking.
+- Updated domain services (`UserService`, `TransactionService`) and controllers to throw domain exceptions for clean, centralized handling.
+- Added unit test suites for `GlobalExceptionHandlerTest` and `RequestIdFilterTest`.
+- Added `ADR-006` (RFC 7807 ProblemDetail & Centralized Exception Handling) to `docs/ADR.md`.
+
+### Added - Phase 2C (Mapper Layer & API Documentation)
+- Integrated MapStruct `1.6.3` compile-time mappers (`UserMapper`, `TransactionMapper`) for type-safe DTO <-> Entity conversions.
+- Integrated Springdoc OpenAPI `3.0.3` (`springdoc-openapi-starter-webmvc-ui`) for live interactive Swagger UI (`/swagger-ui.html`) and OpenAPI JSON specs (`/v3/api-docs`).
+- Added OpenAPI configuration bean (`OpenApiConfig`) and controller OpenAPI annotations (`@Tag`, `@Operation`, `@ApiResponse`).
+- Added MapStruct mapper unit test suite (`UserMapperTest`, `TransactionMapperTest`).
+- Added `ADR-005` (MapStruct for compile-time type-safe DTO mapping) to `docs/ADR.md`.
+
+### Added - Phase 2B (DTO Layer, Input Validation & API Versioning)
+- Versioned REST controllers under `/api/v1/users` and `/api/v1/transactions`.
+- Added `spring-boot-starter-validation` dependency for Jakarta Validation (`@Valid`, `@NotBlank`, `@Pattern`, `@DecimalMin`, `@Size`, `@Min`, `@Max`).
+- Implemented request DTOs: `CreateUserRequest` and `TransferMoneyRequest` with strict validation rules.
+- Implemented response DTO records: `UserResponse`, `TransactionResponse`, and generic `PagedResponse<T>` pagination wrapper.
+- Added controller web slice tests (`UserControllerTest`, `TransactionControllerTest`) verifying HTTP status codes and input validation enforcement.
+- Added `ADR-004` (URI-based API Versioning and DTO Isolation Layer) to `docs/ADR.md`.
+
+### Added - Phase 2A (Entity Model Hardening & Rich Domain)
+- Replaced `Double` primitives with `BigDecimal` (`precision = 19, scale = 4`) across `User` and `Transaction` entities.
+- Implemented Rich Domain methods (`User.debit()`, `User.credit()`) encapsulating balance invariants and state validation.
+- Added audit timestamps (`createdAt`, `updatedAt`) and optimistic locking (`@Version version`) support to `User`.
+- Added `TransactionStatus` (`INITIATED`, `COMPLETED`, `FAILED`, `REFUNDED`) and `TransactionType` (`TRANSFER`, `REFUND`) enums.
+- Added JPA `@ManyToOne` foreign key relationships between `Transaction` and `User` entities with denormalized UPI strings.
+- Added UUID `referenceId` auto-generation (`@PrePersist`) on `Transaction`.
+- Refactored all services (`UserService`, `TransactionService`) and controllers (`UserController`, `TransactionController`) to use constructor injection.
+- Unit test suite for `User` domain logic and `Transaction` reference ID auto-generation (`UserTest`, `TransactionTest`).
+- Architectural Decision Records: `ADR-001` (BigDecimal), `ADR-002` (Constructor injection), `ADR-003` (Rich Domain Model).
+
+---
+
+## [0.1.0] - 2026-07-27
+
+### Added
+- Baseline Phase 0/1 implementation.
+- Basic User (`/users`) and Transaction (`/transactions`) REST endpoints.
+- Spring Data JPA entities (`User`, `Transaction`) and repositories.
+- In-memory H2 database persistence for local development builds.
+- Initial Spring Boot 4.1.0 project configuration with Java 25.
+- System Architecture documentation (`docs/ARCHITECTURE.md`), API Specification (`docs/API_SPECIFICATION.md`), and Phased Roadmap (`docs/ROADMAP.md`).
 - Project scaffolding: MIT `LICENSE`, `CHANGELOG.md`, `.editorconfig`.
 - Architectural Decision Records log (`docs/ADR.md`) and engineering standards guide (`docs/CONVENTIONS.md`).
 - Spotless code formatting plugin (`com.diffplug.spotless:spotless-maven-plugin`) integrated into Maven build.
@@ -79,15 +104,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Broken GraalVM native profile in `pom.xml`: removed invalid dependency declaration with undefined property reference.
 - Removed `System.out.println` debug statement from `UserController`.
 - README updated to accurately reflect current project status.
-
----
-
-## [0.1.0] - 2026-07-27
-
-### Added
-- Baseline Phase 0 implementation.
-- Basic User (`/users`) and Transaction (`/transactions`) REST endpoints.
-- Spring Data JPA entities (`User`, `Transaction`) and repositories.
-- In-memory H2 database persistence for local development builds.
-- Initial Spring Boot 4.1.0 project configuration with Java 25.
-- System Architecture documentation (`docs/ARCHITECTURE.md`), API Specification (`docs/API_SPECIFICATION.md`), and Phased Roadmap (`docs/ROADMAP.md`).
