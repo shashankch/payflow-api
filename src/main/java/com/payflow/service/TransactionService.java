@@ -1,5 +1,6 @@
 package com.payflow.service;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -9,6 +10,8 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.payflow.dto.request.TransferMoneyRequest;
+import com.payflow.entity.BalanceLedgerEntry;
+import com.payflow.entity.LedgerEntryType;
 import com.payflow.entity.Transaction;
 import com.payflow.entity.TransactionStatus;
 import com.payflow.entity.TransactionType;
@@ -16,6 +19,7 @@ import com.payflow.entity.User;
 import com.payflow.exception.SelfTransferException;
 import com.payflow.exception.TransactionNotFoundException;
 import com.payflow.exception.UserNotFoundException;
+import com.payflow.repository.BalanceLedgerRepository;
 import com.payflow.repository.TransactionRepository;
 import com.payflow.repository.UserRepository;
 
@@ -24,10 +28,13 @@ public class TransactionService {
 
 	private final TransactionRepository transactionRepository;
 	private final UserRepository userRepository;
+	private final BalanceLedgerRepository balanceLedgerRepository;
 
-	public TransactionService(TransactionRepository transactionRepository, UserRepository userRepository) {
+	public TransactionService(TransactionRepository transactionRepository, UserRepository userRepository,
+			BalanceLedgerRepository balanceLedgerRepository) {
 		this.transactionRepository = transactionRepository;
 		this.userRepository = userRepository;
+		this.balanceLedgerRepository = balanceLedgerRepository;
 	}
 
 	@Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class, timeout = 5)
@@ -57,8 +64,15 @@ public class TransactionService {
 		User sender = senderFirst ? firstUser : secondUser;
 		User receiver = senderFirst ? secondUser : firstUser;
 
+		BigDecimal senderBalanceBefore = sender.getBalance();
+		BigDecimal receiverBalanceBefore = receiver.getBalance();
+
 		sender.debit(request.getAmount());
 		receiver.credit(request.getAmount());
+
+		BigDecimal senderBalanceAfter = sender.getBalance();
+		BigDecimal receiverBalanceAfter = receiver.getBalance();
+
 		userRepository.save(sender);
 		userRepository.save(receiver);
 
@@ -71,7 +85,25 @@ public class TransactionService {
 		builder.status(TransactionStatus.COMPLETED);
 		builder.type(TransactionType.TRANSFER);
 		builder.note(request.getNote());
-		return transactionRepository.save(builder.build());
+		Transaction savedTransaction = transactionRepository.save(builder.build());
+
+		// Double-entry bookkeeping balance ledger audit entries
+		BalanceLedgerEntry.BalanceLedgerEntryBuilder sBuilder = BalanceLedgerEntry.builder();
+		sBuilder.user(sender).transaction(savedTransaction).entryType(LedgerEntryType.DEBIT);
+		sBuilder.amount(request.getAmount());
+		sBuilder.balanceBefore(senderBalanceBefore).balanceAfter(senderBalanceAfter);
+		BalanceLedgerEntry senderLedger = sBuilder.build();
+
+		BalanceLedgerEntry.BalanceLedgerEntryBuilder rBuilder = BalanceLedgerEntry.builder();
+		rBuilder.user(receiver).transaction(savedTransaction).entryType(LedgerEntryType.CREDIT);
+		rBuilder.amount(request.getAmount());
+		rBuilder.balanceBefore(receiverBalanceBefore).balanceAfter(receiverBalanceAfter);
+		BalanceLedgerEntry receiverLedger = rBuilder.build();
+
+		balanceLedgerRepository.save(senderLedger);
+		balanceLedgerRepository.save(receiverLedger);
+
+		return savedTransaction;
 	}
 
 	@Transactional(readOnly = true)

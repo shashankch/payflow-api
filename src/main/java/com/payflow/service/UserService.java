@@ -11,17 +11,22 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.payflow.dto.request.CreateUserRequest;
+import com.payflow.entity.BalanceLedgerEntry;
 import com.payflow.entity.User;
 import com.payflow.exception.DuplicateUpiIdException;
+import com.payflow.exception.UserNotFoundException;
+import com.payflow.repository.BalanceLedgerRepository;
 import com.payflow.repository.UserRepository;
 
 @Service
 public class UserService {
 
 	private final UserRepository userRepository;
+	private final BalanceLedgerRepository balanceLedgerRepository;
 
-	public UserService(UserRepository userRepository) {
+	public UserService(UserRepository userRepository, BalanceLedgerRepository balanceLedgerRepository) {
 		this.userRepository = userRepository;
+		this.balanceLedgerRepository = balanceLedgerRepository;
 	}
 
 	@Transactional
@@ -62,5 +67,13 @@ public class UserService {
 	@Transactional(readOnly = true)
 	public List<User> getUsersWithBalanceAbove(BigDecimal amount) {
 		return userRepository.findUsersWithBalanceGreaterThan(amount);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<BalanceLedgerEntry> getUserLedger(UUID userReferenceId, Pageable pageable) {
+		if (userRepository.findByReferenceId(userReferenceId).isEmpty()) {
+			throw new UserNotFoundException("User not found: " + userReferenceId);
+		}
+		return balanceLedgerRepository.findByUserReferenceIdOrderByCreatedAtDesc(userReferenceId, pageable);
 	}
 }

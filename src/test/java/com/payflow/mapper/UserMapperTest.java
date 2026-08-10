@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mapstruct.factory.Mappers;
 
 import com.payflow.dto.request.CreateUserRequest;
 import com.payflow.dto.response.UserResponse;
@@ -15,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class UserMapperTest {
 
-	private final UserMapper userMapper = new UserMapperImpl();
+	private final UserMapper userMapper = Mappers.getMapper(UserMapper.class);
 
 	@Test
 	@DisplayName("Should correctly map User entity to UserResponse record")

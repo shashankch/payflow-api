@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mapstruct.factory.Mappers;
 
 import com.payflow.dto.response.TransactionResponse;
 import com.payflow.entity.Transaction;
@@ -16,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class TransactionMapperTest {
 
-	private final TransactionMapper transactionMapper = new TransactionMapperImpl();
+	private final TransactionMapper transactionMapper = Mappers.getMapper(TransactionMapper.class);
 
 	@Test
 	@DisplayName("Should correctly map Transaction entity to TransactionResponse record")

@@ -18,15 +18,16 @@ The project is evolving through a phased implementation roadmap. See the full pl
 
 | Phase | Description | Status |
 | :--- | :--- | :--- |
-| **Phase 1: Foundation & Project Hygiene** | Spring Boot 4.1, JDK 25, H2, DevTools, Checkstyle, Spotless | ✅ Complete |
-| **Phase 2: Domain Modeling & Data Access Layer** | Entities, Repositories, DTOs, Mappers, OpenAPI Docs, Error Handling, UUIDs | ✅ Complete |
-| **Phase 3: Business Logic & Transaction Management** | Money Transfer Orchestration (`@Transactional`), Pagination, Isolation, Auditing | 🔄 In Progress (3A Done) |
-| **Phase 4: Idempotency & Concurrency Control** | Idempotency Keys, Pessimistic Locking, Optimistic Locking, Race Conditions | ⏳ Planned |
+| **Phase 1: Foundation & Project Hygiene** | Spring Boot 4.1, JDK 25, H2, DevTools, Checkstyle, Spotless, CI Pipeline | ✅ Complete |
+| **Phase 2: Domain Modeling & API Hardening** | Entities, Repositories, DTOs, Mappers, OpenAPI Docs, RFC 7807 Error Handling, UUIDs | ✅ Complete |
+| **Phase 3: ACID Transactions & Concurrency** | Money Transfer Orchestration (`@Transactional`), Pessimistic Locking (`FOR UPDATE`), Deadlock Avoidance, Double-Entry Balance Ledger | ✅ Complete |
+| **Phase 4: Database & Profiles** | Flyway Migrations, PostgreSQL Integration, Profile Configs (`local`/`test`/`prod`), Testcontainers | 🔄 Next Up |
 
 ---
 
 ## Implemented Features
 
+- **Double-Entry Balance Ledger**: Immutable audit trail (`balance_ledger` table) recording `DEBIT` and `CREDIT` entries with `balanceBefore` and `balanceAfter` tracking per transaction for financial auditability and balance reconciliation.
 - **Pessimistic Locking & Deadlock Avoidance**: Database-level write locking (`SELECT ... FOR UPDATE`) via `UserRepository.findByUpiIdWithLock()` with deterministic alphabetical lock ordering by UPI ID to prevent race conditions and cross-transfer deadlocks.
 - **JPA N+1 Resolution**: `@EntityGraph(attributePaths = {"sender", "receiver"})` on transaction repository queries ensuring single-query JOIN fetches.
 - **Money Transfer Orchestration**: `TransactionService.sendMoney()` executing under `@Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class, timeout = 5)` boundaries with balance debit/credit invariance.

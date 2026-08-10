@@ -21,10 +21,13 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.payflow.dto.request.CreateUserRequest;
+import com.payflow.dto.response.LedgerEntryResponse;
 import com.payflow.dto.response.PagedResponse;
 import com.payflow.dto.response.UserResponse;
+import com.payflow.entity.BalanceLedgerEntry;
 import com.payflow.entity.User;
 import com.payflow.exception.UserNotFoundException;
+import com.payflow.mapper.LedgerMapper;
 import com.payflow.mapper.UserMapper;
 import com.payflow.service.UserService;
 
@@ -43,10 +46,12 @@ public class UserController {
 
 	private final UserService userService;
 	private final UserMapper userMapper;
+	private final LedgerMapper ledgerMapper;
 
-	public UserController(UserService userService, UserMapper userMapper) {
+	public UserController(UserService userService, UserMapper userMapper, LedgerMapper ledgerMapper) {
 		this.userService = userService;
 		this.userMapper = userMapper;
+		this.ledgerMapper = ledgerMapper;
 	}
 
 	@PostMapping
@@ -102,5 +107,19 @@ public class UserController {
 		List<User> entityList = userService.getUsersWithBalanceAbove(amount);
 		List<UserResponse> users = entityList.stream().map(userMapper::toResponse).toList();
 		return ResponseEntity.ok(users);
+	}
+
+	@GetMapping("/{id}/ledger")
+	@Operation(summary = "Get user balance ledger history", description = "Retrieves paginated double-entry "
+			+ "balance ledger audit entries for a user by UUID reference ID")
+	@ApiResponse(responseCode = "200", description = "Paginated ledger history returned")
+	@ApiResponse(responseCode = "404", description = "User not found")
+	public ResponseEntity<PagedResponse<LedgerEntryResponse>> getUserLedger(@PathVariable UUID id,
+			@RequestParam(defaultValue = "0") @Min(0) int page,
+			@RequestParam(defaultValue = "10") @Min(1) @Max(100) int size) {
+		Pageable pageable = PageRequest.of(page, size);
+		Page<BalanceLedgerEntry> entries = userService.getUserLedger(id, pageable);
+		Page<LedgerEntryResponse> ledgerPage = entries.map(ledgerMapper::toResponse);
+		return ResponseEntity.ok(PagedResponse.fromPage(ledgerPage));
 	}
 }

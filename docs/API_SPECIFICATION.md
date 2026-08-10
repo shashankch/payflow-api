@@ -176,7 +176,44 @@ Fetches a single user record by their unique UPI ID.
 
 ---
 
-### 5. Create Money Transfer
+### 5. Retrieve User Balance Ledger History
+Retrieves paginated double-entry balance ledger audit entries for a user by UUID reference ID.
+
+- **HTTP Method**: `GET`
+- **Path**: `/api/v1/users/{id}/ledger`
+- **Query Parameters**:
+  - `page`: Integer, optional (default `0`), min `0`.
+  - `size`: Integer, optional (default `10`), min `1`, max `100`.
+- **Authentication**: None
+
+#### Response Example (`200 OK`)
+```json
+{
+  "content": [
+    {
+      "ledgerId": 101,
+      "userReferenceId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+      "transactionReferenceId": "f9e8d7c6-b5a4-3f2e-1d0c-9b8a7f6e5d4c",
+      "entryType": "DEBIT",
+      "amount": 100.0000,
+      "balanceBefore": 500.0000,
+      "balanceAfter": 400.0000,
+      "createdAt": "2026-08-09T14:00:00Z"
+    }
+  ],
+  "page": 0,
+  "size": 10,
+  "totalElements": 1,
+  "totalPages": 1,
+  "first": true,
+  "last": true
+}
+```
+*If user not found, returns `404 Not Found`.*
+
+---
+
+### 6. Create Money Transfer
 Executes a fund transfer request.
 
 - **HTTP Method**: `POST`
@@ -215,7 +252,7 @@ Headers: `Location: /api/v1/transactions/550e8400-e29b-41d4-a716-446655440000`
 
 ---
 
-### 6. Retrieve Transaction by Reference ID
+### 7. Retrieve Transaction by Reference ID
 Fetches details of a single transaction by its unique UUID reference ID.
 
 - **HTTP Method**: `GET`
@@ -240,7 +277,7 @@ Fetches details of a single transaction by its unique UUID reference ID.
 
 ---
 
-### 7. Retrieve User Transaction History (Paginated)
+### 8. Retrieve User Transaction History (Paginated)
 Retrieves paginated transfer history (sent and received) for a given UPI ID.
 
 - **HTTP Method**: `GET`
