@@ -149,10 +149,22 @@ All financial balance operations execute double-entry bookkeeping by persisting 
 - **Immutability**: Once written, ledger rows are never updated or deleted. Reversals or refunds append new `CREDIT`/`DEBIT` ledger rows.
 
 ### D. Database Indexing Strategy
-To ensure high database read throughput and statement generation speed, the following index constraints are established in migrations:
+To ensure high database read throughput and statement generation speed, the following index constraints are established in Flyway migrations:
+- `CREATE UNIQUE INDEX idx_users_upi_id ON users(upi_id);`
+- `CREATE UNIQUE INDEX idx_users_reference_id ON users(reference_id);`
 - `CREATE INDEX idx_tx_sender_created ON transactions(sender_upi_id, created_at DESC);`
 - `CREATE INDEX idx_tx_receiver_created ON transactions(receiver_upi_id, created_at DESC);`
-These composite indexes optimize transaction statement history pages and eliminate expensive full-table scans.
+- `CREATE INDEX idx_tx_reference_id ON transactions(reference_id);`
+- `CREATE INDEX idx_ledger_user_created ON balance_ledger(user_id, created_at DESC);`
+
+### E. Flyway Versioned Database Migrations
+All database DDL changes execute via Flyway versioned SQL scripts located in `src/main/resources/db/migration/`:
+- `V1__create_users_table.sql`: Baseline schema for `users` table.
+- `V2__create_transactions_table.sql`: Schema for `transactions` table with foreign keys to `users`.
+- `V3__create_balance_ledger_table.sql`: Schema for `balance_ledger` double-entry audit table.
+- `V4__add_performance_indexes.sql`: Composite and unique indexes for UPI lookups, transaction queries, and ledger audit lookups.
+
+Hibernate is configured to `spring.jpa.hibernate.ddl-auto=validate`, forcing JPA mapping validation against Flyway-managed schema while prohibiting unversioned database mutations in production.
 
 ---
 

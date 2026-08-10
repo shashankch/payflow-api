@@ -22,6 +22,7 @@ ADRs document significant technical decisions, along with their context, rationa
 | [ADR-010](#adr-010-pessimistic-locking-for-high-concurrency-balance-operations) | Pessimistic Locking for High-Concurrency Balance Operations | 2026-08-07 | Accepted |
 | [ADR-011](#adr-011-deterministic-lock-ordering-for-deadlock-prevention) | Deterministic Lock Ordering for Deadlock Prevention | 2026-08-07 | Accepted |
 | [ADR-012](#adr-012-double-entry-balance-ledger-as-immutable-audit-trail) | Double-Entry Balance Ledger as Immutable Audit Trail | 2026-08-09 | Accepted |
+| [ADR-013](#adr-013-flyway-database-migrations-over-ddl-auto-generation) | Flyway Database Migrations over DDL Auto-Generation | 2026-08-10 | Accepted |
 
 ---
 
@@ -363,3 +364,31 @@ Chosen Option: **Double-Entry Balance Ledger (`balance_ledger` table)**
 #### Consequences
 - **Positive**: Complete audit trail, balance reconstruction capability, financial compliance.
 - **Negative / Trade-offs**: Increases database row writes per transaction from 3 to 5 (2 user updates, 1 transaction record, 2 ledger records).
+
+---
+
+### ADR-013: Flyway Database Migrations over DDL Auto-Generation
+
+**Date**: 2026-08-10  
+**Status**: Accepted  
+**Phase**: Phase 4A  
+
+#### Context & Problem Statement
+Relying on Hibernate `spring.jpa.hibernate.ddl-auto=update` or `create-drop` in production environment creates high-risk database mutation vulnerabilities: schema changes are unversioned, non-repeatable, cannot be reviewed in pull requests, and risk accidental data loss or locking during application restarts.
+
+#### Considered Options
+1. **Hibernate DDL Auto-Generation (`ddl-auto=update`)**: Convenient for early prototyping, but non-deterministic, unversioned, and prohibited in production environments.
+2. **Flyway Versioned SQL Migrations**: Versioned, immutable SQL migration scripts (`V1__...`, `V2__...`) stored in version control (`db/migration`), executed deterministically on startup, with Hibernate configured to `ddl-auto=validate`.
+
+#### Decision Outcome
+Chosen Option: **Flyway Versioned SQL Migrations (`org.flywaydb:flyway-core`)**
+
+##### Rationale
+- **Production Safety**: Schema migrations are explicit, version-controlled SQL files that can be audited in code reviews before deployment.
+- **Strict Validation**: Hibernate `ddl-auto=validate` verifies entity mappings against Flyway-managed schema without altering database tables dynamically.
+- **Environmental Consistency**: Flyway ensures identical database schema evolution across local development, CI pipelines, staging, and production environments.
+
+#### Consequences
+- **Positive**: Complete schema versioning history, zero accidental DDL mutations, production-grade deployment safety.
+- **Negative / Trade-offs**: Schema changes require writing explicit SQL migration scripts alongside entity modifications.
+

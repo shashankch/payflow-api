@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Phase 4A (Flyway Migrations & PostgreSQL Integration)
+- Version-controlled Flyway DDL migration scripts (`V1__create_users_table.sql`, `V2__create_transactions_table.sql`, `V3__create_balance_ledger_table.sql`, `V4__add_performance_indexes.sql`).
+- Performance indexes added to database schema for UPI lookups (`idx_users_upi_id`), UUID reference lookups (`idx_users_reference_id`, `idx_tx_reference_id`), transaction history statements (`idx_tx_sender_created`, `idx_tx_receiver_created`), and balance ledger audits (`idx_ledger_user_created`).
+- Added PostgreSQL driver (`postgresql`), `flyway-core`, and `flyway-database-postgresql` dependencies.
+- Converted monolithic `application.properties` configuration to structured `application.yml` setting `spring.jpa.hibernate.ddl-auto=validate`.
+- Added `ADR-013` (Flyway Database Migrations over DDL Auto-Generation) to `docs/ADR.md`.
+
 ---
 
 ## [0.3.0] - 2026-08-09

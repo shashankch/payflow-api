@@ -61,10 +61,10 @@ Double-entry bookkeeping (DEBIT/CREDIT entries), `balanceBefore`/`balanceAfter` 
 
 ---
 
-## Phase 4 — Database & Profiles ⬜
+## Phase 4 — Database & Profiles 🔄
 
-### 4A — Flyway & PostgreSQL ⬜
-Versioned SQL migrations, PostgreSQL driver, YAML configuration, performance indexes.
+### 4A — Flyway & PostgreSQL ✅
+Versioned SQL migrations (`V1`..`V4`), PostgreSQL driver, structured YAML configuration (`application.yml`), performance indexes, Hibernate `ddl-auto=validate`.
 
 ### 4B — Spring Profiles & Testcontainers ⬜
 Profile-specific configs (`local`/`test`/`prod`), Testcontainers PostgreSQL for integration tests.
