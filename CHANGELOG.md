@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.4.0] - 2026-08-11
+
+### Added - Phase 4B (Spring Profiles & Testcontainers Integration)
+- Profile-specific YAML configuration structure (`application.yml`, `application-local.yml`, `application-test.yml`, `application-prod.yml`).
+- Integrated Testcontainers PostgreSQL (`org.testcontainers:postgresql`) and `spring-boot-testcontainers` BOM.
+- Abstract base class [AbstractIntegrationTest.java](file:///Users/shashankchandel/Developer/Bootcamp/Backend/payflow-api/src/test/java/com/payflow/AbstractIntegrationTest.java) with `@Testcontainers(disabledWithoutDocker = true)` and `@DynamicPropertySource` for 100% production-parity integration testing.
+- Created `PostgreSQLIntegrationTest.java` verifying real PostgreSQL container startup, Flyway schema migration execution, and Hibernate `ddl-auto=validate` verification.
+- Added `ADR-014` (Spring Environment Profiles and Testcontainers Integration Testing Strategy) to `docs/ADR.md`.
+
 ### Added - Phase 4A (Flyway Migrations & PostgreSQL Integration)
 - Version-controlled Flyway DDL migration scripts (`V1__create_users_table.sql`, `V2__create_transactions_table.sql`, `V3__create_balance_ledger_table.sql`, `V4__add_performance_indexes.sql`).
 - Performance indexes added to database schema for UPI lookups (`idx_users_upi_id`), UUID reference lookups (`idx_users_reference_id`, `idx_tx_reference_id`), transaction history statements (`idx_tx_sender_created`, `idx_tx_receiver_created`), and balance ledger audits (`idx_ledger_user_created`).
