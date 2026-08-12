@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added - Phase 4B (Spring Profiles & Testcontainers Integration)
 - Profile-specific YAML configuration structure (`application.yml`, `application-local.yml`, `application-test.yml`, `application-prod.yml`).
 - Integrated Testcontainers PostgreSQL (`org.testcontainers:postgresql`) and `spring-boot-testcontainers` BOM.
-- Abstract base class [AbstractIntegrationTest.java](file:///Users/shashankchandel/Developer/Bootcamp/Backend/payflow-api/src/test/java/com/payflow/AbstractIntegrationTest.java) with `@Testcontainers(disabledWithoutDocker = true)` and `@DynamicPropertySource` for 100% production-parity integration testing.
+- Abstract base class `AbstractIntegrationTest.java` with `@Testcontainers(disabledWithoutDocker = true)` and `@DynamicPropertySource` for 100% production-parity integration testing.
 - Created `PostgreSQLIntegrationTest.java` verifying real PostgreSQL container startup, Flyway schema migration execution, and Hibernate `ddl-auto=validate` verification.
 - Added `ADR-014` (Spring Environment Profiles and Testcontainers Integration Testing Strategy) to `docs/ADR.md`.
 
