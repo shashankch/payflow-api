@@ -61,33 +61,33 @@ Double-entry bookkeeping (DEBIT/CREDIT entries), `balanceBefore`/`balanceAfter` 
 
 ---
 
-## Phase 4 — Database & Profiles 🔄
+## Phase 4 — Database & Profiles ✅
 
 ### 4A — Flyway & PostgreSQL ✅
 Versioned SQL migrations (`V1`..`V4`), PostgreSQL driver, structured YAML configuration (`application.yml`), performance indexes, Hibernate `ddl-auto=validate`.
 
-### 4B — Spring Profiles & Testcontainers ⬜
-Profile-specific configs (`local`/`test`/`prod`), Testcontainers PostgreSQL for integration tests.
+### 4B — Spring Profiles & Testcontainers ✅
+Profile-specific YAML configurations (`local`/`test`/`prod`), `AbstractIntegrationTest` base class with Testcontainers PostgreSQL (`postgres:16-alpine`), `@DynamicPropertySource`, and graceful fallback execution.
 
 ---
 
 ## Phase 5 — Testing ⬜
 
 ### 5A — Unit Tests ⬜
-Mockito service tests, `@WebMvcTest` controller tests, `@DataJpaTest` repository tests.
+Mockito service tests, `@WebMvcTest` controller tests (including ledger pagination slice test), `@DataJpaTest` repository tests (`UserRepository` and `BalanceLedgerRepository` reconciliation SUM query), MapStruct `LedgerMapperTest`.
 
 ### 5B — Integration & Concurrency Tests ⬜
-Full lifecycle tests on Testcontainers PG, 10-thread race condition tests, balance reconciliation assertions.
+Full lifecycle tests on Testcontainers PG, 10-thread race condition tests, double-entry balance ledger reconciliation assertions (`calculateReconciledBalanceByUserId()` == `users.balance`).
 
 ---
 
 ## Phase 6 — Idempotency & Outbox ⬜
 
 ### 6A — Idempotency Engine ⬜
-`Idempotency-Key` header filter, SHA-256 payload hashing, cached response replay, TTL cleanup.
+`Idempotency-Key` header filter, SHA-256 payload hashing, cached response replay, TTL cleanup with `idx_idemp_created` performance index.
 
 ### 6B — Spring Modulith Events & Transactional Outbox ⬜
-Spring Modulith event publication registry (`spring-modulith-starter-jpa`), domain events via `ApplicationEventPublisher`, module boundary verification, in-process async event listeners.
+Spring Modulith event publication registry (`spring-modulith-starter-jpa`), domain events with balance snapshot metadata via `ApplicationEventPublisher`, module boundary verification, in-process async event listeners.
 
 ---
 
@@ -97,7 +97,7 @@ Spring Modulith event publication registry (`spring-modulith-starter-jpa`), doma
 Spring Security, stateless JWT, auth/login endpoint, CORS configuration.
 
 ### 7B — Authorization ⬜
-Sender verification, transaction/ledger history access control.
+Sender verification, transaction history and double-entry balance ledger access control (`403 Forbidden`).
 
 ### 7C — RestClient, HTTP Interface Client & External Service Integration ⬜
 Declarative HTTP Interface Client (`@GetExchange`/`@PostExchange`) backed by `RestClient` for UPI validation. Framework 7 native `@Retryable` with exponential backoff + jitter. Graceful fallback on service unavailability.

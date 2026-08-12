@@ -21,12 +21,13 @@ The project is evolving through a phased implementation roadmap. See the full pl
 | **Phase 1: Foundation & Project Hygiene** | Spring Boot 4.1, JDK 25, H2, DevTools, Checkstyle, Spotless, CI Pipeline | ✅ Complete |
 | **Phase 2: Domain Modeling & API Hardening** | Entities, Repositories, DTOs, Mappers, OpenAPI Docs, RFC 7807 Error Handling, UUIDs | ✅ Complete |
 | **Phase 3: ACID Transactions & Concurrency** | Money Transfer Orchestration (`@Transactional`), Pessimistic Locking (`FOR UPDATE`), Deadlock Avoidance, Double-Entry Balance Ledger | ✅ Complete |
-| **Phase 4: Database & Profiles** | Flyway Migrations, PostgreSQL Integration, Profile Configs (`local`/`test`/`prod`), Testcontainers | 🔄 In Progress (4A Done) |
+| **Phase 4: Database & Profiles** | Flyway Migrations, PostgreSQL Integration, Profile Configs (`local`/`test`/`prod`), Testcontainers | ✅ Complete |
 
 ---
 
 ## Implemented Features
 
+- **Spring Environment Profiles & Testcontainers Infrastructure**: Profile-specific YAML configuration (`local`, `test`, `prod`) with `AbstractIntegrationTest` base class leveraging Testcontainers PostgreSQL (`@Testcontainers`, `@DynamicPropertySource`) for 100% production-parity database integration testing.
 - **Flyway Schema Migrations & PostgreSQL Support**: Version-controlled DDL migrations (`V1` through `V4`) managing `users`, `transactions`, and `balance_ledger` schemas with performance indexes, structured YAML configuration (`application.yml`), and Hibernate `ddl-auto=validate` enforcement.
 - **Double-Entry Balance Ledger**: Immutable audit trail (`balance_ledger` table) recording `DEBIT` and `CREDIT` entries with `balanceBefore` and `balanceAfter` tracking per transaction for financial auditability and balance reconciliation.
 - **Pessimistic Locking & Deadlock Avoidance**: Database-level write locking (`SELECT ... FOR UPDATE`) via `UserRepository.findByUpiIdWithLock()` with deterministic alphabetical lock ordering by UPI ID to prevent race conditions and cross-transfer deadlocks.

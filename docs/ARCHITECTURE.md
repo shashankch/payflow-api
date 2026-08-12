@@ -166,6 +166,17 @@ All database DDL changes execute via Flyway versioned SQL scripts located in `sr
 
 Hibernate is configured to `spring.jpa.hibernate.ddl-auto=validate`, forcing JPA mapping validation against Flyway-managed schema while prohibiting unversioned database mutations in production.
 
+### F. Spring Environment Profiles & Testcontainers Strategy
+Configuration is structured cleanly across profile-specific YAML files:
+
+| Profile | Datasource / DB Engine | Flyway | JPA DDL Auto | Primary Purpose |
+| :--- | :--- | :--- | :--- | :--- |
+| **`local`** | H2 In-Memory (`MODE=PostgreSQL`) | Enabled | `validate` | Instant local dev startup without Docker |
+| **`test`** | Testcontainers PostgreSQL (`postgres:16-alpine`) | Enabled | `validate` | 100% production-parity integration testing |
+| **`prod`** | External PostgreSQL Cluster | Enabled | `validate` | Production deployment with HikariCP tuning & graceful shutdown |
+
+Integration tests extend `AbstractIntegrationTest`, utilizing `@Testcontainers(disabledWithoutDocker = true)` and `@DynamicPropertySource` to dynamically spin up disposable PostgreSQL containers and bind JDBC credentials, ensuring full schema migration and locking verification against real PostgreSQL.
+
 ---
 
 ## 4. JPA N+1 Query Resolution
@@ -272,9 +283,9 @@ This design ensures that domain service code (`TransactionService.sendMoney()`) 
 
 To support smart financial features, the project includes an **AI spend assistant** integration using **Spring AI** connected to an LLM provider API:
 
-- **AI Categorization**: An asynchronous listener or dedicated endpoint reads transaction metadata (amounts, merchant UPI names, transaction notes) and passes a structured prompt to the LLM to map the transaction into structured categories (e.g., `Groceries`, `Utilities`, `Entertainment`, `Dining`).
+- **AI Categorization**: An asynchronous listener or dedicated endpoint reads transaction metadata and recent `BalanceLedgerEntry` history (amounts, merchant UPI names, transaction notes, DEBIT/CREDIT classifications) and passes a structured prompt to the LLM to map transactions into structured categories (e.g., `Groceries`, `Utilities`, `Entertainment`, `Dining`).
 - **Structured JSON Schema**: Prompts leverage the LLM's structured JSON output mode to force the response directly into a predefined JSON schema mapping, preventing formatting errors.
-- **Budgeting Insights**: Generates automated personal budgeting recommendations based on the user's recent transaction history via clean prompt engineering and LLM integrations.
+- **Budgeting Insights**: Generates automated personal budgeting recommendations based on the user's double-entry balance ledger audit history via clean prompt engineering and LLM integrations.
 
 ---
 
