@@ -3,7 +3,6 @@ package com.payflow.repository;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
-
 import java.util.UUID;
 
 import jakarta.persistence.LockModeType;
@@ -19,6 +18,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
 	// Derived JPA query parsed from method name
 	Optional<User> findByUpiId(String upiId);
+
+	boolean existsByUpiId(String upiId);
 
 	// Pessimistic write lock query to prevent concurrent balance mutation race
 	// conditions

@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Phase 5A (Comprehensive Unit & Slice Test Suite)
+- Created `UserServiceTest.java` verifying user registration, duplicate UPI prevention, UUID reference lookups, and pagination.
+- Created `UserRepositoryTest.java` data JPA slice test verifying custom query compilation, UUID lookups, and pessimistic locking (`SELECT FOR UPDATE`).
+- Created `BalanceLedgerRepositoryTest.java` data JPA slice test verifying aggregate balance reconciliation JPQL queries (`SUM(CREDIT) - SUM(DEBIT)`) and paginated audit retrieval.
+- Enhanced `UserControllerTest.java` and `TransactionControllerTest.java` WebMvc slice tests verifying HTTP contracts, input validation (`422 Unprocessable Entity`), RFC 7807 problem details, and paginated ledger endpoints (`GET /api/v1/users/{id}/ledger`).
+- Added modular test starters `spring-boot-starter-data-jpa-test` and `spring-boot-starter-flyway` to `pom.xml`.
+
 ---
 
 ## [0.4.0] - 2026-08-11
