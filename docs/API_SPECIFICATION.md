@@ -5,7 +5,7 @@
 > - **Author**: Payflow Engineering (`shashankchandel@gmail.com`)
 > - **Status**: Approved / Living Specification
 > - **Created Date**: 2026-08-01
-> - **Last Updated**: 2026-08-05
+> - **Last Updated**: 2026-08-12
 > - **Authoritative Location**: [API_SPECIFICATION.md](API_SPECIFICATION.md)
 > - **Related Documents**: [System Architecture](ARCHITECTURE.md) | [Architecture Decisions (ADRs)](ADR.md) | [Phased Roadmap](ROADMAP.md) | [Engineering Conventions](CONVENTIONS.md)
 
@@ -19,8 +19,8 @@ This document details the REST API endpoints, request/response models, input val
 - **Content-Type**: All request and response bodies use `application/json`.
 - **Monetary Precision**: All monetary values are encoded as standard JSON numbers with up to 4 decimal places (e.g. `100.0000`).
 - **Pagination**: Default page size is 10, with a hard maximum of 100 per page (`@Min(1) @Max(100)`).
-- **Authentication**: Mutation and secure history endpoints require a cryptographically signed JWT token passed via the `Authorization: Bearer <token>` header (implemented in Phase 3).
-- **Idempotency**: All mutation write operations require a unique identifier passed in the `Idempotency-Key` header (implemented in Phase 4).
+- **Authentication**: Mutation and secure history endpoints require a cryptographically signed JWT token passed via the `Authorization: Bearer <token>` header (to be implemented in Phase 7).
+- **Idempotency**: All mutation write operations require a unique identifier passed in the `Idempotency-Key` header (to be implemented in Phase 6A).
 
 ---
 
