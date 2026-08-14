@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -21,6 +23,8 @@ import com.payflow.repository.UserRepository;
 @Service
 public class UserService {
 
+	private static final Logger LOG = LoggerFactory.getLogger(UserService.class);
+
 	private final UserRepository userRepository;
 	private final BalanceLedgerRepository balanceLedgerRepository;
 
@@ -34,9 +38,13 @@ public class UserService {
 		if (userRepository.findByUpiId(request.getUpiId()).isPresent()) {
 			throw new DuplicateUpiIdException(request.getUpiId());
 		}
+		LOG.info("Registering new user with UPI ID: {}", request.getUpiId());
 		User user = User.builder().name(request.getName()).upiId(request.getUpiId())
 				.phoneNumber(request.getPhoneNumber()).balance(request.getBalance()).build();
-		return userRepository.save(user);
+		User savedUser = userRepository.save(user);
+		LOG.info("User registered: refId={}, upiId={}", savedUser != null ? savedUser.getReferenceId() : null,
+				request.getUpiId());
+		return savedUser;
 	}
 
 	@Transactional(readOnly = true)

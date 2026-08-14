@@ -71,13 +71,13 @@ Profile-specific YAML configurations (`local`/`test`/`prod`), `AbstractIntegrati
 
 ---
 
-## Phase 5 — Testing 🔄
+## Phase 5 — Testing ✅
 
 ### 5A — Unit & Slice Tests ✅
 Mockito service unit tests (`UserServiceTest`, `TransactionServiceTest`), `@WebMvcTest` controller slice tests (`UserControllerTest`, `TransactionControllerTest` verifying RFC 7807 problem details and `GET /api/v1/users/{id}/ledger` pagination), `@DataJpaTest` repository slice tests (`UserRepository` and `BalanceLedgerRepository` JPQL reconciliation SUM query), MapStruct mapper tests.
 
-### 5B — Integration & Concurrency Tests ⬜
-Full lifecycle tests on Testcontainers PG, 10-thread race condition tests, double-entry balance ledger reconciliation assertions (`calculateReconciledBalanceByUserId()` == `users.balance`).
+### 5B — Integration & Concurrency Tests ✅
+Full end-to-end money transfer lifecycle integration tests on Testcontainers PostgreSQL (`TransferLifecycleIT`), 10-thread synchronized race condition tests (`ConcurrentTransferIT` with CountDownLatch), deadlock avoidance cross-transfer tests (`MutualTransferDeadlockIT`), and double-entry balance ledger reconciliation assertions (`calculateReconciledBalanceByUserId()`).
 
 ---
 
