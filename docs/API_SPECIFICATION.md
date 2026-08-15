@@ -214,10 +214,12 @@ Retrieves paginated double-entry balance ledger audit entries for a user by UUID
 ---
 
 ### 6. Create Money Transfer
-Executes a fund transfer request.
+Executes a peer-to-peer fund transfer request with guaranteed exactly-once idempotency.
 
 - **HTTP Method**: `POST`
 - **Path**: `/api/v1/transactions`
+- **Headers**:
+  - `Idempotency-Key`: String / UUID, **required**. Prevents duplicate debits and replays cached responses on retry.
 - **Request Body DTO (`TransferMoneyRequest`)**:
   - `senderUpiId`: String, required (`@NotBlank`), max 100 chars (`@Size(max = 100)`), valid UPI format (`@Pattern(...)`).
   - `receiverUpiId`: String, required (`@NotBlank`), max 100 chars (`@Size(max = 100)`), valid UPI format (`@Pattern(...)`).
@@ -225,7 +227,12 @@ Executes a fund transfer request.
   - `note`: String, optional, max 255 characters (`@Size(max = 255)`).
 
 #### Request Example
-```json
+```http
+POST /api/v1/transactions HTTP/1.1
+Host: api.payflow.com
+Idempotency-Key: 9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d
+Content-Type: application/json
+
 {
   "senderUpiId": "janedoe@upi",
   "receiverUpiId": "johnsmith@upi",
@@ -249,6 +256,11 @@ Headers: `Location: /api/v1/transactions/550e8400-e29b-41d4-a716-446655440000`
   "createdAt": "2026-08-01T16:05:00Z"
 }
 ```
+
+#### Error Responses
+- `400 Bad Request`: Missing `Idempotency-Key` header, or key reused with a mismatched payload.
+- `409 Conflict`: A request with the same `Idempotency-Key` is currently in-flight.
+- `422 Unprocessable Entity`: Validation constraint failure or insufficient sender balance.
 
 ---
 

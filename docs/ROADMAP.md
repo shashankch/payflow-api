@@ -81,10 +81,10 @@ Full end-to-end money transfer lifecycle integration tests on Testcontainers Pos
 
 ---
 
-## Phase 6 — Idempotency & Outbox ⬜
+## Phase 6 — Idempotency & Outbox 🔄
 
-### 6A — Idempotency Engine ⬜
-`Idempotency-Key` header filter, SHA-256 payload hashing, cached response replay, TTL cleanup with `idx_idemp_created` performance index.
+### 6A — Idempotency Engine ✅
+`Idempotency-Key` header filter with servlet request wrapping, deterministic SHA-256 payload hashing, cached HTTP 201 response replay, in-flight 409 conflict detection, key reuse rejection, Flyway migration (`V5__create_idempotency_registry.sql`), and background scheduled TTL cleanup with `idx_idemp_created` performance index.
 
 ### 6B — Spring Modulith Events & Transactional Outbox ⬜
 Spring Modulith event publication registry (`spring-modulith-starter-jpa`), domain events with balance snapshot metadata via `ApplicationEventPublisher`, module boundary verification, in-process async event listeners.

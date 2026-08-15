@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Phase 6A (Durable Idempotency Engine)
+- Created `IdempotencyFilter.java` (`OncePerRequestFilter`) with `CachedBodyHttpServletRequest` wrapper to intercept `POST /api/v1/transactions`, enforcing mandatory `Idempotency-Key` header with SHA-256 request payload hashing.
+- Added database persistence via `idempotency_registry` table and `IdempotencyRecord` entity with lifecycle states (`PROCESSING`, `SUCCESS`, `FAILED`).
+- Created Flyway migration `V5__create_idempotency_registry.sql` with performance index `idx_idemp_created`.
+- Implemented cached HTTP response replay: repeated identical requests immediately return cached 201 Created response without triggering backend transfer logic or double-debiting user balances.
+- Implemented validation and conflict handling: rejecting missing `Idempotency-Key` headers or key reuse with mismatched payloads with `400 Bad Request`, and concurrent in-flight requests with `409 Conflict` (RFC 7807 problem details).
+- Created `IdempotencyCleanupService.java` with `@Scheduled` purge job for removing expired idempotency records past configured TTL (`payflow.idempotency.ttl-hours`, default 24h).
+- Added unit test suite `IdempotencyFilterTest.java` and integration test suite `IdempotencyIT.java` against Testcontainers PostgreSQL.
+- Added ADR-015 (*SHA-256 Request Payload Hashing & Durable Database-Backed Idempotency Engine*) to `docs/ADR.md`.
+
 ### Added - Phase 5B (Integration & Concurrency Test Suites)
 - Created `TransferLifecycleIT.java` full-stack integration test verifying end-to-end user registration, money transfers, updated balances, and double-entry ledger audit verification against Testcontainers PostgreSQL.
 - Created `ConcurrentTransferIT.java` high-concurrency race condition test with 10 synchronized threads (`CountDownLatch`), asserting that simultaneous withdrawals from an account with insufficient balance for all result in exactly 1 success, 9 failures, zero double-spending, and balance invariance (balance never goes negative).

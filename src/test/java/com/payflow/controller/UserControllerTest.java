@@ -27,6 +27,7 @@ import com.payflow.entity.LedgerEntryType;
 import com.payflow.entity.User;
 import com.payflow.mapper.LedgerMapper;
 import com.payflow.mapper.UserMapper;
+import com.payflow.repository.IdempotencyRepository;
 import com.payflow.service.UserService;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -54,6 +55,9 @@ class UserControllerTest {
 
 	@MockitoBean
 	private LedgerMapper ledgerMapper;
+
+	@MockitoBean
+	private IdempotencyRepository idempotencyRepository;
 
 	@BeforeEach
 	void setUpMapperMock() {
