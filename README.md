@@ -34,7 +34,7 @@ Payflow API evolves through a structured, multi-phase engineering roadmap:
 | **Phase 2** | Domain Modeling, OpenAPI Docs, RFC 7807 Error Handling, UUID References | ✅ Complete |
 | **Phase 3** | ACID Transfer Engine, Pessimistic Locking, Double-Entry Balance Ledger | ✅ Complete |
 | **Phase 4** | Flyway Database Migrations (`V1`..`V4`), Spring Profiles & Testcontainers | ✅ Complete |
-| **Phase 5** | Multi-Tier Test Suite (Unit, `@DataJpaTest`, `@WebMvcTest`, Testcontainers) | 🔄 Phase 5A ✅ |
+| **Phase 5** | Multi-Tier Test Suite (Unit, `@DataJpaTest`, `@WebMvcTest`, Testcontainers Concurrency) | ✅ Complete |
 
 > 📌 *See full multi-phase evolution details in [docs/ROADMAP.md](docs/ROADMAP.md).*
 

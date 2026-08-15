@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Phase 5B (Integration & Concurrency Test Suites)
+- Created `TransferLifecycleIT.java` full-stack integration test verifying end-to-end user registration, money transfers, updated balances, and double-entry ledger audit verification against Testcontainers PostgreSQL.
+- Created `ConcurrentTransferIT.java` high-concurrency race condition test with 10 synchronized threads (`CountDownLatch`), asserting that simultaneous withdrawals from an account with insufficient balance for all result in exactly 1 success, 9 failures, zero double-spending, and balance invariance (balance never goes negative).
+- Created `MutualTransferDeadlockIT.java` verifying deadlock avoidance under concurrent mutual cross-transfers ($A \rightarrow B$ and $B \rightarrow A$) via deterministic alphabetical lock ordering.
+- Added `spring-boot-resttestclient` dependency to `pom.xml` for Spring Boot 4.x `TestRestTemplate` autoconfiguration.
+- Added structured SLF4J logging across `TransactionService` and `UserService` for enhanced transaction lifecycle observability.
+
 ### Added - Phase 5A (Comprehensive Unit & Slice Test Suite)
 - Created `UserServiceTest.java` verifying user registration, duplicate UPI prevention, UUID reference lookups, and pagination.
 - Created `UserRepositoryTest.java` data JPA slice test verifying custom query compilation, UUID lookups, and pessimistic locking (`SELECT FOR UPDATE`).

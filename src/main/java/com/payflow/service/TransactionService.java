@@ -3,6 +3,8 @@ package com.payflow.service;
 import java.math.BigDecimal;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -26,6 +28,8 @@ import com.payflow.repository.UserRepository;
 @Service
 public class TransactionService {
 
+	private static final Logger LOG = LoggerFactory.getLogger(TransactionService.class);
+
 	private final TransactionRepository transactionRepository;
 	private final UserRepository userRepository;
 	private final BalanceLedgerRepository balanceLedgerRepository;
@@ -45,6 +49,8 @@ public class TransactionService {
 		if (senderUpi.equalsIgnoreCase(receiverUpi)) {
 			throw new SelfTransferException(senderUpi);
 		}
+
+		LOG.info("Initiating P2P transfer of {} from {} to {}", request.getAmount(), senderUpi, receiverUpi);
 
 		// Deterministic lock acquisition order (alphabetical by UPI ID) to prevent
 		// database deadlocks
@@ -102,6 +108,9 @@ public class TransactionService {
 
 		balanceLedgerRepository.save(senderLedger);
 		balanceLedgerRepository.save(receiverLedger);
+
+		LOG.info("Transfer completed: txId={}, amount={}", savedTransaction.getReferenceId(),
+				savedTransaction.getAmount());
 
 		return savedTransaction;
 	}
