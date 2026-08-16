@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,6 +28,7 @@ import com.payflow.entity.LedgerEntryType;
 import com.payflow.entity.TransactionStatus;
 import com.payflow.entity.TransactionType;
 import com.payflow.entity.User;
+import com.payflow.filter.IdempotencyFilter;
 import com.payflow.repository.BalanceLedgerRepository;
 import com.payflow.repository.UserRepository;
 
@@ -69,14 +72,18 @@ class TransferLifecycleIT extends AbstractIntegrationTest {
 		assertThat(bobRes.getBody()).isNotNull();
 		UUID bobRefId = bobRes.getBody().referenceId();
 
-		// 3. Initiate Transfer of ₹300.00 from Alice -> Bob
+		// 3. Initiate Transfer of ₹300.00 from Alice -> Bob with Idempotency-Key
 		TransferMoneyRequest transferReq = new TransferMoneyRequest();
 		transferReq.setSenderUpiId("alice.life@payflow");
 		transferReq.setReceiverUpiId("bob.life@payflow");
 		transferReq.setAmount(new BigDecimal("300.0000"));
 		transferReq.setNote("Lifecycle Test Dinner Split");
 
-		ResponseEntity<TransactionResponse> txRes = restTemplate.postForEntity("/api/v1/transactions", transferReq,
+		HttpHeaders headers = new HttpHeaders();
+		headers.set(IdempotencyFilter.IDEMPOTENCY_KEY_HEADER, UUID.randomUUID().toString());
+		HttpEntity<TransferMoneyRequest> txEntity = new HttpEntity<>(transferReq, headers);
+
+		ResponseEntity<TransactionResponse> txRes = restTemplate.postForEntity("/api/v1/transactions", txEntity,
 				TransactionResponse.class);
 		assertThat(txRes.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 		assertThat(txRes.getBody()).isNotNull();

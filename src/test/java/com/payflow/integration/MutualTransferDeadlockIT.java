@@ -3,6 +3,7 @@ package com.payflow.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -13,6 +14,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -22,6 +25,7 @@ import com.payflow.dto.request.TransferMoneyRequest;
 import com.payflow.dto.response.TransactionResponse;
 import com.payflow.dto.response.UserResponse;
 import com.payflow.entity.User;
+import com.payflow.filter.IdempotencyFilter;
 import com.payflow.repository.UserRepository;
 
 class MutualTransferDeadlockIT extends AbstractIntegrationTest {
@@ -72,7 +76,11 @@ class MutualTransferDeadlockIT extends AbstractIntegrationTest {
 				req.setAmount(new BigDecimal("100.0000"));
 				req.setNote("Mutual Transfer A -> B");
 
-				ResponseEntity<TransactionResponse> res = restTemplate.postForEntity("/api/v1/transactions", req,
+				HttpHeaders headers = new HttpHeaders();
+				headers.set(IdempotencyFilter.IDEMPOTENCY_KEY_HEADER, UUID.randomUUID().toString());
+				HttpEntity<TransferMoneyRequest> txEntity = new HttpEntity<>(req, headers);
+
+				ResponseEntity<TransactionResponse> res = restTemplate.postForEntity("/api/v1/transactions", txEntity,
 						TransactionResponse.class);
 				if (res.getStatusCode() == HttpStatus.CREATED) {
 					successCount.incrementAndGet();
@@ -95,7 +103,11 @@ class MutualTransferDeadlockIT extends AbstractIntegrationTest {
 				req.setAmount(new BigDecimal("100.0000"));
 				req.setNote("Mutual Transfer B -> A");
 
-				ResponseEntity<TransactionResponse> res = restTemplate.postForEntity("/api/v1/transactions", req,
+				HttpHeaders headers = new HttpHeaders();
+				headers.set(IdempotencyFilter.IDEMPOTENCY_KEY_HEADER, UUID.randomUUID().toString());
+				HttpEntity<TransferMoneyRequest> txEntity = new HttpEntity<>(req, headers);
+
+				ResponseEntity<TransactionResponse> res = restTemplate.postForEntity("/api/v1/transactions", txEntity,
 						TransactionResponse.class);
 				if (res.getStatusCode() == HttpStatus.CREATED) {
 					successCount.incrementAndGet();

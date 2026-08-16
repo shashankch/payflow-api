@@ -239,7 +239,7 @@ To support continuous releases and backward compatibility for mobile and third-p
 
 ## 6. Durable Idempotency Engine
 
-To guarantee "exactly-once" execution on payment mutations, the system requires clients to pass a unique `Idempotency-Key` header with write requests.
+To guarantee "exactly-once" execution on payment mutations, Payflow enforces a durable, database-backed idempotency filter that requires clients to pass a unique `Idempotency-Key` header with write requests.
 
 ### Idempotency Schema
 ```sql
@@ -252,17 +252,44 @@ CREATE TABLE idempotency_registry (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX idx_idemp_created ON idempotency_registry(created_at);
 ```
 
-### Execution Lifecycle
-1. **Intercept Request**: Extract `Idempotency-Key` from the header and compute a SHA-256 hash of the request payload.
-2. **Lookup Key**: Find the key in the `idempotency_registry`:
-   - **Key Not Found**: Insert a new record with status `INITIATED` and the current request hash. Proceed to process the request.
-   - **Key Found & status is `PROCESSING`**: Reject the request with `409 Conflict` (indicating the request is already in-flight).
-   - **Key Found & status is `SUCCESS`/`FAILED`**: Check the saved `request_hash`. If the payload matches, immediately return the cached response (payload and HTTP code) without executing backend logic. If the payload does not match, reject with `400 Bad Request` (key reuse with different payload).
-3. **Update Status**: 
-   - Upon successful execution, update status to `SUCCESS` and save the response payload and status code.
-   - Upon execution error, update status to `FAILED` or remove the record to allow the client to retry.
+### Idempotency Filter Lifecycle Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as 📱 HTTP Client
+    participant Filter as 🛡️ IdempotencyFilter
+    participant DB as 🗄️ PostgreSQL (idempotency_registry)
+    participant Engine as 🔒 TransactionService
+
+    Client->>Filter: POST /api/v1/transactions (Header: Idempotency-Key)
+    alt Missing Idempotency-Key
+        Filter-->>Client: 400 Bad Request (RFC 7807: Missing Required Header)
+    else Key Present
+        Filter->>Filter: Compute SHA-256(requestBody)
+        Filter->>DB: SELECT * FROM idempotency_registry WHERE idempotency_key = ?
+        alt Key Exists & Different Hash
+            Filter-->>Client: 400 Bad Request (RFC 7807: Key Reuse with Different Payload)
+        else Key Exists & Status is PROCESSING / INITIATED
+            Filter-->>Client: 409 Conflict (Request Currently In-Flight)
+        else Key Exists & Status is SUCCESS
+            Filter-->>Client: Replay Cached HTTP Response (Code & JSON Body)
+        else Key Not Found
+            Filter->>DB: INSERT INTO idempotency_registry (key, hash, status=PROCESSING)
+            Filter->>Engine: doFilterInternal() -> sendMoney()
+            Engine-->>Filter: HTTP 201 Created (TransactionResponse)
+            Filter->>DB: UPDATE idempotency_registry SET status=SUCCESS, response_code=201, response_body=...
+            Filter-->>Client: HTTP 201 Created (Original Response)
+        end
+    end
+```
+
+### Background TTL Purge Service
+A scheduled job (`IdempotencyCleanupService`) executes periodically (`payflow.idempotency.cleanup-cron`) to purge expired records older than the configured TTL (`payflow.idempotency.ttl-hours`, default 24 hours). The `idx_idemp_created` B-Tree index ensures constant-time range scan performance during deletion.
 
 ---
 

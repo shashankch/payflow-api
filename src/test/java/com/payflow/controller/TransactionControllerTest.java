@@ -20,6 +20,7 @@ import com.payflow.entity.Transaction;
 import com.payflow.entity.TransactionStatus;
 import com.payflow.entity.TransactionType;
 import com.payflow.mapper.TransactionMapper;
+import com.payflow.repository.IdempotencyRepository;
 import com.payflow.service.TransactionService;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -44,6 +45,9 @@ class TransactionControllerTest {
 
 	@MockitoBean
 	private TransactionMapper transactionMapper;
+
+	@MockitoBean
+	private IdempotencyRepository idempotencyRepository;
 
 	@BeforeEach
 	void setUpMapperMock() {
@@ -73,8 +77,9 @@ class TransactionControllerTest {
 		given(transactionService.sendMoney(any(TransferMoneyRequest.class))).willReturn(createdTransaction);
 
 		mockMvc.perform(post("/api/v1/transactions").contentType(MediaType.APPLICATION_JSON)
-				.content(objectMapper.writeValueAsString(request))).andExpect(status().isCreated())
-				.andExpect(header().exists("Location")).andExpect(jsonPath("$.transactionId").value(10))
+				.header("Idempotency-Key", "tx-test-key-123").content(objectMapper.writeValueAsString(request)))
+				.andExpect(status().isCreated()).andExpect(header().exists("Location"))
+				.andExpect(jsonPath("$.transactionId").value(10))
 				.andExpect(jsonPath("$.senderUpiId").value("alice@upi"))
 				.andExpect(jsonPath("$.receiverUpiId").value("bob@upi")).andExpect(jsonPath("$.amount").value(100.00))
 				.andExpect(jsonPath("$.status").value("COMPLETED"));
@@ -87,7 +92,8 @@ class TransactionControllerTest {
 				.receiverUpiId("bob@upi").amount(new BigDecimal("0.00")).build();
 
 		mockMvc.perform(post("/api/v1/transactions").contentType(MediaType.APPLICATION_JSON)
-				.content(objectMapper.writeValueAsString(invalidRequest))).andExpect(status().isUnprocessableEntity());
+				.header("Idempotency-Key", "tx-test-key-456").content(objectMapper.writeValueAsString(invalidRequest)))
+				.andExpect(status().isUnprocessableEntity());
 	}
 
 	@Test

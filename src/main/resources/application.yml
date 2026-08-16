@@ -19,3 +19,8 @@ management:
 logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{requestId:-}] %-5level %logger{36} - %msg%n"
+
+payflow:
+  idempotency:
+    ttl-hours: 24
+    cleanup-cron: "0 0 * * * *"
