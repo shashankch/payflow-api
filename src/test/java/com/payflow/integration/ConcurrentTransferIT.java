@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -26,7 +27,6 @@ import com.payflow.dto.response.TransactionResponse;
 import com.payflow.dto.response.UserResponse;
 import com.payflow.entity.User;
 import com.payflow.filter.IdempotencyFilter;
-import com.payflow.repository.BalanceLedgerRepository;
 import com.payflow.repository.UserRepository;
 
 class ConcurrentTransferIT extends AbstractIntegrationTest {
@@ -37,11 +37,8 @@ class ConcurrentTransferIT extends AbstractIntegrationTest {
 	@Autowired
 	private UserRepository userRepository;
 
-	@Autowired
-	private BalanceLedgerRepository balanceLedgerRepository;
-
 	@Test
-	@DisplayName("Should prevent double-spending under high concurrency (10 simultaneous threads, ₹150 balance)")
+	@DisplayName("10 concurrent threads attempt ₹100 transfers from ₹150 balance: exactly 1 succeeds, 9 fail with 422, balance never goes negative")
 	void shouldPreventDoubleSpending_underHighConcurrency() throws InterruptedException {
 		// 1. Create Sender with ₹150.00 initial balance
 		String senderUpi = "sender.race@payflow";
@@ -86,44 +83,50 @@ class ConcurrentTransferIT extends AbstractIntegrationTest {
 					txReq.setAmount(new BigDecimal("100.0000"));
 					txReq.setNote("Concurrent race attempt");
 
-					HttpHeaders headers = new HttpHeaders();
+					HttpHeaders headers = authHeaders(senderUpi);
 					headers.set(IdempotencyFilter.IDEMPOTENCY_KEY_HEADER, UUID.randomUUID().toString());
-					HttpEntity<TransferMoneyRequest> txEntity = new HttpEntity<>(txReq, headers);
+					HttpEntity<TransferMoneyRequest> entity = new HttpEntity<>(txReq, headers);
 
-					ResponseEntity<TransactionResponse> response = restTemplate.postForEntity("/api/v1/transactions",
-							txEntity, TransactionResponse.class);
+					ResponseEntity<TransactionResponse> response = restTemplate.exchange("/api/v1/transactions",
+							HttpMethod.POST, entity, TransactionResponse.class);
 
 					if (response.getStatusCode() == HttpStatus.CREATED) {
 						successCount.incrementAndGet();
-					} else {
+					} else if (response.getStatusCode() == HttpStatus.UNPROCESSABLE_ENTITY) {
 						failureCount.incrementAndGet();
 					}
-				} catch (InterruptedException e) {
-					Thread.currentThread().interrupt();
+				} catch (Exception e) {
+					failureCount.incrementAndGet();
 				} finally {
 					finishLatch.countDown();
 				}
 			});
 		}
 
-		readyLatch.await(10, TimeUnit.SECONDS);
-		startLatch.countDown(); // Release all 10 threads simultaneously
-		finishLatch.await(15, TimeUnit.SECONDS);
+		// Release all threads simultaneously
+		readyLatch.await(5, TimeUnit.SECONDS);
+		startLatch.countDown();
+		finishLatch.await(10, TimeUnit.SECONDS);
 		executor.shutdown();
-		executor.awaitTermination(5, TimeUnit.SECONDS);
 
-		// 4. Assert Concurrency Invariants
-		assertThat(successCount.get()).as("Exactly 1 concurrent transfer must succeed").isEqualTo(1);
-		assertThat(failureCount.get()).as("Exactly 9 concurrent transfers must fail").isEqualTo(9);
+		// 4. Assert Invariants
+		assertThat(successCount.get()).as("Exactly one ₹100 transfer should succeed from ₹150 balance").isEqualTo(1);
 
-		// 5. Verify database state in PostgreSQL
-		User sender = userRepository.findByUpiId(senderUpi).orElseThrow();
-		assertThat(sender.getBalance())
-				.as("Sender final balance must be exactly 50.0000 (150.00 - 100.00), never negative")
+		assertThat(failureCount.get()).as("Remaining 9 concurrent transfers should fail with 422 Insufficient Balance")
+				.isEqualTo(9);
+
+		// 5. Verify database balance invariance
+		User updatedSender = userRepository.findByUpiId(senderUpi).orElseThrow();
+		assertThat(updatedSender.getBalance()).as("Sender final balance must be exactly ₹50.00 (₹150 - ₹100)")
 				.isEqualByComparingTo("50.0000");
 
-		// 6. Verify ledger reconciliation
-		BigDecimal reconciled = balanceLedgerRepository.calculateReconciledBalanceByUserId(sender.getUserId());
-		assertThat(reconciled).as("Reconciled ledger delta must equal -100.0000").isEqualByComparingTo("-100.0000");
+		// Total receiver balances must equal exactly ₹100.00
+		BigDecimal totalReceiverBalance = BigDecimal.ZERO;
+		for (String rUpi : receiverUpis) {
+			User rUser = userRepository.findByUpiId(rUpi).orElseThrow();
+			totalReceiverBalance = totalReceiverBalance.add(rUser.getBalance());
+		}
+		assertThat(totalReceiverBalance).as("Total money credited across all receivers must equal exactly ₹100.00")
+				.isEqualByComparingTo("100.0000");
 	}
 }

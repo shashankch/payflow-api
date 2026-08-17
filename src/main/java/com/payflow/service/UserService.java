@@ -73,6 +73,12 @@ public class UserService {
 	}
 
 	@Transactional(readOnly = true)
+	public User getUserByUpiId(String upiId) {
+		return userRepository.findByUpiId(upiId)
+				.orElseThrow(() -> new UserNotFoundException("User not found with UPI ID: " + upiId));
+	}
+
+	@Transactional(readOnly = true)
 	public List<User> getUsersWithBalanceAbove(BigDecimal amount) {
 		return userRepository.findUsersWithBalanceGreaterThan(amount);
 	}
@@ -83,5 +89,10 @@ public class UserService {
 			throw new UserNotFoundException("User not found: " + userReferenceId);
 		}
 		return balanceLedgerRepository.findByUserReferenceIdOrderByCreatedAtDesc(userReferenceId, pageable);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<BalanceLedgerEntry> getUserLedgerByReferenceId(UUID userReferenceId, Pageable pageable) {
+		return getUserLedger(userReferenceId, pageable);
 	}
 }

@@ -29,7 +29,7 @@ Dockerfile JDK alignment, GraalVM profile fix, README cleanup.
 
 ---
 
-## Phase 2 — Domain Model & API Hardening 🔄
+## Phase 2 — Domain Model & API Hardening ✅
 
 ### 2A — Entity Model & Rich Domain ✅
 `BigDecimal` financials, `@Column` constraints, JPA FK relationships, audit timestamps, status/type enums, rich domain methods (`debit`/`credit`), constructor injection.
@@ -91,10 +91,10 @@ Spring Modulith event publication registry (`spring-modulith-starter-jpa`), doma
 
 ---
 
-## Phase 7 — Security & External Integration ⬜
+## Phase 7 — Security & External Integration 🟡
 
-### 7A — JWT Authentication ⬜
-Spring Security, stateless JWT, auth/login endpoint, CORS configuration.
+### 7A — JWT Authentication ✅
+Spring Security 6/7 integration, stateless HMAC-SHA256 JWT tokens via JJWT 0.13.0, `POST /api/v1/auth/login` endpoint issuing tokens with 1-hour TTL, `JwtAuthenticationFilter` Bearer token parsing and SecurityContext setup, `JwtAuthenticationEntryPoint` returning RFC 7807 401 Unauthorized problem details, CORS configuration, and public/protected security filter chain rule enforcement.
 
 ### 7B — Authorization ⬜
 Sender verification, transaction history and double-entry balance ledger access control (`403 Forbidden`).

@@ -373,7 +373,52 @@ This design ensures that domain service code (`TransactionService.sendMoney()`) 
 
 ---
 
-## 8. Gen-AI Spend Insights & Categorization
+## 8. Spring Security & Stateless JWT Authentication
+
+Payflow secures all financial and private user endpoints using **Spring Security 6/7** and **Stateless JSON Web Tokens (JWT)**. Authentication is completely decoupled from server session state, allowing frictionless horizontal scaling across distributed cloud nodes.
+
+### Authentication & Token Issuance Flow
+
+1. **User Login (`POST /api/v1/auth/login`)**: The client provides their registered `upiId`. Upon successful user lookup, `JwtTokenProvider` generates a cryptographically signed HMAC-SHA256 token containing user claims (`sub: upiId`, `referenceId`, `roles: [ROLE_USER]`, `iat`, `exp`).
+2. **Access Token Lifetime**: Configured to 1 hour (3600s) via `payflow.security.jwt.expiration-ms`.
+3. **Public vs Protected Route Matrix**:
+   - **Public**: `POST /api/v1/auth/login`, `POST /api/v1/users` (onboarding), `/swagger-ui/**`, `/v3/api-docs/**`, `/actuator/health/**`, `/actuator/info`.
+   - **Protected**: `POST /api/v1/transactions`, `GET /api/v1/transactions/**`, `GET /api/v1/users/**` (all require `Authorization: Bearer <token>`).
+
+### Security Filter Chain Sequence
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as 📱 HTTP Client
+    participant Filter as 🛡️ JwtAuthenticationFilter
+    participant Provider as 🔑 JwtTokenProvider
+    participant Context as 🧠 SecurityContextHolder
+    participant Controller as 🎯 Protected Controller
+    participant EntryPoint as 🚫 JwtAuthenticationEntryPoint
+
+    Client->>Filter: Request with Authorization: Bearer <token>
+    alt Missing Authorization Header on Protected Route
+        Filter->>Controller: Chain continues without auth
+        Controller-->>EntryPoint: Access Denied / Unauthenticated
+        EntryPoint-->>Client: 401 Unauthorized (RFC 7807 ProblemDetail)
+    else Invalid or Expired Token
+        Filter->>Provider: validateToken(token) -> false
+        Filter->>Controller: Chain continues without auth
+        Controller-->>EntryPoint: Access Denied
+        EntryPoint-->>Client: 401 Unauthorized (RFC 7807 ProblemDetail)
+    else Valid JWT Bearer Token
+        Filter->>Provider: validateToken(token) -> true
+        Filter->>Provider: getUpiIdFromToken(token) -> upiId
+        Filter->>Context: setAuthentication(UsernamePasswordAuthenticationToken)
+        Filter->>Controller: FilterChain.doFilter(req, res)
+        Controller-->>Client: 200 / 201 Response Payload
+    end
+```
+
+---
+
+## 9. Gen-AI Spend Insights & Categorization
 
 To support smart financial features, the project includes an **AI spend assistant** integration using **Spring AI** connected to an LLM provider API:
 
@@ -383,7 +428,7 @@ To support smart financial features, the project includes an **AI spend assistan
 
 ---
 
-## 9. Resilience Policies & Thread Tuning
+## 10. Resilience Policies & Thread Tuning
 
 System stability under load is enforced using **Resilience4j** configurations:
 
@@ -399,7 +444,7 @@ System stability under load is enforced using **Resilience4j** configurations:
 
 ---
 
-## 10. Kubernetes Readiness & Pod Lifecycle
+## 11. Kubernetes Readiness & Pod Lifecycle
 
 The application complies with cloud-native deployment requirements when running in a Kubernetes cluster:
 
@@ -414,7 +459,7 @@ The application complies with cloud-native deployment requirements when running 
 
 ---
 
-## 11. Observability Stack
+## 12. Observability Stack
 
 Payflow implements the **Three Pillars of Observability** — Metrics, Tracing, and Logging — using industry-standard open-source tooling:
 
@@ -434,7 +479,7 @@ Payflow implements the **Three Pillars of Observability** — Metrics, Tracing, 
 
 ---
 
-## 12. Testing Strategy (Rigor, Concurrency & Unit Verification)
+## 13. Testing Strategy (Rigor, Concurrency & Unit Verification)
 
 To ensure maximum code coverage and high system reliability, the project defines a two-tier testing strategy consisting of isolated unit tests and full-stack integration tests.
 
@@ -471,7 +516,7 @@ Integration tests verify the full lifecycle of a transaction across actual conta
 
 ---
 
-## 13. Entity Model & Rich Domain Architecture
+## 14. Entity Model & Rich Domain Architecture
 
 To establish robust domain boundaries and prevent corrupt data state, the entity layer adheres to Rich Domain Model principles and precise database constraints:
 
@@ -492,7 +537,7 @@ The `Transaction` entity maintains explicit JPA `@ManyToOne(fetch = FetchType.LA
 
 ---
 
-## 14. External Service Integration (RestClient & HTTP Interface Client)
+## 15. External Service Integration (RestClient & HTTP Interface Client)
 
 Payflow validates UPI IDs against an external validation service during user registration using modern Spring outbound HTTP communication patterns:
 
@@ -533,7 +578,7 @@ Graceful fallback: if the UPI validation service is unavailable, registration pr
 
 ---
 
-## 15. Security, Privacy & Threat Modeling
+## 16. Security, Privacy & Threat Modeling
 
 Payment backends operate under strict security and regulatory requirements. The system architecture addresses key threat vectors:
 
@@ -552,7 +597,7 @@ Payment backends operate under strict security and regulatory requirements. The 
 
 ---
 
-## 16. Alternatives Considered & Trade-off Analysis
+## 17. Alternatives Considered & Trade-off Analysis
 
 Documenting rejected alternatives and evaluating the penalty ("cost of getting it wrong") is critical to preventing architectural regressions.
 
@@ -567,7 +612,7 @@ Documenting rejected alternatives and evaluating the penalty ("cost of getting i
 
 ---
 
-## 17. Open & Resolved Design Issues
+## 18. Open & Resolved Design Issues
 
 ### Resolved Design Decisions
 - **`RES-001`: MapStruct for DTO Mapping** — Resolved in Phase 2C. Replaced custom manual factories with type-safe MapStruct mappers.
