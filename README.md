@@ -83,7 +83,7 @@ graph TD
 | 🗓️ **[Phased Roadmap](docs/ROADMAP.md)** | Full 12-phase technical expansion blueprint |
 | 🌐 **[API Specification](docs/API_SPECIFICATION.md)** | Complete REST endpoint contracts, schemas, RFC 7807 payloads |
 | 📋 **[Engineering Conventions](docs/CONVENTIONS.md)** | Java 25 standards, Spotless/Checkstyle rules, testing guidelines |
-| 📜 **[Architecture Decisions (ADRs)](docs/ADR.md)** | Log of architectural decisions (ADR-001 through ADR-015) |
+| 📜 **[Architecture Decisions (ADRs)](docs/ADR.md)** | Log of architectural decisions (ADR-001 through ADR-016) |
 | 📝 **[Changelog](CHANGELOG.md)** | Version-by-version implementation notes |
 
 ---

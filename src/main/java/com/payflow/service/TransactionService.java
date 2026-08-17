@@ -1,10 +1,12 @@
 package com.payflow.service;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -18,6 +20,7 @@ import com.payflow.entity.Transaction;
 import com.payflow.entity.TransactionStatus;
 import com.payflow.entity.TransactionType;
 import com.payflow.entity.User;
+import com.payflow.event.TransferCompletedEvent;
 import com.payflow.exception.SelfTransferException;
 import com.payflow.exception.TransactionNotFoundException;
 import com.payflow.exception.UserNotFoundException;
@@ -33,12 +36,14 @@ public class TransactionService {
 	private final TransactionRepository transactionRepository;
 	private final UserRepository userRepository;
 	private final BalanceLedgerRepository balanceLedgerRepository;
+	private final ApplicationEventPublisher eventPublisher;
 
 	public TransactionService(TransactionRepository transactionRepository, UserRepository userRepository,
-			BalanceLedgerRepository balanceLedgerRepository) {
+			BalanceLedgerRepository balanceLedgerRepository, ApplicationEventPublisher eventPublisher) {
 		this.transactionRepository = transactionRepository;
 		this.userRepository = userRepository;
 		this.balanceLedgerRepository = balanceLedgerRepository;
+		this.eventPublisher = eventPublisher;
 	}
 
 	@Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class, timeout = 5)
@@ -54,7 +59,7 @@ public class TransactionService {
 
 		// Deterministic lock acquisition order (alphabetical by UPI ID) to prevent
 		// database deadlocks
-		boolean senderFirst = senderUpi.compareToIgnoreCase(receiverUpi) < 0;
+		boolean senderFirst = String.CASE_INSENSITIVE_ORDER.compare(senderUpi, receiverUpi) < 0;
 		String firstUpi = senderFirst ? senderUpi : receiverUpi;
 		String secondUpi = senderFirst ? receiverUpi : senderUpi;
 
@@ -108,6 +113,13 @@ public class TransactionService {
 
 		balanceLedgerRepository.save(senderLedger);
 		balanceLedgerRepository.save(receiverLedger);
+
+		UUID refId = savedTransaction.getReferenceId();
+		BigDecimal amount = savedTransaction.getAmount();
+		TransactionStatus status = savedTransaction.getStatus();
+		TransferCompletedEvent event = new TransferCompletedEvent(refId, senderUpi, receiverUpi, amount, status,
+				senderBalanceAfter, receiverBalanceAfter, Instant.now());
+		eventPublisher.publishEvent(event);
 
 		LOG.info("Transfer completed: txId={}, amount={}", savedTransaction.getReferenceId(),
 				savedTransaction.getAmount());

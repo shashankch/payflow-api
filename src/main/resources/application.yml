@@ -6,6 +6,9 @@ spring:
     name: payflow-api
   profiles:
     active: local
+  modulith:
+    events:
+      republish-outstanding-events-on-restart: true
 
 management:
   endpoints:

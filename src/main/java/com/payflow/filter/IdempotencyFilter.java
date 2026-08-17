@@ -8,12 +8,14 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
@@ -38,6 +40,7 @@ import jakarta.servlet.http.HttpServletResponse;
 public class IdempotencyFilter extends OncePerRequestFilter {
 
 	public static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
+	private static final Duration IN_FLIGHT_TIMEOUT = Duration.ofMinutes(2);
 	private static final Logger LOG = LoggerFactory.getLogger(IdempotencyFilter.class);
 
 	private final IdempotencyRepository idempotencyRepository;
@@ -73,6 +76,8 @@ public class IdempotencyFilter extends OncePerRequestFilter {
 		CachedBodyHttpServletRequest wrappedRequest = new CachedBodyHttpServletRequest(req, requestBytes);
 
 		Optional<IdempotencyRecord> existingOpt = idempotencyRepository.findById(key);
+		IdempotencyRecord record;
+
 		if (existingOpt.isPresent()) {
 			IdempotencyRecord existing = existingOpt.get();
 
@@ -83,12 +88,21 @@ public class IdempotencyFilter extends OncePerRequestFilter {
 				return;
 			}
 
-			if (existing.getStatus() == IdempotencyStatus.PROCESSING
-					|| existing.getStatus() == IdempotencyStatus.INITIATED) {
-				LOG.warn("Concurrent request in-flight: key={}", key);
-				String msg = "Request with key is in-flight.";
-				sendError(res, HttpStatus.CONFLICT, "In Flight", msg, uri);
-				return;
+			boolean isInFlight = existing.getStatus() == IdempotencyStatus.PROCESSING
+					|| existing.getStatus() == IdempotencyStatus.INITIATED;
+
+			if (isInFlight) {
+				Instant leaseCutoff = Instant.now().minus(IN_FLIGHT_TIMEOUT);
+				Instant recordUpdated = existing.getUpdatedAt() != null
+						? existing.getUpdatedAt()
+						: existing.getCreatedAt();
+				if (recordUpdated == null || recordUpdated.isAfter(leaseCutoff)) {
+					LOG.warn("Concurrent request in-flight: key={}", key);
+					String msg = "Request with key is in-flight.";
+					sendError(res, HttpStatus.CONFLICT, "In Flight", msg, uri);
+					return;
+				}
+				LOG.warn("In-flight lease expired for key={}. Allowing retry execution.", key);
 			}
 
 			if (existing.getStatus() == IdempotencyStatus.SUCCESS) {
@@ -101,13 +115,24 @@ public class IdempotencyFilter extends OncePerRequestFilter {
 				}
 				return;
 			}
+
+			existing.setStatus(IdempotencyStatus.PROCESSING);
+			record = existing;
+		} else {
+			record = new IdempotencyRecord();
+			record.setIdempotencyKey(key);
+			record.setRequestHash(requestHash);
+			record.setStatus(IdempotencyStatus.PROCESSING);
 		}
 
-		IdempotencyRecord record = new IdempotencyRecord();
-		record.setIdempotencyKey(key);
-		record.setRequestHash(requestHash);
-		record.setStatus(IdempotencyStatus.PROCESSING);
-		idempotencyRepository.saveAndFlush(record);
+		try {
+			idempotencyRepository.saveAndFlush(record);
+		} catch (DataIntegrityViolationException ex) {
+			LOG.warn("Concurrent insert race detected for key={}: {}", key, ex.getMessage());
+			String msg = "Concurrent request with this key is being processed.";
+			sendError(res, HttpStatus.CONFLICT, "Concurrent Conflict", msg, uri);
+			return;
+		}
 
 		ContentCachingResponseWrapper wrappedResponse = new ContentCachingResponseWrapper(res);
 		try {
