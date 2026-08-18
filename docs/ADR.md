@@ -25,6 +25,7 @@ ADRs document significant technical decisions, along with their context, rationa
 | [ADR-013](#adr-013-flyway-database-migrations-over-ddl-auto-generation) | Flyway Database Migrations over DDL Auto-Generation | 2026-08-10 | Accepted |
 | [ADR-014](#adr-014-spring-environment-profiles-and-testcontainers-integration-testing-strategy) | Spring Environment Profiles and Testcontainers Integration Testing Strategy | 2026-08-11 | Accepted |
 | [ADR-015](#adr-015-sha-256-request-payload-hashing--durable-database-backed-idempotency-engine) | SHA-256 Request Payload Hashing & Durable Database-Backed Idempotency Engine | 2026-08-15 | Accepted |
+| [ADR-016](#adr-016-spring-modulith-event-publication-registry--transactional-outbox-pattern) | Spring Modulith Event Publication Registry & Transactional Outbox Pattern | 2026-08-16 | Accepted |
 
 ---
 
@@ -446,13 +447,45 @@ Chosen Option: **Durable Database-Backed Registry with SHA-256 Payload Hashing**
 ##### Rationale
 - **Zero Double-Spending Guarantee**: Storing records in PostgreSQL ensures ACID durability across node restarts, horizontal scaling, and transactional isolation.
 - **Payload Tampering & Reuse Prevention**: Computing a deterministic SHA-256 hash of the raw HTTP request bytes prevents fraudulent client key reuse with modified amounts or recipient UPIs.
-- **In-Flight Conflict Detection**: Status tracking (`PROCESSING` / `INITIATED`) detects concurrent requests with the same key and rejects them with `409 Conflict`.
+- **In-Flight Conflict Detection & Crash Lease Recovery**: Status tracking (`PROCESSING` / `INITIATED`) detects concurrent requests with the same key and rejects them with `409 Conflict`. An in-flight lease expiration window (2 minutes) ensures that orphaned in-flight states from crashed worker nodes automatically unlock for client retries without waiting for the 24-hour TTL purge.
+- **Distributed Race Protection**: Simultaneous key inserts on multi-node deployments catching `DataIntegrityViolationException` gracefully map to `409 Conflict`.
 - **Cached Replay**: Completed requests (`SUCCESS`) immediately replay the cached HTTP response code and response JSON without re-executing backend balance changes.
 - **Performance**: An index on `created_at` (`idx_idemp_created`) guarantees rapid scheduled TTL purge queries without scanning the entire registry table.
 
 #### Consequences
-- **Positive**: Absolute protection against duplicate payments, standard financial industry compliance (Stripe/Adyen pattern), zero external infrastructure dependencies.
+- **Positive**: Absolute protection against duplicate payments, standard financial industry compliance (Stripe/Adyen pattern), zero external infrastructure dependencies, resilience to worker node crashes.
 - **Negative / Trade-offs**: Requires database round-trips for mutation requests; requires periodic TTL purge job.
+
+---
+
+### ADR-016: Spring Modulith Event Publication Registry & Transactional Outbox Pattern
+
+**Date**: 2026-08-16  
+**Status**: Accepted  
+**Phase**: Phase 6B  
+
+#### Context & Problem Statement
+When a payment transaction completes, domain events (such as `TransferCompletedEvent`) must be published for asynchronous auditing, notifications, and downstream processing (e.g. Kafka streaming in Phase 9). Directly publishing events over network brokers inside a `@Transactional` business method causes the **dual-write problem**: if the broker call fails after DB commit, or if the DB transaction aborts after message dispatch, the systems fall out of sync.
+
+#### Considered Options
+1. **Direct Synchronous Broker Publishing (e.g. Kafka/RabbitMQ in `@Transactional`)**: Vulnerable to the dual-write problem, network latency, and distributed transaction anomalies.
+2. **Hand-Rolled Outbox Table with Polling Dispatcher**: Requires custom schema, custom polling workers with advisory locks, dead-letter retry queues, and significant maintenance overhead.
+3. **Spring Modulith Event Publication Registry (`spring-modulith-starter-jpa`)**: Framework-managed transactional outbox using `ApplicationEventPublisher`. Events published within `@Transactional` are atomically recorded in an `event_publication` log table in the same database transaction. Async event listeners annotated with `@ApplicationModuleListener` execute outside the publishing transaction and mark the registry entry as completed.
+
+#### Decision Outcome
+Chosen Option: **Spring Modulith Event Publication Registry (`spring-modulith-starter-jpa`)**
+
+##### Rationale
+- **Zero Dual-Write Problem**: Events are persisted to PostgreSQL within the exact same ACID transaction as the wallet balance mutations and double-entry ledger entries.
+- **Transactional Decoupling**: Downstream consumers (`@ApplicationModuleListener`) run in separate asynchronous transactions after commit. Failures in consumers do not fail or roll back the completed financial transfer.
+- **Automatic Event Replay & Resilience**: On application restart or retry, uncompleted events in `event_publication` can be re-dispatched (`republish-outstanding-events-on-restart: true`).
+- **Architectural Boundary Enforcement**: Spring Modulith provides compile-time / test-time architectural boundary verification (`ApplicationModules.verify()`), ensuring clean modular domain encapsulation without premature microservices decomposition.
+- **Zero Custom Boilerplate**: Eliminates hundreds of lines of custom polling daemon and state-tracking code.
+
+#### Consequences
+- **Positive**: ACID atomicity for domain events, seamless future externalization to Kafka (Phase 9A), built-in architectural verification.
+- **Negative / Trade-offs**: Requires `event_publication` database table managed via Flyway (`V6__create_event_publication_registry.sql`).
+
 
 
 

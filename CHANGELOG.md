@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Phase 6B (Spring Modulith Events & Transactional Outbox)
+- Integrated Spring Modulith 2.0 (`spring-modulith-starter-jpa`, `spring-modulith-starter-test`, and `spring-modulith-bom`).
+- Created Flyway migration `V6__create_event_publication_registry.sql` creating `event_publication` table with completion and publication date indexes.
+- Created `TransferCompletedEvent` domain event record containing transaction reference UUID, sender/receiver UPI IDs, amount, status, and post-transfer balances.
+- Updated `TransactionService.java` to publish `TransferCompletedEvent` via `ApplicationEventPublisher` within the `@Transactional` boundary, achieving transactional outbox persistence to PostgreSQL with zero dual-write vulnerability.
+- Created `TransferEventListener.java` annotated with `@ApplicationModuleListener` for asynchronous post-commit event consumption.
+- Created `ModulithStructureTest.java` verifying architectural boundaries and package encapsulation with `ApplicationModules.of(PayflowApiApplication.class).verify()`.
+- Created `OutboxIT.java` full-stack integration test verifying atomic event publication to `event_publication` table against Testcontainers PostgreSQL.
+- Hardened `IdempotencyFilter.java` with in-flight lease timeout (2 min) for automatic recovery from crashed worker nodes, and catch for `DataIntegrityViolationException` to gracefully handle concurrent insert collisions as `409 Conflict`.
+- Enhanced `GlobalExceptionHandler.java` with structured error logging (`LOG.error`) for unhandled server exceptions and data integrity violations.
+- Standardized deterministic alphabetical lock acquisition in `TransactionService.java` with `String.CASE_INSENSITIVE_ORDER`.
+- Added ADR-016 (*Spring Modulith Event Publication Registry & Transactional Outbox Pattern*) to `docs/ADR.md`.
+
 ### Added - Phase 6A (Durable Idempotency Engine)
 - Created `IdempotencyFilter.java` (`OncePerRequestFilter`) with `CachedBodyHttpServletRequest` wrapper to intercept `POST /api/v1/transactions`, enforcing mandatory `Idempotency-Key` header with SHA-256 request payload hashing.
 - Added database persistence via `idempotency_registry` table and `IdempotencyRecord` entity with lifecycle states (`PROCESSING`, `SUCCESS`, `FAILED`).

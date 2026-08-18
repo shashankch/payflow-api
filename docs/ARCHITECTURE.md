@@ -275,18 +275,31 @@ sequenceDiagram
         alt Key Exists & Different Hash
             Filter-->>Client: 400 Bad Request (RFC 7807: Key Reuse with Different Payload)
         else Key Exists & Status is PROCESSING / INITIATED
-            Filter-->>Client: 409 Conflict (Request Currently In-Flight)
+            alt Lease Expired (> 2 minutes)
+                Filter->>DB: UPDATE idempotency_registry SET updated_at = NOW()
+                Filter->>Engine: Allow Retry Execution -> sendMoney()
+            else Lease Active (<= 2 minutes)
+                Filter-->>Client: 409 Conflict (Request Currently In-Flight)
+            end
         else Key Exists & Status is SUCCESS
             Filter-->>Client: Replay Cached HTTP Response (Code & JSON Body)
         else Key Not Found
-            Filter->>DB: INSERT INTO idempotency_registry (key, hash, status=PROCESSING)
-            Filter->>Engine: doFilterInternal() -> sendMoney()
-            Engine-->>Filter: HTTP 201 Created (TransactionResponse)
-            Filter->>DB: UPDATE idempotency_registry SET status=SUCCESS, response_code=201, response_body=...
-            Filter-->>Client: HTTP 201 Created (Original Response)
+            alt Concurrent Insert Collision (DataIntegrityViolationException)
+                Filter-->>Client: 409 Conflict (Concurrent Request Being Processed)
+            else Successful Insert
+                Filter->>DB: INSERT INTO idempotency_registry (key, hash, status=PROCESSING)
+                Filter->>Engine: doFilterInternal() -> sendMoney()
+                Engine-->>Filter: HTTP 201 Created (TransactionResponse)
+                Filter->>DB: UPDATE idempotency_registry SET status=SUCCESS, response_code=201, response_body=...
+                Filter-->>Client: HTTP 201 Created (Original Response)
+            end
         end
     end
 ```
+
+### In-Flight Lease Recovery & Distributed Race Handling
+- **Crashed Worker Node Recovery**: If an application node crashes mid-flight while a transaction is in status `PROCESSING`, the in-flight lease automatically expires after 2 minutes (`IN_FLIGHT_TIMEOUT`), allowing client retries to re-acquire the lock without waiting for the 24-hour TTL purge.
+- **Concurrent Insert Collision Safety**: If two concurrent requests with the same key arrive simultaneously and both pass initial existence checks, database unique constraint enforcement triggers a `DataIntegrityViolationException`, which the filter catches and gracefully translates to `409 Conflict`.
 
 ### Background TTL Purge Service
 A scheduled job (`IdempotencyCleanupService`) executes periodically (`payflow.idempotency.cleanup-cron`) to purge expired records older than the configured TTL (`payflow.idempotency.ttl-hours`, default 24 hours). The `idx_idemp_created` B-Tree index ensures constant-time range scan performance during deletion.
@@ -295,26 +308,57 @@ A scheduled job (`IdempotencyCleanupService`) executes periodically (`payflow.id
 
 ## 7. Spring Modulith Event Publication & Transactional Outbox
 
-To achieve reliable event-driven messaging, Payflow uses **Spring Modulith's Event Publication Registry** to atomically persist domain events within the same database transaction as the business state change. This eliminates the dual-write problem without requiring custom outbox infrastructure.
+To achieve reliable event-driven messaging, Payflow uses **Spring Modulith's Event Publication Registry** (`spring-modulith-starter-jpa`) to atomically persist domain events within the same database transaction as the business state change. This eliminates the dual-write problem without requiring custom outbox polling infrastructure.
 
-### Event Publication Flow
+### Event Publication Schema
+```sql
+CREATE TABLE IF NOT EXISTS event_publication (
+    id UUID NOT NULL,
+    listener_id VARCHAR(512) NOT NULL,
+    event_type VARCHAR(512) NOT NULL,
+    serialized_event TEXT NOT NULL,
+    publication_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    completion_date TIMESTAMP WITH TIME ZONE,
+    PRIMARY KEY (id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_event_pub_completion ON event_publication(completion_date);
+CREATE INDEX IF NOT EXISTS idx_event_pub_date ON event_publication(publication_date);
 ```
-[Start @Transactional]
-   │
-   ├── 1. Update User Balance (SQL)
-   ├── 2. Save Transaction Record (SQL)
-   ├── 3. applicationEventPublisher.publishEvent(TransferCompletedEvent)
-   │      └── Spring Modulith writes to `event_publication` table (same TX)
-   │
-[Commit Transaction] --> Atomically persists everything locally
-   │
-   └── [Post-Commit Async Processing]
-          │
-          ├── @ApplicationModuleListener receives event (in-process, local/test profiles)
-          │     └── Logging, audit trail, notification triggers
-          │
-          └── spring-modulith-events-kafka (prod profile, Phase 9A)
-                └── Auto-externalizes event to Kafka topic `payflow.transfers`
+
+### Transactional Outbox Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as 📱 HTTP Client
+    participant Service as 🔒 TransactionService
+    participant Publisher as 📢 ApplicationEventPublisher
+    participant DB as 🗄️ PostgreSQL (users / transactions / event_publication)
+    participant Listener as ⚡ TransferEventListener (@ApplicationModuleListener)
+
+    Client->>Service: sendMoney(TransferMoneyRequest)
+    Note over Service,DB: Transaction Boundary: @Transactional(READ_COMMITTED)
+    Service->>DB: UPDATE users SET balance = balance - amount WHERE ... (Sender)
+    Service->>DB: UPDATE users SET balance = balance + amount WHERE ... (Receiver)
+    Service->>DB: INSERT INTO transactions ...
+    Service->>DB: INSERT INTO balance_ledger (DEBIT & CREDIT entries) ...
+    Service->>Publisher: publishEvent(TransferCompletedEvent)
+    Publisher->>DB: INSERT INTO event_publication (id, listener_id, event_type, serialized_event, publication_date)
+    Service-->>Client: 201 Created (TransactionResponse)
+    Note over Service,DB: Transaction Commits Atomically in Single DB Unit of Work
+
+    Note over DB,Listener: Post-Commit Asynchronous Invocation (Spring Modulith)
+    Publisher->>Listener: onTransferCompleted(TransferCompletedEvent)
+    Listener->>Listener: Asynchronous audit / notification logging
+    Listener->>DB: UPDATE event_publication SET completion_date = NOW() WHERE id = ?
+```
+
+### Module Boundary Verification
+Spring Modulith continuously validates domain encapsulation and architectural coupling rules across packages via `ModulithStructureTest`:
+```java
+ApplicationModules modules = ApplicationModules.of(PayflowApiApplication.class);
+modules.verify();
 ```
 
 ### Evolutionary Architecture Path
