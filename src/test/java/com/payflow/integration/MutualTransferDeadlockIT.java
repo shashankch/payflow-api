@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -37,25 +38,25 @@ class MutualTransferDeadlockIT extends AbstractIntegrationTest {
 	private UserRepository userRepository;
 
 	@Test
-	@DisplayName("Should prevent database deadlocks when two users perform mutual transfers simultaneously")
-	void shouldPreventDeadlock_whenMutualTransfersExecuteSimultaneously() throws InterruptedException {
-		// 1. Create User A (₹500.00) and User B (₹500.00)
-		String upiA = "userA.deadlock@payflow";
-		String upiB = "userB.deadlock@payflow";
+	@DisplayName("Mutual transfers A->B and B->A concurrently execute without deadlocks via deterministic alphabetical row lock ordering")
+	void shouldPreventDeadlocks_underConcurrentMutualTransfers() throws InterruptedException {
+		// 1. Create User A and User B with ₹500.00 each
+		String upiA = "user.alpha@payflow";
+		String upiB = "user.beta@payflow";
 
-		CreateUserRequest userAReq = new CreateUserRequest();
-		userAReq.setName("User A");
-		userAReq.setUpiId(upiA);
-		userAReq.setPhoneNumber("9777111111");
-		userAReq.setBalance(new BigDecimal("500.0000"));
-		restTemplate.postForEntity("/api/v1/users", userAReq, UserResponse.class);
+		CreateUserRequest reqA = new CreateUserRequest();
+		reqA.setName("User Alpha");
+		reqA.setUpiId(upiA);
+		reqA.setPhoneNumber("9876111111");
+		reqA.setBalance(new BigDecimal("500.0000"));
+		restTemplate.postForEntity("/api/v1/users", reqA, UserResponse.class);
 
-		CreateUserRequest userBReq = new CreateUserRequest();
-		userBReq.setName("User B");
-		userBReq.setUpiId(upiB);
-		userBReq.setPhoneNumber("9777222222");
-		userBReq.setBalance(new BigDecimal("500.0000"));
-		restTemplate.postForEntity("/api/v1/users", userBReq, UserResponse.class);
+		CreateUserRequest reqB = new CreateUserRequest();
+		reqB.setName("User Beta");
+		reqB.setUpiId(upiB);
+		reqB.setPhoneNumber("9876222222");
+		reqB.setBalance(new BigDecimal("500.0000"));
+		restTemplate.postForEntity("/api/v1/users", reqB, UserResponse.class);
 
 		// 2. Set up synchronized concurrent mutual transfers (A -> B and B -> A)
 		ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -76,12 +77,12 @@ class MutualTransferDeadlockIT extends AbstractIntegrationTest {
 				req.setAmount(new BigDecimal("100.0000"));
 				req.setNote("Mutual Transfer A -> B");
 
-				HttpHeaders headers = new HttpHeaders();
+				HttpHeaders headers = authHeaders(upiA);
 				headers.set(IdempotencyFilter.IDEMPOTENCY_KEY_HEADER, UUID.randomUUID().toString());
 				HttpEntity<TransferMoneyRequest> txEntity = new HttpEntity<>(req, headers);
 
-				ResponseEntity<TransactionResponse> res = restTemplate.postForEntity("/api/v1/transactions", txEntity,
-						TransactionResponse.class);
+				ResponseEntity<TransactionResponse> res = restTemplate.exchange("/api/v1/transactions", HttpMethod.POST,
+						txEntity, TransactionResponse.class);
 				if (res.getStatusCode() == HttpStatus.CREATED) {
 					successCount.incrementAndGet();
 				}
@@ -103,12 +104,12 @@ class MutualTransferDeadlockIT extends AbstractIntegrationTest {
 				req.setAmount(new BigDecimal("100.0000"));
 				req.setNote("Mutual Transfer B -> A");
 
-				HttpHeaders headers = new HttpHeaders();
+				HttpHeaders headers = authHeaders(upiB);
 				headers.set(IdempotencyFilter.IDEMPOTENCY_KEY_HEADER, UUID.randomUUID().toString());
 				HttpEntity<TransferMoneyRequest> txEntity = new HttpEntity<>(req, headers);
 
-				ResponseEntity<TransactionResponse> res = restTemplate.postForEntity("/api/v1/transactions", txEntity,
-						TransactionResponse.class);
+				ResponseEntity<TransactionResponse> res = restTemplate.exchange("/api/v1/transactions", HttpMethod.POST,
+						txEntity, TransactionResponse.class);
 				if (res.getStatusCode() == HttpStatus.CREATED) {
 					successCount.incrementAndGet();
 				}
@@ -119,20 +120,25 @@ class MutualTransferDeadlockIT extends AbstractIntegrationTest {
 			}
 		});
 
+		// Trigger simultaneous execution
 		readyLatch.await(5, TimeUnit.SECONDS);
 		startLatch.countDown();
 		finishLatch.await(10, TimeUnit.SECONDS);
 		executor.shutdown();
-		executor.awaitTermination(5, TimeUnit.SECONDS);
 
-		// 3. Assert both mutual transfers completed cleanly with zero deadlocks
-		assertThat(successCount.get()).as("Both mutual transfers must succeed").isEqualTo(2);
+		// 3. Assert Invariants: Both transfers completed cleanly without deadlock
+		// exception
+		assertThat(successCount.get()).as("Both mutual transfers must succeed concurrently without database deadlocks")
+				.isEqualTo(2);
 
-		// 4. Assert balances returned to initial state (500 - 100 + 100 = 500)
+		// 4. Verify Final Balances remain exactly ₹500.00 each
 		User finalA = userRepository.findByUpiId(upiA).orElseThrow();
 		User finalB = userRepository.findByUpiId(upiB).orElseThrow();
 
-		assertThat(finalA.getBalance()).isEqualByComparingTo("500.0000");
-		assertThat(finalB.getBalance()).isEqualByComparingTo("500.0000");
+		assertThat(finalA.getBalance()).as("User A balance remains ₹500.00 (+100 -100)")
+				.isEqualByComparingTo("500.0000");
+
+		assertThat(finalB.getBalance()).as("User B balance remains ₹500.00 (+100 -100)")
+				.isEqualByComparingTo("500.0000");
 	}
 }

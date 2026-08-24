@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Phase 7A (Spring Security & Stateless JWT Authentication)
+- Added `spring-boot-starter-security`, `spring-security-test`, and JJWT 0.13.0 (`jjwt-api`, `jjwt-impl`, `jjwt-jackson`) dependencies to `pom.xml`.
+- Created `JwtTokenProvider.java` for HMAC-SHA256 (HS256) token generation, signature validation, expiration checking, and user claims extraction (`upiId`, `referenceId`, `roles`).
+- Created `JwtAuthenticationFilter.java` (`OncePerRequestFilter`) to parse Bearer tokens from `Authorization` header and populate `SecurityContextHolder`.
+- Created `JwtAuthenticationEntryPoint.java` rendering standardized RFC 7807 `401 Unauthorized` problem details (`application/problem+json`) on unauthenticated requests to protected endpoints.
+- Created `SecurityConfig.java` configuring stateless `SecurityFilterChain`, CORS policy with configurable origins/methods/headers, CSRF disabled, public route permit rules (`POST /api/v1/auth/login`, `POST /api/v1/users`, `/swagger-ui/**`, `/v3/api-docs/**`, `/actuator/health/**`), and protected route authentication requirements (`anyRequest().authenticated()`).
+- Created `AuthController.java` with `POST /api/v1/auth/login` endpoint issuing JWT tokens with 1-hour expiration and user reference metadata.
+- Created DTOs `LoginRequest.java` and `AuthResponse.java`.
+- Created unit tests `JwtTokenProviderTest.java` and `AuthControllerTest.java`.
+- Created full-stack integration test `AuthenticationIT.java` against Testcontainers PostgreSQL verifying 401 unauthorized rejection, login token acquisition, and authenticated transaction execution.
+- Added ADR-017 (*Stateless JWT Authentication & Spring Security Architecture*) to `docs/ADR.md`.
+
+---
+
+## [0.6.0] - 2026-08-16
+
 ### Added - Phase 6B (Spring Modulith Events & Transactional Outbox)
 - Integrated Spring Modulith 2.0 (`spring-modulith-starter-jpa`, `spring-modulith-starter-test`, and `spring-modulith-bom`).
 - Created Flyway migration `V6__create_event_publication_registry.sql` creating `event_publication` table with completion and publication date indexes.
@@ -31,6 +47,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Created `IdempotencyCleanupService.java` with `@Scheduled` purge job for removing expired idempotency records past configured TTL (`payflow.idempotency.ttl-hours`, default 24h).
 - Added unit test suite `IdempotencyFilterTest.java` and integration test suite `IdempotencyIT.java` against Testcontainers PostgreSQL.
 - Added ADR-015 (*SHA-256 Request Payload Hashing & Durable Database-Backed Idempotency Engine*) to `docs/ADR.md`.
+
+---
+
+## [0.5.0] - 2026-08-15
 
 ### Added - Phase 5B (Integration & Concurrency Test Suites)
 - Created `TransferLifecycleIT.java` full-stack integration test verifying end-to-end user registration, money transfers, updated balances, and double-entry ledger audit verification against Testcontainers PostgreSQL.

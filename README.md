@@ -4,7 +4,7 @@
   <a href="https://github.com/shashankch/payflow-api/actions/workflows/ci.yml"><img src="https://github.com/shashankch/payflow-api/actions/workflows/ci.yml/badge.svg" alt="Build"></a>
   <a href="https://dev.java/"><img src="https://img.shields.io/badge/Java-25-ED8B00?logo=openjdk&logoColor=white" alt="Java 25"></a>
   <a href="https://spring.io/projects/spring-boot"><img src="https://img.shields.io/badge/Spring%20Boot-4.1.0-6DB33F?logo=springboot&logoColor=white" alt="Spring Boot"></a>
-  <a href="https://junit.org/junit5/"><img src="https://img.shields.io/badge/Tests-52%20Passing-brightgreen?logo=junit5" alt="Tests"></a>
+  <a href="https://junit.org/junit5/"><img src="https://img.shields.io/badge/Tests-62%20Passing-brightgreen?logo=junit5" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
 </p>
 
@@ -14,11 +14,14 @@ Payflow API is an enterprise-grade peer-to-peer (P2P) payment backend and double
 
 ## 🚀 Key Architectural Pillars
 
-- **🧪 Multi-Tier Testing Suite (Phase 5A)**: 52 unit, slice, and integration tests passing (`mvn clean verify`), featuring Mockito service isolation (`UserServiceTest`, `TransactionServiceTest`), Data JPA repository slice tests (`@DataJpaTest` with JPQL reconciliation queries), WebMvc slice tests (`@WebMvcTest` with RFC 7807 problem details), and Testcontainers PostgreSQL integration tests (`@Testcontainers`).
-- **🐳 Profile Matrix & Testcontainers (Phase 4B)**: Environment profiles (`local`, `test`, `prod`) with production-parity PostgreSQL container testing (`@Testcontainers`, `@DynamicPropertySource`) enforcing schema validation parity between local dev and CI.
-- **🗄️ Flyway Migrations & Performance Indexing (Phase 4A)**: Versioned DDL migrations (`V1`..`V4`) managing `users`, `transactions`, and `balance_ledger` schemas with custom performance indexes (`idx_users_upi_id`, `idx_tx_sender_created`, `idx_ledger_user_created`) and Hibernate `ddl-auto=validate` enforcement.
-- **🔒 Concurrency Control & Double-Entry Ledger (Phase 3)**: Database write locking (`SELECT ... FOR UPDATE`) with deterministic alphabetical lock ordering by UPI ID to prevent race conditions and cross-transfer deadlocks. Every balance mutation appends immutable `DEBIT`/`CREDIT` audit records.
-- **🌐 DTO Isolation & RFC 7807 Error Framework (Phases 1–2)**: Versioned `/api/v1` endpoints exposing Java records, compile-time MapStruct DTO mappings, non-enumerable UUID reference IDs (`referenceId`), and standardized RFC 7807 `ProblemDetail` error payloads.
+- **🛡️ Spring Security & Stateless JWT Authentication (Phase 7A)**: Stateless HMAC-SHA256 bearer token authentication (`POST /api/v1/auth/login`), `JwtAuthenticationFilter` with SecurityContextHolder setup, and RFC 7807 401 Unauthorized problem details.
+- **⚡ Spring Modulith Events & Transactional Outbox (Phase 6B)**: Event publication registry (`spring-modulith-starter-jpa`), domain event `TransferCompletedEvent` published atomically inside `@Transactional` to `event_publication` table, and async `@ApplicationModuleListener` handler with modular boundary verification (`ModulithStructureTest`).
+- **🔁 Database-Backed Idempotency Engine (Phase 6A)**: `Idempotency-Key` header with SHA-256 request payload hashing, cached 201 response replay, in-flight lease recovery, 409 conflict detection, and background TTL purge job.
+- **🧪 Multi-Tier Testing Suite (Phase 5)**: 62 unit, slice, and integration tests passing (`mvn clean verify`), featuring Mockito service isolation (`UserServiceTest`, `TransactionServiceTest`), Data JPA repository slice tests (`@DataJpaTest` with JPQL reconciliation queries), WebMvc slice tests (`@WebMvcTest`), and Testcontainers PostgreSQL concurrency tests (`ConcurrentTransferIT`, `MutualTransferDeadlockIT`, `TransferLifecycleIT`, `IdempotencyIT`, `OutboxIT`, `AuthenticationIT`).
+- **🐳 Profile Matrix & Testcontainers (Phase 4B)**: Environment profiles (`local`, `test`, `prod`) with production-parity PostgreSQL container testing (`@Testcontainers`, `@ServiceConnection`).
+- **🗄️ Flyway Migrations & Performance Indexing (Phase 4A)**: Versioned DDL migrations (`V1`..`V6`) managing schemas with custom performance indexes and Hibernate `ddl-auto=validate` enforcement.
+- **🔒 Concurrency Control & Double-Entry Ledger (Phase 3)**: Database write locking (`SELECT ... FOR UPDATE`) with deterministic alphabetical lock ordering by UPI ID to prevent race conditions and cross-transfer deadlocks.
+- **🌐 DTO Isolation & RFC 7807 Error Framework (Phases 1–2)**: Versioned `/api/v1` endpoints exposing Java records, compile-time MapStruct DTO mappings, non-enumerable UUID reference IDs, and standardized RFC 7807 `ProblemDetail` error payloads.
 
 > 👉 **For the complete feature breakdown, concurrency locking models, and detailed system design, explore [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [CHANGELOG.md](CHANGELOG.md).**
 
@@ -35,6 +38,8 @@ Payflow API evolves through a structured, multi-phase engineering roadmap:
 | **Phase 3** | ACID Transfer Engine, Pessimistic Locking, Double-Entry Balance Ledger | ✅ Complete |
 | **Phase 4** | Flyway Database Migrations (`V1`..`V4`), Spring Profiles & Testcontainers | ✅ Complete |
 | **Phase 5** | Multi-Tier Test Suite (Unit, `@DataJpaTest`, `@WebMvcTest`, Testcontainers Concurrency) | ✅ Complete |
+| **Phase 6** | Durable Idempotency Engine (6A) & Spring Modulith Transactional Outbox (6B) | ✅ Complete |
+| **Phase 7** | Spring Security & JWT Authentication (7A) & Sender Authorization (7B) | 🟡 In Progress |
 
 > 📌 *See full multi-phase evolution details in [docs/ROADMAP.md](docs/ROADMAP.md).*
 
@@ -83,7 +88,7 @@ graph TD
 | 🗓️ **[Phased Roadmap](docs/ROADMAP.md)** | Full 12-phase technical expansion blueprint |
 | 🌐 **[API Specification](docs/API_SPECIFICATION.md)** | Complete REST endpoint contracts, schemas, RFC 7807 payloads |
 | 📋 **[Engineering Conventions](docs/CONVENTIONS.md)** | Java 25 standards, Spotless/Checkstyle rules, testing guidelines |
-| 📜 **[Architecture Decisions (ADRs)](docs/ADR.md)** | Log of architectural decisions (ADR-001 through ADR-016) |
+| 📜 **[Architecture Decisions (ADRs)](docs/ADR.md)** | Log of architectural decisions (ADR-001 through ADR-017) |
 | 📝 **[Changelog](CHANGELOG.md)** | Version-by-version implementation notes |
 
 ---

@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -76,12 +77,12 @@ class IdempotencyIT extends AbstractIntegrationTest {
 		txReq.setAmount(new BigDecimal("200.0000"));
 		txReq.setNote("Idempotent Transfer Test");
 
-		HttpHeaders headers = new HttpHeaders();
+		HttpHeaders headers = authHeaders(senderUpi);
 		headers.set(IdempotencyFilter.IDEMPOTENCY_KEY_HEADER, idempotencyKey);
 		HttpEntity<TransferMoneyRequest> txEntity = new HttpEntity<>(txReq, headers);
 
-		ResponseEntity<TransactionResponse> firstRes = restTemplate.postForEntity("/api/v1/transactions", txEntity,
-				TransactionResponse.class);
+		ResponseEntity<TransactionResponse> firstRes = restTemplate.exchange("/api/v1/transactions", HttpMethod.POST,
+				txEntity, TransactionResponse.class);
 		assertThat(firstRes.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 		assertThat(firstRes.getBody()).isNotNull();
 
@@ -96,8 +97,8 @@ class IdempotencyIT extends AbstractIntegrationTest {
 
 		// 3. Second Transfer Attempt with EXACT SAME Idempotency-Key & Payload (Network
 		// Retry Simulation)
-		ResponseEntity<TransactionResponse> secondRes = restTemplate.postForEntity("/api/v1/transactions", txEntity,
-				TransactionResponse.class);
+		ResponseEntity<TransactionResponse> secondRes = restTemplate.exchange("/api/v1/transactions", HttpMethod.POST,
+				txEntity, TransactionResponse.class);
 		assertThat(secondRes.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 		assertThat(secondRes.getBody()).isNotNull();
 

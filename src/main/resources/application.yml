@@ -27,3 +27,9 @@ payflow:
   idempotency:
     ttl-hours: 24
     cleanup-cron: "0 0 * * * *"
+  security:
+    jwt:
+      secret: "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970"
+      expiration-ms: 3600000
+    cors:
+      allowed-origins: "*"

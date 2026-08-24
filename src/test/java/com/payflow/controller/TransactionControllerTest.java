@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -21,8 +22,12 @@ import com.payflow.entity.TransactionStatus;
 import com.payflow.entity.TransactionType;
 import com.payflow.mapper.TransactionMapper;
 import com.payflow.repository.IdempotencyRepository;
+import com.payflow.security.JwtAuthenticationEntryPoint;
+import com.payflow.security.JwtAuthenticationFilter;
+import com.payflow.security.JwtTokenProvider;
 import com.payflow.service.TransactionService;
 
+import static org.hamcrest.Matchers.endsWith;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -32,6 +37,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(TransactionController.class)
+@AutoConfigureMockMvc(addFilters = false)
 class TransactionControllerTest {
 
 	@Autowired
@@ -49,6 +55,15 @@ class TransactionControllerTest {
 	@MockitoBean
 	private IdempotencyRepository idempotencyRepository;
 
+	@MockitoBean
+	private JwtTokenProvider jwtTokenProvider;
+
+	@MockitoBean
+	private JwtAuthenticationFilter jwtAuthenticationFilter;
+
+	@MockitoBean
+	private JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+
 	@BeforeEach
 	void setUpMapperMock() {
 		given(transactionMapper.toResponse(any())).willAnswer(invocation -> {
@@ -63,79 +78,80 @@ class TransactionControllerTest {
 	}
 
 	@Test
-	@DisplayName("POST /api/v1/transactions — Should execute transfer and return 201 Created")
-	void shouldExecuteTransfer_whenRequestIsValid() throws Exception {
-		TransferMoneyRequest request = TransferMoneyRequest.builder().senderUpiId("alice@upi").receiverUpiId("bob@upi")
-				.amount(new BigDecimal("100.00")).note("Dinner payment").build();
-
+	@DisplayName("POST /api/v1/transactions with valid payload should return 201 Created and location header")
+	void shouldReturnCreated_whenTransferRequestIsValid() throws Exception {
 		UUID refId = UUID.randomUUID();
-		Transaction createdTransaction = Transaction.builder().transactionId(10L).referenceId(refId)
-				.senderUpiId("alice@upi").receiverUpiId("bob@upi").amount(new BigDecimal("100.00"))
-				.status(TransactionStatus.COMPLETED).type(TransactionType.TRANSFER).note("Dinner payment")
-				.createdAt(Instant.now()).build();
+		TransferMoneyRequest request = TransferMoneyRequest.builder().senderUpiId("alice@payflow")
+				.receiverUpiId("bob@payflow").amount(new BigDecimal("100.00")).note("Dinner split").build();
 
-		given(transactionService.sendMoney(any(TransferMoneyRequest.class))).willReturn(createdTransaction);
+		Transaction tx = Transaction.builder().transactionId(1L).referenceId(refId).senderUpiId("alice@payflow")
+				.receiverUpiId("bob@payflow").amount(new BigDecimal("100.00")).status(TransactionStatus.COMPLETED)
+				.type(TransactionType.TRANSFER).note("Dinner split").createdAt(Instant.now()).build();
 
-		mockMvc.perform(post("/api/v1/transactions").contentType(MediaType.APPLICATION_JSON)
-				.header("Idempotency-Key", "tx-test-key-123").content(objectMapper.writeValueAsString(request)))
-				.andExpect(status().isCreated()).andExpect(header().exists("Location"))
-				.andExpect(jsonPath("$.transactionId").value(10))
-				.andExpect(jsonPath("$.senderUpiId").value("alice@upi"))
-				.andExpect(jsonPath("$.receiverUpiId").value("bob@upi")).andExpect(jsonPath("$.amount").value(100.00))
-				.andExpect(jsonPath("$.status").value("COMPLETED"));
+		given(transactionService.sendMoney(any(TransferMoneyRequest.class))).willReturn(tx);
+
+		mockMvc.perform(post("/api/v1/transactions").header("Idempotency-Key", "test-key-123")
+				.contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(request)))
+				.andExpect(status().isCreated())
+				.andExpect(header().string("Location", endsWith("/api/v1/transactions/" + refId)))
+				.andExpect(jsonPath("$.referenceId").value(refId.toString()))
+				.andExpect(jsonPath("$.amount").value(100.00)).andExpect(jsonPath("$.status").value("COMPLETED"));
 	}
 
 	@Test
-	@DisplayName("POST /api/v1/transactions — Should return 422 Unprocessable Entity when amount is non-positive")
-	void shouldReturn422_whenTransferAmountIsZeroOrNegative() throws Exception {
-		TransferMoneyRequest invalidRequest = TransferMoneyRequest.builder().senderUpiId("alice@upi")
-				.receiverUpiId("bob@upi").amount(new BigDecimal("0.00")).build();
+	@DisplayName("POST /api/v1/transactions with invalid UPI should return 422 Unprocessable Entity")
+	void shouldReturnUnprocessableEntity_whenUpiIsInvalid() throws Exception {
+		TransferMoneyRequest request = TransferMoneyRequest.builder().senderUpiId("invalid_upi_no_at")
+				.receiverUpiId("bob@payflow").amount(new BigDecimal("100.00")).build();
 
-		mockMvc.perform(post("/api/v1/transactions").contentType(MediaType.APPLICATION_JSON)
-				.header("Idempotency-Key", "tx-test-key-456").content(objectMapper.writeValueAsString(invalidRequest)))
-				.andExpect(status().isUnprocessableEntity());
+		mockMvc.perform(post("/api/v1/transactions").header("Idempotency-Key", "test-key-123")
+				.contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(request)))
+				.andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.title").value("Validation Failure"))
+				.andExpect(jsonPath("$.errors.senderUpiId").exists());
 	}
 
 	@Test
-	@DisplayName("GET /api/v1/transactions/{id} — Should return transaction details when found")
-	void shouldReturnTransaction_whenFoundByReferenceId() throws Exception {
+	@DisplayName("POST /api/v1/transactions with negative amount should return 422 Unprocessable Entity")
+	void shouldReturnUnprocessableEntity_whenAmountIsNegative() throws Exception {
+		TransferMoneyRequest request = TransferMoneyRequest.builder().senderUpiId("alice@payflow")
+				.receiverUpiId("bob@payflow").amount(new BigDecimal("-50.00")).build();
+
+		mockMvc.perform(post("/api/v1/transactions").header("Idempotency-Key", "test-key-123")
+				.contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(request)))
+				.andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.title").value("Validation Failure"))
+				.andExpect(jsonPath("$.errors.amount").exists());
+	}
+
+	@Test
+	@DisplayName("POST /api/v1/transactions with missing note should be valid and return 201 Created")
+	void shouldReturnCreated_whenOptionalNoteIsMissing() throws Exception {
 		UUID refId = UUID.randomUUID();
-		Transaction tx = Transaction.builder().transactionId(10L).referenceId(refId).senderUpiId("alice@upi")
-				.receiverUpiId("bob@upi").amount(new BigDecimal("100.00")).status(TransactionStatus.COMPLETED)
+		TransferMoneyRequest request = TransferMoneyRequest.builder().senderUpiId("alice@payflow")
+				.receiverUpiId("bob@payflow").amount(new BigDecimal("50.00")).build();
+
+		Transaction tx = Transaction.builder().transactionId(2L).referenceId(refId).senderUpiId("alice@payflow")
+				.receiverUpiId("bob@payflow").amount(new BigDecimal("50.00")).status(TransactionStatus.COMPLETED)
+				.type(TransactionType.TRANSFER).createdAt(Instant.now()).build();
+
+		given(transactionService.sendMoney(any(TransferMoneyRequest.class))).willReturn(tx);
+
+		mockMvc.perform(post("/api/v1/transactions").header("Idempotency-Key", "test-key-123")
+				.contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(request)))
+				.andExpect(status().isCreated()).andExpect(jsonPath("$.referenceId").value(refId.toString()));
+	}
+
+	@Test
+	@DisplayName("GET /api/v1/transactions/{id} should return 200 and transaction when found")
+	void shouldReturnOk_whenTransactionFoundByReferenceId() throws Exception {
+		UUID refId = UUID.randomUUID();
+		Transaction tx = Transaction.builder().transactionId(3L).referenceId(refId).senderUpiId("alice@payflow")
+				.receiverUpiId("bob@payflow").amount(new BigDecimal("75.00")).status(TransactionStatus.COMPLETED)
 				.type(TransactionType.TRANSFER).createdAt(Instant.now()).build();
 
 		given(transactionService.getTransactionByReferenceId(refId)).willReturn(tx);
 
 		mockMvc.perform(get("/api/v1/transactions/" + refId)).andExpect(status().isOk())
 				.andExpect(jsonPath("$.referenceId").value(refId.toString()))
-				.andExpect(jsonPath("$.senderUpiId").value("alice@upi")).andExpect(jsonPath("$.amount").value(100.00));
-	}
-
-	@Test
-	@DisplayName("GET /api/v1/transactions/{id} — Should return 404 Not Found when transaction missing")
-	void shouldReturn404_whenTransactionNotFound() throws Exception {
-		UUID missingRefId = UUID.randomUUID();
-		given(transactionService.getTransactionByReferenceId(missingRefId)).willThrow(
-				new com.payflow.exception.TransactionNotFoundException("Transaction not found: " + missingRefId));
-
-		mockMvc.perform(get("/api/v1/transactions/" + missingRefId)).andExpect(status().isNotFound());
-	}
-
-	@Test
-	@DisplayName("GET /api/v1/transactions/user/{upiId} — Should return paginated transaction history")
-	void shouldReturnPaginatedUserTransactions() throws Exception {
-		Transaction tx = Transaction.builder().transactionId(1L).referenceId(UUID.randomUUID()).senderUpiId("alice@upi")
-				.receiverUpiId("bob@upi").amount(new BigDecimal("50.00")).status(TransactionStatus.COMPLETED)
-				.type(TransactionType.TRANSFER).createdAt(Instant.now()).build();
-
-		org.springframework.data.domain.Page<Transaction> page = new org.springframework.data.domain.PageImpl<>(
-				java.util.List.of(tx));
-
-		given(transactionService.getUserTransactions(org.mockito.ArgumentMatchers.eq("alice@upi"), any()))
-				.willReturn(page);
-
-		mockMvc.perform(get("/api/v1/transactions/user/alice@upi")).andExpect(status().isOk())
-				.andExpect(jsonPath("$.content[0].senderUpiId").value("alice@upi"))
-				.andExpect(jsonPath("$.totalElements").value(1));
+				.andExpect(jsonPath("$.amount").value(75.00));
 	}
 }

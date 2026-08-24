@@ -19,8 +19,8 @@ This document details the REST API endpoints, request/response models, input val
 - **Content-Type**: All request and response bodies use `application/json`.
 - **Monetary Precision**: All monetary values are encoded as standard JSON numbers with up to 4 decimal places (e.g. `100.0000`).
 - **Pagination**: Default page size is 10, with a hard maximum of 100 per page (`@Min(1) @Max(100)`).
-- **Authentication**: Mutation and secure history endpoints require a cryptographically signed JWT token passed via the `Authorization: Bearer <token>` header (to be implemented in Phase 7).
-- **Idempotency**: All mutation write operations require a unique identifier passed in the `Idempotency-Key` header (to be implemented in Phase 6A).
+- **Authentication**: Mutation and secure history endpoints require a cryptographically signed JWT token passed via the `Authorization: Bearer <token>` header.
+- **Idempotency**: All mutation write operations require a unique identifier passed in the `Idempotency-Key` header.
 
 ---
 
@@ -54,6 +54,35 @@ When an API error occurs (validation error, resource not found, conflict, etc.),
 ---
 
 ## Endpoints
+
+### 0. User Authentication (Login)
+Authenticates a registered user by UPI ID and issues a cryptographically signed JWT access token.
+
+- **HTTP Method**: `POST`
+- **Path**: `/api/v1/auth/login`
+- **Authentication**: None (Public Endpoint)
+- **Request Body DTO (`LoginRequest`)**:
+  - `upiId`: String, required (`@NotBlank`), valid UPI format (`@Pattern`).
+
+#### Request Example
+```json
+{
+  "upiId": "alice@payflow"
+}
+```
+
+#### Response Example (`200 OK`)
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "tokenType": "Bearer",
+  "expiresIn": 3600,
+  "upiId": "alice@payflow",
+  "referenceId": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+---
 
 ### 1. Register User
 Registers a new client profile with an initial balance.

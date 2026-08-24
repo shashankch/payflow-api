@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -33,9 +34,9 @@ class OutboxIT extends AbstractIntegrationTest {
 	private JdbcTemplate jdbcTemplate;
 
 	@Test
-	@DisplayName("Should atomically publish domain event to event_publication registry on money transfer")
-	void shouldPublishDomainEventToEventPublicationRegistry_whenTransferExecutes() throws InterruptedException {
-		// 1. Create Sender (₹1,000.00) and Receiver (₹500.00)
+	@DisplayName("Should atomically persist domain event to event_publication registry on completed transfer")
+	void shouldPersistEventToOutbox_whenTransferCompletes() throws InterruptedException {
+		// 1. Setup Sender & Receiver
 		String senderUpi = "outbox.sender@payflow";
 		String receiverUpi = "outbox.receiver@payflow";
 
@@ -53,19 +54,19 @@ class OutboxIT extends AbstractIntegrationTest {
 		receiverReq.setBalance(new BigDecimal("500.0000"));
 		restTemplate.postForEntity("/api/v1/users", receiverReq, UserResponse.class);
 
-		// 2. Execute Transfer
+		// 2. Execute Transfer with auth headers
 		TransferMoneyRequest txReq = new TransferMoneyRequest();
 		txReq.setSenderUpiId(senderUpi);
 		txReq.setReceiverUpiId(receiverUpi);
 		txReq.setAmount(new BigDecimal("250.0000"));
 		txReq.setNote("Outbox Event Test");
 
-		HttpHeaders headers = new HttpHeaders();
+		HttpHeaders headers = authHeaders(senderUpi);
 		headers.set(IdempotencyFilter.IDEMPOTENCY_KEY_HEADER, "outbox-test-key-" + UUID.randomUUID());
 		HttpEntity<TransferMoneyRequest> txEntity = new HttpEntity<>(txReq, headers);
 
-		ResponseEntity<TransactionResponse> txRes = restTemplate.postForEntity("/api/v1/transactions", txEntity,
-				TransactionResponse.class);
+		ResponseEntity<TransactionResponse> txRes = restTemplate.exchange("/api/v1/transactions", HttpMethod.POST,
+				txEntity, TransactionResponse.class);
 		assertThat(txRes.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 		assertThat(txRes.getBody()).isNotNull();
 		assertThat(txRes.getBody().status()).isEqualTo(TransactionStatus.COMPLETED);
