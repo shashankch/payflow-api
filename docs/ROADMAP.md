@@ -91,16 +91,16 @@ Spring Modulith event publication registry (`spring-modulith-starter-jpa`), doma
 
 ---
 
-## Phase 7 — Security & External Integration 🟡
+## Phase 7 — Security & External Integration ✅
 
 ### 7A — JWT Authentication ✅
 Spring Security 6/7 integration, stateless HMAC-SHA256 JWT tokens via JJWT 0.13.0, `POST /api/v1/auth/login` endpoint issuing tokens with 1-hour TTL, `JwtAuthenticationFilter` Bearer token parsing and SecurityContext setup, `JwtAuthenticationEntryPoint` returning RFC 7807 401 Unauthorized problem details, CORS configuration, and public/protected security filter chain rule enforcement.
 
-### 7B — Authorization ⬜
-Sender verification, transaction history and double-entry balance ledger access control (`403 Forbidden`).
+### 7B — Authorization ✅
+Principal-bound resource authorization, sender verification on transfers, multi-party transaction visibility (sender/receiver only), double-entry balance ledger privacy, profile access control, and RFC 7807 `403 Forbidden` (`ForbiddenOperationException`, `JwtAccessDeniedHandler`).
 
-### 7C — RestClient, HTTP Interface Client & External Service Integration ⬜
-Declarative HTTP Interface Client (`@GetExchange`/`@PostExchange`) backed by `RestClient` for UPI validation. Framework 7 native `@Retryable` with exponential backoff + jitter. Graceful fallback on service unavailability.
+### 7C — RestClient, HTTP Interface Client & External Service Integration ✅
+Declarative HTTP Interface Client (`@HttpExchange`/`@GetExchange`) backed by `RestClient` for external UPI verification, Spring Retry `@Retryable` with exponential backoff and randomized jitter, graceful degradation fallback on service unavailability, and 422 Invalid UPI ID problem detail mapping.
 
 ---
 

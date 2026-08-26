@@ -74,6 +74,9 @@ class UserControllerTest {
 	@MockitoBean
 	private JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
 
+	@MockitoBean
+	private com.payflow.security.JwtAccessDeniedHandler jwtAccessDeniedHandler;
+
 	@BeforeEach
 	void setUpMappers() {
 		given(userMapper.toResponse(any())).willAnswer(invocation -> {

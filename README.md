@@ -4,7 +4,7 @@
   <a href="https://github.com/shashankch/payflow-api/actions/workflows/ci.yml"><img src="https://github.com/shashankch/payflow-api/actions/workflows/ci.yml/badge.svg" alt="Build"></a>
   <a href="https://dev.java/"><img src="https://img.shields.io/badge/Java-25-ED8B00?logo=openjdk&logoColor=white" alt="Java 25"></a>
   <a href="https://spring.io/projects/spring-boot"><img src="https://img.shields.io/badge/Spring%20Boot-4.1.0-6DB33F?logo=springboot&logoColor=white" alt="Spring Boot"></a>
-  <a href="https://junit.org/junit5/"><img src="https://img.shields.io/badge/Tests-62%20Passing-brightgreen?logo=junit5" alt="Tests"></a>
+  <a href="https://junit.org/junit5/"><img src="https://img.shields.io/badge/Tests-80%20Passing-brightgreen?logo=junit5" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
 </p>
 
@@ -14,10 +14,11 @@ Payflow API is an enterprise-grade peer-to-peer (P2P) payment backend and double
 
 ## 🚀 Key Architectural Pillars
 
-- **🛡️ Spring Security & Stateless JWT Authentication (Phase 7A)**: Stateless HMAC-SHA256 bearer token authentication (`POST /api/v1/auth/login`), `JwtAuthenticationFilter` with SecurityContextHolder setup, and RFC 7807 401 Unauthorized problem details.
+- **🛡️ Spring Security, JWT Authentication & Authorization (Phase 7A/7B)**: Stateless HMAC-SHA256 bearer token authentication (`POST /api/v1/auth/login`), `JwtAuthenticationFilter`, strict sender verification on transfers, multi-party transaction visibility (sender/receiver only), ledger privacy, and RFC 7807 401/403 problem details.
+- **🌐 RestClient & Declarative HTTP Interface Client (Phase 7C)**: Spring 6.1+ `@HttpExchange`/`@GetExchange` declarative client proxying via `HttpServiceProxyFactory` with Spring Retry (`@Retryable` exponential backoff + jitter) and non-blocking graceful onboarding fallback.
 - **⚡ Spring Modulith Events & Transactional Outbox (Phase 6B)**: Event publication registry (`spring-modulith-starter-jpa`), domain event `TransferCompletedEvent` published atomically inside `@Transactional` to `event_publication` table, and async `@ApplicationModuleListener` handler with modular boundary verification (`ModulithStructureTest`).
 - **🔁 Database-Backed Idempotency Engine (Phase 6A)**: `Idempotency-Key` header with SHA-256 request payload hashing, cached 201 response replay, in-flight lease recovery, 409 conflict detection, and background TTL purge job.
-- **🧪 Multi-Tier Testing Suite (Phase 5)**: 62 unit, slice, and integration tests passing (`mvn clean verify`), featuring Mockito service isolation (`UserServiceTest`, `TransactionServiceTest`), Data JPA repository slice tests (`@DataJpaTest` with JPQL reconciliation queries), WebMvc slice tests (`@WebMvcTest`), and Testcontainers PostgreSQL concurrency tests (`ConcurrentTransferIT`, `MutualTransferDeadlockIT`, `TransferLifecycleIT`, `IdempotencyIT`, `OutboxIT`, `AuthenticationIT`).
+- **🧪 Multi-Tier Testing Suite (Phase 5–7)**: 80 unit, slice, and integration tests passing (`mvn clean verify`), featuring Mockito service isolation (`UserServiceTest`, `TransactionServiceTest`, `UpiValidationServiceTest`), Data JPA repository slice tests (`@DataJpaTest`), WebMvc slice tests (`@WebMvcTest`), `MockRestServiceServer` client tests (`UpiValidationClientTest`), and Testcontainers PostgreSQL concurrency & security tests (`ConcurrentTransferIT`, `MutualTransferDeadlockIT`, `TransferLifecycleIT`, `IdempotencyIT`, `OutboxIT`, `AuthenticationIT`, `AuthorizationIT`, `UpiValidationIT`).
 - **🐳 Profile Matrix & Testcontainers (Phase 4B)**: Environment profiles (`local`, `test`, `prod`) with production-parity PostgreSQL container testing (`@Testcontainers`, `@ServiceConnection`).
 - **🗄️ Flyway Migrations & Performance Indexing (Phase 4A)**: Versioned DDL migrations (`V1`..`V6`) managing schemas with custom performance indexes and Hibernate `ddl-auto=validate` enforcement.
 - **🔒 Concurrency Control & Double-Entry Ledger (Phase 3)**: Database write locking (`SELECT ... FOR UPDATE`) with deterministic alphabetical lock ordering by UPI ID to prevent race conditions and cross-transfer deadlocks.
@@ -39,7 +40,7 @@ Payflow API evolves through a structured, multi-phase engineering roadmap:
 | **Phase 4** | Flyway Database Migrations (`V1`..`V4`), Spring Profiles & Testcontainers | ✅ Complete |
 | **Phase 5** | Multi-Tier Test Suite (Unit, `@DataJpaTest`, `@WebMvcTest`, Testcontainers Concurrency) | ✅ Complete |
 | **Phase 6** | Durable Idempotency Engine (6A) & Spring Modulith Transactional Outbox (6B) | ✅ Complete |
-| **Phase 7** | Spring Security & JWT Authentication (7A) & Sender Authorization (7B) | 🟡 In Progress |
+| **Phase 7** | Spring Security & JWT (7A), Authorization (7B) & RestClient Integration (7C) | ✅ Complete |
 
 > 📌 *See full multi-phase evolution details in [docs/ROADMAP.md](docs/ROADMAP.md).*
 

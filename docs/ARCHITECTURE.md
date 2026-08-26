@@ -416,6 +416,86 @@ sequenceDiagram
     end
 ```
 
+### Principal-Bound Resource Authorization & Sender Verification (Phase 7B)
+
+While JWT authentication verifies the client's cryptographic identity, **Principal-Bound Authorization** enforces resource-level permissions and sender verification across all endpoints:
+
+1. **Strict Sender Verification (`POST /api/v1/transactions`)**:
+   - `TransactionService.sendMoney()` extracts the authenticated UPI handle via `SecurityUtils.getAuthenticatedUpiId()`.
+   - Asserts that `authenticatedUpi.equalsIgnoreCase(request.getSenderUpiId())`.
+   - Any attempt by user $A$ to initiate a transfer debited from user $B$'s account is immediately rejected with `403 Forbidden` (`ForbiddenOperationException`) **before** acquiring database row locks or mutating balances.
+
+2. **Multi-Party Transaction Visibility (`GET /api/v1/transactions/{id}`)**:
+   - Only the **sender** or the **receiver** participating in a financial transaction is authorized to retrieve its details.
+   - Unrelated third-party users attempting to inspect other transactions receive `403 Forbidden`.
+
+3. **Double-Entry Balance Ledger Privacy (`GET /api/v1/users/{id}/ledger`)**:
+   - Users are restricted to retrieving their own double-entry ledger audit entries. Cross-user ledger inspection attempts are rejected with `403 Forbidden`.
+
+4. **Standardized RFC 7807 403 Problem Details**:
+   - Filter-level security rejections trigger `JwtAccessDeniedHandler`, emitting `application/problem+json` with `403 Forbidden`.
+   - Domain-level authorization violations trigger `GlobalExceptionHandler` mapping `ForbiddenOperationException` to uniform RFC 7807 payloads.
+
+### Declarative HTTP Interface Client & Outbound UPI Validation (Phase 7C)
+
+During user onboarding (`POST /api/v1/users`), Payflow integrates with upstream banking / NPCI verification gateways via **Spring 6.1+ Declarative HTTP Interface Clients** backed by fluent `RestClient`:
+
+1. **Declarative Contract (`@HttpExchange` / `@GetExchange`)**:
+   - `UpiValidationClient` defines type-safe contract interfaces with zero boilerplate implementation.
+   - Dynamic proxies generated at boot via `HttpServiceProxyFactory` and `RestClientAdapter`.
+
+2. **Outbound Resilience with Exponential Backoff & Jitter**:
+   - Outbound HTTP calls use Spring Retry (`@Retryable`) with exponential backoff (`delay = 500ms`, `multiplier = 2.0`, `random = true` jitter) up to 3 attempts to prevent thundering herd storms during downstream gateway blips.
+
+3. **High-Availability Non-Blocking Graceful Fallback**:
+   - If the external gateway is persistently unreachable or times out, the `@Recover` handler (`UpiValidationService.recoverFromValidationFailure`) logs a warning and proceeds with registration. External third-party outages never compromise user registration availability.
+   - If the external gateway explicitly reports `valid = false`, registration is blocked with `InvalidUpiException` (`422 Unprocessable Entity`).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as 📱 Mobile Client
+    participant Controller as 🎯 UserController
+    participant Service as 💼 UserService
+    participant Validator as 🛡️ UpiValidationService
+    participant HTTPClient as 🌐 UpiValidationClient (RestClient)
+    participant Gateway as 🏦 Upstream Banking Gateway
+
+    Client->>Controller: POST /api/v1/users { upiId: "alice@payflow", ... }
+    Controller->>Service: registerUser(request)
+    Service->>Validator: validateUpi("alice@payflow")
+    
+    alt Validation Disabled (Feature Flag)
+        Validator-->>Service: Skip check (Instant OK)
+    else Validation Enabled
+        Validator->>HTTPClient: verify("alice@payflow")
+        HTTPClient->>Gateway: GET /api/v1/upi/verify/alice%40payflow
+        
+        alt Success (valid: true)
+            Gateway-->>HTTPClient: 200 OK { "valid": true, "bankName": "HDFC" }
+            HTTPClient-->>Validator: UpiVerificationResponse(valid=true)
+            Validator-->>Service: Proceed with Registration
+        else Explicit Rejection (valid: false)
+            Gateway-->>HTTPClient: 200 OK { "valid": false }
+            HTTPClient-->>Validator: UpiVerificationResponse(valid=false)
+            Validator-->>Controller: throw InvalidUpiException (422 Unprocessable Entity)
+            Controller-->>Client: 422 ProblemDetail (invalid-upi-id)
+        else Gateway Down / Timeout (Network Failure)
+            Gateway--xHTTPClient: 503 / Timeout (Attempt 1)
+            Note over Validator: Retry 1: Backoff 500ms + Jitter
+            Gateway--xHTTPClient: 503 / Timeout (Attempt 2)
+            Note over Validator: Retry 2: Backoff 1000ms + Jitter
+            Gateway--xHTTPClient: 503 / Timeout (Attempt 3)
+            Validator->>Validator: @Recover handler fallback (Proceed with warning)
+            Validator-->>Service: Fallback OK (Non-blocking onboarding)
+        end
+    end
+    
+    Service->>Service: Persist User Entity to DB
+    Service-->>Controller: User Entity
+    Controller-->>Client: 201 Created (UserResponse)
+```
+
 ---
 
 ## 9. Gen-AI Spend Insights & Categorization

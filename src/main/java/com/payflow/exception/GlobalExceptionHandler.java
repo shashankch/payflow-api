@@ -11,6 +11,7 @@ import org.slf4j.MDC;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -63,6 +64,37 @@ public class GlobalExceptionHandler {
 		ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
 		problem.setType(URI.create("https://api.payflow.com/errors/self-transfer-prohibited"));
 		problem.setTitle("Self Transfer Prohibited");
+		enrichProblemDetail(problem);
+		return problem;
+	}
+
+	@ExceptionHandler(ForbiddenOperationException.class)
+	public ProblemDetail handleForbiddenOperation(ForbiddenOperationException ex) {
+		LOG.warn("Forbidden operation: {}", ex.getMessage());
+		ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+		problem.setType(URI.create("https://api.payflow.com/errors/forbidden-operation"));
+		problem.setTitle("Forbidden Operation");
+		enrichProblemDetail(problem);
+		return problem;
+	}
+
+	@ExceptionHandler(AccessDeniedException.class)
+	public ProblemDetail handleAccessDenied(AccessDeniedException ex) {
+		LOG.warn("Access denied: {}", ex.getMessage());
+		ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+		problem.setType(URI.create("https://api.payflow.com/errors/access-denied"));
+		problem.setTitle("Access Denied");
+		enrichProblemDetail(problem);
+		return problem;
+	}
+
+	@ExceptionHandler(InvalidUpiException.class)
+	public ProblemDetail handleInvalidUpi(InvalidUpiException ex) {
+		LOG.warn("Invalid UPI: {}", ex.getMessage());
+		String detail = ex.getMessage();
+		ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, detail);
+		problem.setType(URI.create("https://api.payflow.com/errors/invalid-upi-id"));
+		problem.setTitle("Invalid UPI ID");
 		enrichProblemDetail(problem);
 		return problem;
 	}

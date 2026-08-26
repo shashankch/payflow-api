@@ -51,6 +51,7 @@ public class TransactionController {
 			+ "valid UPI accounts")
 	@ApiResponse(responseCode = "201", description = "Transaction successfully created and executed")
 	@ApiResponse(responseCode = "400", description = "Invalid request payload or constraint validation error")
+	@ApiResponse(responseCode = "403", description = "Unauthorized sender transfer")
 	public ResponseEntity<TransactionResponse> sendMoney(@Valid @RequestBody TransferMoneyRequest request) {
 		Transaction createdTransaction = transactionService.sendMoney(request);
 		TransactionResponse response = transactionMapper.toResponse(createdTransaction);
@@ -62,6 +63,7 @@ public class TransactionController {
 	@GetMapping("/{id}")
 	@Operation(summary = "Get transaction by reference ID", description = "Fetches transaction by reference ID")
 	@ApiResponse(responseCode = "200", description = "Transaction found and returned")
+	@ApiResponse(responseCode = "403", description = "Access forbidden to non-participant")
 	@ApiResponse(responseCode = "404", description = "Transaction not found")
 	public ResponseEntity<TransactionResponse> getTransactionByReferenceId(@PathVariable UUID id) {
 		Transaction tx = transactionService.getTransactionByReferenceId(id);
@@ -71,6 +73,7 @@ public class TransactionController {
 	@GetMapping("/user/{upiId}")
 	@Operation(summary = "Get user transactions", description = "Retrieves transaction history for a UPI ID")
 	@ApiResponse(responseCode = "200", description = "Paginated transaction list returned")
+	@ApiResponse(responseCode = "403", description = "Access forbidden to transaction history")
 	public ResponseEntity<PagedResponse<TransactionResponse>> getUserTransactions(@PathVariable String upiId,
 			@RequestParam(defaultValue = "0") @Min(0) int page,
 			@RequestParam(defaultValue = "10") @Min(1) @Max(100) int size,

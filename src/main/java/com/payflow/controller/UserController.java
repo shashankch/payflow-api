@@ -26,9 +26,11 @@ import com.payflow.dto.response.PagedResponse;
 import com.payflow.dto.response.UserResponse;
 import com.payflow.entity.BalanceLedgerEntry;
 import com.payflow.entity.User;
+import com.payflow.exception.ForbiddenOperationException;
 import com.payflow.exception.UserNotFoundException;
 import com.payflow.mapper.LedgerMapper;
 import com.payflow.mapper.UserMapper;
+import com.payflow.security.SecurityUtils;
 import com.payflow.service.UserService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -82,20 +84,36 @@ public class UserController {
 	@GetMapping("/{id}")
 	@Operation(summary = "Get user by reference ID", description = "Fetches user details by UUID reference ID")
 	@ApiResponse(responseCode = "200", description = "User found and returned")
+	@ApiResponse(responseCode = "403", description = "Access forbidden to other users' profile")
 	@ApiResponse(responseCode = "404", description = "User not found")
 	public ResponseEntity<UserResponse> getUserById(@PathVariable UUID id) {
 		User user = userService.getUserByReferenceId(id)
 				.orElseThrow(() -> new UserNotFoundException("User not found: " + id));
+
+		String authenticatedUpi = SecurityUtils.getAuthenticatedUpiId();
+		if (authenticatedUpi != null && !authenticatedUpi.equalsIgnoreCase(user.getUpiId())) {
+			String msg = "User '" + authenticatedUpi + "' is not authorized for user: " + id;
+			throw new ForbiddenOperationException(msg);
+		}
+
 		return ResponseEntity.ok(userMapper.toResponse(user));
 	}
 
 	@GetMapping("/upi/{upiId}")
 	@Operation(summary = "Get user by UPI ID", description = "Fetches details of a user by their unique UPI ID")
 	@ApiResponse(responseCode = "200", description = "User found and returned")
+	@ApiResponse(responseCode = "403", description = "Access forbidden to other users' profile")
 	@ApiResponse(responseCode = "404", description = "User not found")
 	public ResponseEntity<UserResponse> getUserByUpiId(@PathVariable String upiId) {
 		User user = userService.findByUpiId(upiId)
 				.orElseThrow(() -> new UserNotFoundException("User not found with UPI ID: " + upiId));
+
+		String authenticatedUpi = SecurityUtils.getAuthenticatedUpiId();
+		if (authenticatedUpi != null && !authenticatedUpi.equalsIgnoreCase(upiId)) {
+			String msg = "User '" + authenticatedUpi + "' is not authorized for user: " + upiId;
+			throw new ForbiddenOperationException(msg);
+		}
+
 		return ResponseEntity.ok(userMapper.toResponse(user));
 	}
 
@@ -113,6 +131,7 @@ public class UserController {
 	@Operation(summary = "Get user balance ledger history", description = "Retrieves paginated double-entry "
 			+ "balance ledger audit entries for a user by UUID reference ID")
 	@ApiResponse(responseCode = "200", description = "Paginated ledger history returned")
+	@ApiResponse(responseCode = "403", description = "Access forbidden to other users' ledger")
 	@ApiResponse(responseCode = "404", description = "User not found")
 	public ResponseEntity<PagedResponse<LedgerEntryResponse>> getUserLedger(@PathVariable UUID id,
 			@RequestParam(defaultValue = "0") @Min(0) int page,

@@ -120,6 +120,10 @@ Headers: `Location: /api/v1/users/a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d`
 }
 ```
 
+#### Error Responses
+- `409 Conflict`: User with the requested UPI ID already exists (`DuplicateUpiIdException`).
+- `422 Unprocessable Entity`: Input validation failure, or external UPI verification rejected the UPI ID (`InvalidUpiException`, type: `https://api.payflow.com/errors/invalid-upi-id`).
+
 ---
 
 ### 2. List Users (Paginated)
@@ -163,7 +167,7 @@ Fetches a single user record by their unique UUID reference ID.
 
 - **HTTP Method**: `GET`
 - **Path**: `/api/v1/users/{id}`
-- **Authentication**: None
+- **Authentication**: `Authorization: Bearer <token>` (User can only inspect their own profile)
 
 #### Response Example (`200 OK`)
 ```json
@@ -186,7 +190,7 @@ Fetches a single user record by their unique UPI ID.
 
 - **HTTP Method**: `GET`
 - **Path**: `/api/v1/users/upi/{upiId}`
-- **Authentication**: None
+- **Authentication**: `Authorization: Bearer <token>` (User can only inspect their own profile)
 
 #### Response Example (`200 OK`)
 ```json
@@ -213,7 +217,7 @@ Retrieves paginated double-entry balance ledger audit entries for a user by UUID
 - **Query Parameters**:
   - `page`: Integer, optional (default `0`), min `0`.
   - `size`: Integer, optional (default `10`), min `1`, max `100`.
-- **Authentication**: None
+- **Authentication**: `Authorization: Bearer <token>` (User can only view their own ledger)
 
 #### Response Example (`200 OK`)
 ```json
@@ -243,10 +247,11 @@ Retrieves paginated double-entry balance ledger audit entries for a user by UUID
 ---
 
 ### 6. Create Money Transfer
-Executes a peer-to-peer fund transfer request with guaranteed exactly-once idempotency.
+Executes a peer-to-peer fund transfer request with guaranteed exactly-once idempotency and sender verification.
 
 - **HTTP Method**: `POST`
 - **Path**: `/api/v1/transactions`
+- **Authentication**: `Authorization: Bearer <token>` (Authenticated JWT principal must match `senderUpiId`)
 - **Headers**:
   - `Idempotency-Key`: String / UUID, **required**. Prevents duplicate debits and replays cached responses on retry.
 - **Request Body DTO (`TransferMoneyRequest`)**:
@@ -288,6 +293,8 @@ Headers: `Location: /api/v1/transactions/550e8400-e29b-41d4-a716-446655440000`
 
 #### Error Responses
 - `400 Bad Request`: Missing `Idempotency-Key` header, or key reused with a mismatched payload.
+- `401 Unauthorized`: Missing or invalid JWT bearer token.
+- `403 Forbidden`: Authenticated user is not authorized to transfer from requested sender UPI.
 - `409 Conflict`: A request with the same `Idempotency-Key` is currently in-flight.
 - `422 Unprocessable Entity`: Validation constraint failure or insufficient sender balance.
 
@@ -298,7 +305,7 @@ Fetches details of a single transaction by its unique UUID reference ID.
 
 - **HTTP Method**: `GET`
 - **Path**: `/api/v1/transactions/{id}`
-- **Authentication**: None
+- **Authentication**: `Authorization: Bearer <token>` (Only sender or receiver participants can view)
 
 #### Response Example (`200 OK`)
 ```json
@@ -383,7 +390,9 @@ All API errors return standardized RFC 7807 `application/problem+json` response 
 | **200** | `OK` | Standard successful read or lookup. |
 | **201** | `Created` | Successfully registered a user or created a transaction. |
 | **400** | `Bad Request` | Illegal business arguments (e.g. self-transfer attempt). |
+| **401** | `Unauthorized` | Missing, expired, or invalid JWT authentication token. |
+| **403** | `Forbidden` | Authenticated principal is not authorized for the requested resource (sender impersonation, cross-user ledger/transaction access). |
 | **404** | `Not Found` | User or transaction lookup returned no matching records (`UserNotFoundException`). |
-| **409** | `Conflict` | Resource conflict (e.g. duplicate UPI ID registration or database constraint violation). |
+| **409** | `Conflict` | Resource conflict (e.g. duplicate UPI ID registration, in-flight idempotency conflict, or constraint violation). |
 | **422** | `Unprocessable Entity` | Jakarta validation constraint violation or insufficient account balance (`InsufficientBalanceException`). |
 | **500** | `Internal Error` | Unexpected server error (sanitized, stack traces suppressed). |
