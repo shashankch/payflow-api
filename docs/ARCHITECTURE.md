@@ -2,12 +2,12 @@
 
 > **Document Metadata**
 > - **Title**: Payflow API Core System Architecture & Payment Engine Design
-> - **Author**: Payflow Engineering (`shashankchandel@gmail.com`)
+> - **Author**: Payflow Engineering (`shashakchandel@gmail.com`)
 > - **Status**: Approved / Living Design Document
 > - **Created Date**: 2026-08-01
-> - **Last Updated**: 2026-08-07
+> - **Last Updated**: 2026-08-28
 > - **Authoritative Location**: [ARCHITECTURE.md](ARCHITECTURE.md)
-> - **Related Documents**: [API Specification](API_SPECIFICATION.md) | [Architecture Decisions (ADRs)](ADR.md) | [Phased Roadmap](ROADMAP.md) | [Engineering Conventions](CONVENTIONS.md)
+> - **Related Documents**: [API Specification](API_SPECIFICATION.md) | [Security Architecture](SECURITY.md) | [Architecture Decisions (ADRs)](adr/README.md) | [Phased Roadmap](ROADMAP.md) | [Engineering Conventions](CONVENTIONS.md)
 
 ---
 
@@ -539,23 +539,35 @@ The application complies with cloud-native deployment requirements when running 
 
 ---
 
-## 12. Observability Stack
+## 12. Observability Stack (Phase 8A)
 
-Payflow implements the **Three Pillars of Observability** — Metrics, Tracing, and Logging — using industry-standard open-source tooling:
+Payflow implements the **Three Pillars of Observability** — Metrics, Tracing, and Logging — using industry-standard open-source tooling and Spring Boot 4 / Micrometer Observation architecture:
 
-### A. Distributed Tracing (OpenTelemetry)
-- **Micrometer Tracing** with the **OpenTelemetry bridge** (`micrometer-tracing-bridge-otel`) automatically injects W3C-standard `traceparent` headers (`traceId`, `spanId`) across HTTP controllers, database queries, and async thread pools.
-- The existing `X-Request-Id` correlation (Phase 2D) is preserved and coexists with W3C trace context, providing both custom and standards-based correlation.
+### A. Distributed Tracing (OpenTelemetry & Micrometer Observation)
+- **Micrometer Tracing** with the **OpenTelemetry bridge** (`micrometer-tracing-bridge-otel` and `opentelemetry-exporter-otlp`) automatically generates and propagates W3C-standard `traceparent` headers (`traceId`, `spanId`) across HTTP controllers, database queries, and async thread pools.
+- **Method-Level Spans**: Domain service operations like `TransactionService.sendMoney()` are instrumented with `@Observed(name = "payflow.transfers.send", contextualName = "send-money-transfer")` via `ObservedAspect`, creating dedicated trace spans and execution timers automatically.
+- **Header Correlation**: The client-provided or auto-generated `X-Request-Id` (via `RequestIdFilter`) coexists with W3C `traceparent` context, returning both headers in HTTP responses.
 - Compatible with **Grafana Tempo**, **Jaeger**, or any OTLP-compatible tracing backend.
 
-### B. Metrics (Prometheus + Grafana)
-- **System Metrics**: JVM garbage collection, thread pool depth, HikariCP connection pool saturation — all auto-exported via Micrometer.
-- **Business Metrics**: Custom counters and timers track real-time transfer TPS (`payflow.transfers.total`), latency percentiles (`payflow.transfers.latency` — p50/p95/p99), and failure breakdowns by exception type.
-- **Prometheus** scrapes `/actuator/prometheus`; **Grafana** dashboards visualize transfer volume, error rates, and infrastructure health.
+### B. Business & System Metrics (Prometheus + Grafana)
+- **Business Metrics (`MetricsConfig.java`)**:
+  - `payflow.transfers.total`: Counter tagged by transfer status (`COMPLETED`, `FAILED`, `INSUFFICIENT_BALANCE`, `FORBIDDEN`).
+  - `payflow.transfers.amount`: Distribution summary with SLA percentiles (p50, p95, p99) tracking transfer monetary distribution in INR.
+  - `payflow.transfers.duration`: Timer with SLA percentiles (p50, p95, p99) tracking end-to-end transfer execution latency.
+- **System & Pool Metrics**: Actuator exposes HikariCP connection pool saturation (`PayflowHikariPool`), JVM memory, garbage collection, and thread states.
+- **Prometheus Scraping**: Prometheus scrapes `/actuator/prometheus` without authentication barriers (`SecurityConfig` permits actuator metric endpoints).
 
-### C. Structured Logging (MDC Correlation)
-- Logback configured with JSON-structured output including MDC fields (`traceId`, `spanId`, `requestId`, `userId`).
-- Every log line is automatically correlated with the distributed trace, enabling click-through from a Grafana dashboard metric spike to the exact log lines across the request lifecycle.
+### C. Structured Logging & MDC Enrichment (`RequestLoggingFilter.java`)
+- **MDC Correlation**: `RequestIdFilter` and `RequestLoggingFilter` populate MDC keys across every request:
+  - `requestId`: Unique request identifier (`X-Request-Id`).
+  - `traceId` and `spanId`: OpenTelemetry trace context.
+  - `http.status`, `http.method`, `http.uri`, `http.latency_ms`: HTTP execution telemetry.
+- **Environment Profiles**:
+  - `prod` profile: Activates native structured JSON logging (`logging.structured.format.console: ecs`) for ingestion by Elasticsearch, Grafana Loki, or CloudWatch.
+  - `local` / `test` profiles: Outputs formatted ANSI colored logs:
+    ```text
+    2026-08-27 20:30:45.123 [http-nio-8080-exec-1] [req-abc-123] [4bf92f3577b34da6a3ce929d0e0e4736,00f067aa0ba902b7] INFO  c.p.f.RequestLoggingFilter - HTTP POST /api/v1/transactions - 201 (18ms)
+    ```
 
 ---
 

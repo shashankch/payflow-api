@@ -8,6 +8,8 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password: ""
+    hikari:
+      pool-name: PayflowLocalHikariPool
 
   flyway:
     enabled: true
@@ -15,7 +17,6 @@ spring:
     baseline-on-migrate: true
 
   jpa:
-    database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
       ddl-auto: validate
     show-sql: true

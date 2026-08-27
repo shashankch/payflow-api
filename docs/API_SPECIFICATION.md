@@ -2,12 +2,12 @@
 
 > **Document Metadata**
 > - **Title**: Payflow REST API Interface & Schema Specification
-> - **Author**: Payflow Engineering (`shashankchandel@gmail.com`)
+> - **Author**: Payflow Engineering(`shashakchandel@gmail.com`)
 > - **Status**: Approved / Living Specification
 > - **Created Date**: 2026-08-01
-> - **Last Updated**: 2026-08-12
+> - **Last Updated**: 2026-08-28
 > - **Authoritative Location**: [API_SPECIFICATION.md](API_SPECIFICATION.md)
-> - **Related Documents**: [System Architecture](ARCHITECTURE.md) | [Architecture Decisions (ADRs)](ADR.md) | [Phased Roadmap](ROADMAP.md) | [Engineering Conventions](CONVENTIONS.md)
+> - **Related Documents**: [System Architecture](ARCHITECTURE.md) | [Security Architecture](SECURITY.md) | [Architecture Decisions (ADRs)](adr/README.md) | [Phased Roadmap](ROADMAP.md) | [Engineering Conventions](CONVENTIONS.md)
 
 This document details the REST API endpoints, request/response models, input validation rules, and error handling behaviors for the Payflow API service.
 
@@ -359,6 +359,21 @@ Retrieves paginated transfer history (sent and received) for a given UPI ID.
   "last": true
 }
 ```
+
+---
+
+## 7. Observability & Telemetry Endpoints (Actuator)
+
+Payflow API exposes standard Spring Boot Actuator endpoints for container health probes and Prometheus metrics collection:
+
+| Endpoint | Method | Auth Required | Description |
+| :--- | :--- | :--- | :--- |
+| `/actuator/health` | `GET` | No | Basic liveness status (`{"status": "UP"}`). Detailed status shown when authorized. |
+| `/actuator/health/liveness` | `GET` | No | Kubernetes liveness probe confirming process health. |
+| `/actuator/health/readiness` | `GET` | No | Kubernetes readiness probe verifying database connectivity. |
+| `/actuator/info` | `GET` | No | Application build and version information. |
+| `/actuator/prometheus` | `GET` | No | Prometheus format scrape output including custom `payflow_transfers_*` metrics and `hikaricp_connections`. |
+| `/actuator/metrics` | `GET` | No | JSON catalog of available Micrometer metric names. |
 
 ---
 

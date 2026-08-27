@@ -15,7 +15,7 @@ public class OpenApiConfig {
 	public OpenAPI payflowOpenAPI() {
 		return new OpenAPI().info(new Info().title("Payflow API")
 				.description("Peer-to-peer payment and transaction ledger API").version("v0.7.0")
-				.contact(new Contact().name("Payflow Engineering").email("shashankchandel@gmail.com"))
+				.contact(new Contact().name("Payflow Engineering").email("shashakchandel@gmail.com"))
 				.license(new License().name("MIT License").url("https://opensource.org/licenses/MIT")));
 	}
 }

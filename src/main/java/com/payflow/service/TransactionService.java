@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.payflow.config.MetricsConfig;
 import com.payflow.dto.request.TransferMoneyRequest;
 import com.payflow.entity.BalanceLedgerEntry;
 import com.payflow.entity.LedgerEntryType;
@@ -30,6 +31,8 @@ import com.payflow.repository.TransactionRepository;
 import com.payflow.repository.UserRepository;
 import com.payflow.security.SecurityUtils;
 
+import io.micrometer.observation.annotation.Observed;
+
 @Service
 public class TransactionService {
 
@@ -39,22 +42,28 @@ public class TransactionService {
 	private final UserRepository userRepository;
 	private final BalanceLedgerRepository balanceLedgerRepository;
 	private final ApplicationEventPublisher eventPublisher;
+	private final MetricsConfig metricsConfig;
 
 	public TransactionService(TransactionRepository transactionRepository, UserRepository userRepository,
-			BalanceLedgerRepository balanceLedgerRepository, ApplicationEventPublisher eventPublisher) {
+			BalanceLedgerRepository balanceLedgerRepository, ApplicationEventPublisher eventPublisher,
+			MetricsConfig metricsConfig) {
 		this.transactionRepository = transactionRepository;
 		this.userRepository = userRepository;
 		this.balanceLedgerRepository = balanceLedgerRepository;
 		this.eventPublisher = eventPublisher;
+		this.metricsConfig = metricsConfig;
 	}
 
+	@Observed(name = "payflow.transfers.send", contextualName = "send-money-transfer")
 	@Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class, timeout = 5)
 	public Transaction sendMoney(TransferMoneyRequest request) {
+		long startTime = System.currentTimeMillis();
 		String senderUpi = request.getSenderUpiId();
 		String receiverUpi = request.getReceiverUpiId();
 
 		String authenticatedUpi = SecurityUtils.getAuthenticatedUpiId();
 		if (authenticatedUpi != null && !authenticatedUpi.equalsIgnoreCase(senderUpi)) {
+			metricsConfig.incrementTransferStatus("FORBIDDEN");
 			throw new ForbiddenOperationException("Authenticated user '" + authenticatedUpi
 					+ "' is not authorized to transfer from '" + senderUpi + "'");
 		}
@@ -128,6 +137,9 @@ public class TransactionService {
 		TransferCompletedEvent event = new TransferCompletedEvent(refId, senderUpi, receiverUpi, amount, status,
 				senderBalanceAfter, receiverBalanceAfter, Instant.now());
 		eventPublisher.publishEvent(event);
+
+		metricsConfig.recordTransfer("COMPLETED", savedTransaction.getAmount().doubleValue(),
+				System.currentTimeMillis() - startTime);
 
 		LOG.info("Transfer completed: txId={}, amount={}", savedTransaction.getReferenceId(),
 				savedTransaction.getAmount());
