@@ -64,6 +64,9 @@ class TransactionControllerTest {
 	@MockitoBean
 	private JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
 
+	@MockitoBean
+	private com.payflow.security.JwtAccessDeniedHandler jwtAccessDeniedHandler;
+
 	@BeforeEach
 	void setUpMapperMock() {
 		given(transactionMapper.toResponse(any())).willAnswer(invocation -> {

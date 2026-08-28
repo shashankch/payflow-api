@@ -21,12 +21,14 @@ import com.payflow.entity.TransactionStatus;
 import com.payflow.entity.TransactionType;
 import com.payflow.entity.User;
 import com.payflow.event.TransferCompletedEvent;
+import com.payflow.exception.ForbiddenOperationException;
 import com.payflow.exception.SelfTransferException;
 import com.payflow.exception.TransactionNotFoundException;
 import com.payflow.exception.UserNotFoundException;
 import com.payflow.repository.BalanceLedgerRepository;
 import com.payflow.repository.TransactionRepository;
 import com.payflow.repository.UserRepository;
+import com.payflow.security.SecurityUtils;
 
 @Service
 public class TransactionService {
@@ -50,6 +52,12 @@ public class TransactionService {
 	public Transaction sendMoney(TransferMoneyRequest request) {
 		String senderUpi = request.getSenderUpiId();
 		String receiverUpi = request.getReceiverUpiId();
+
+		String authenticatedUpi = SecurityUtils.getAuthenticatedUpiId();
+		if (authenticatedUpi != null && !authenticatedUpi.equalsIgnoreCase(senderUpi)) {
+			throw new ForbiddenOperationException("Authenticated user '" + authenticatedUpi
+					+ "' is not authorized to transfer from '" + senderUpi + "'");
+		}
 
 		if (senderUpi.equalsIgnoreCase(receiverUpi)) {
 			throw new SelfTransferException(senderUpi);
@@ -130,12 +138,27 @@ public class TransactionService {
 	@Transactional(readOnly = true)
 	public Transaction getTransactionByReferenceId(UUID referenceId) {
 		String msg = "Transaction not found: " + referenceId;
-		return transactionRepository.findByReferenceId(referenceId)
+		Transaction transaction = transactionRepository.findByReferenceId(referenceId)
 				.orElseThrow(() -> new TransactionNotFoundException(msg));
+
+		String authenticatedUpi = SecurityUtils.getAuthenticatedUpiId();
+		if (authenticatedUpi != null && !authenticatedUpi.equalsIgnoreCase(transaction.getSenderUpiId())
+				&& !authenticatedUpi.equalsIgnoreCase(transaction.getReceiverUpiId())) {
+			throw new ForbiddenOperationException("Authenticated user '" + authenticatedUpi
+					+ "' is not authorized to view transaction: " + referenceId);
+		}
+
+		return transaction;
 	}
 
 	@Transactional(readOnly = true)
 	public Page<Transaction> getUserTransactions(String upiId, Pageable pageable) {
+		String authenticatedUpi = SecurityUtils.getAuthenticatedUpiId();
+		if (authenticatedUpi != null && !authenticatedUpi.equalsIgnoreCase(upiId)) {
+			throw new ForbiddenOperationException("Authenticated user '" + authenticatedUpi
+					+ "' is not authorized to view transactions for: " + upiId);
+		}
+
 		return transactionRepository.findBySenderUpiIdOrReceiverUpiId(upiId, upiId, pageable);
 	}
 }

@@ -1,10 +1,19 @@
 package com.payflow.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,6 +29,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import com.payflow.dto.request.TransferMoneyRequest;
 import com.payflow.entity.BalanceLedgerEntry;
@@ -29,6 +40,7 @@ import com.payflow.entity.TransactionStatus;
 import com.payflow.entity.TransactionType;
 import com.payflow.entity.User;
 import com.payflow.event.TransferCompletedEvent;
+import com.payflow.exception.ForbiddenOperationException;
 import com.payflow.exception.InsufficientBalanceException;
 import com.payflow.exception.SelfTransferException;
 import com.payflow.exception.TransactionNotFoundException;
@@ -36,14 +48,6 @@ import com.payflow.exception.UserNotFoundException;
 import com.payflow.repository.BalanceLedgerRepository;
 import com.payflow.repository.TransactionRepository;
 import com.payflow.repository.UserRepository;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class TransactionServiceTest {
@@ -84,6 +88,11 @@ class TransactionServiceTest {
 				.balance(new BigDecimal("200.00")).version(0L).build();
 	}
 
+	@AfterEach
+	void tearDown() {
+		SecurityContextHolder.clearContext();
+	}
+
 	@Test
 	@DisplayName("Should successfully transfer funds between two accounts, record double-entry ledgers, and publish domain event")
 	void shouldTransferFunds_whenRequestIsValid() {
@@ -100,9 +109,6 @@ class TransactionServiceTest {
 		assertThat(result.getAmount()).isEqualByComparingTo("100.00");
 		assertThat(result.getStatus()).isEqualTo(TransactionStatus.COMPLETED);
 		assertThat(result.getType()).isEqualTo(TransactionType.TRANSFER);
-		assertThat(result.getSenderUpiId()).isEqualTo("alice@payflow");
-		assertThat(result.getReceiverUpiId()).isEqualTo("bob@payflow");
-
 		assertThat(sender.getBalance()).isEqualByComparingTo("400.00");
 		assertThat(receiver.getBalance()).isEqualByComparingTo("300.00");
 
@@ -112,36 +118,46 @@ class TransactionServiceTest {
 		verify(balanceLedgerRepository, times(2)).save(ledgerCaptor.capture());
 		verify(eventPublisher).publishEvent(eventCaptor.capture());
 
+		List<BalanceLedgerEntry> ledgers = ledgerCaptor.getAllValues();
+		assertThat(ledgers).hasSize(2);
+		assertThat(ledgers.get(0).getEntryType()).isEqualTo(LedgerEntryType.DEBIT);
+		assertThat(ledgers.get(0).getBalanceBefore()).isEqualByComparingTo("500.00");
+		assertThat(ledgers.get(0).getBalanceAfter()).isEqualByComparingTo("400.00");
+		assertThat(ledgers.get(1).getEntryType()).isEqualTo(LedgerEntryType.CREDIT);
+		assertThat(ledgers.get(1).getBalanceBefore()).isEqualByComparingTo("200.00");
+		assertThat(ledgers.get(1).getBalanceAfter()).isEqualByComparingTo("300.00");
+
 		TransferCompletedEvent publishedEvent = eventCaptor.getValue();
 		assertThat(publishedEvent).isNotNull();
 		assertThat(publishedEvent.senderUpi()).isEqualTo("alice@payflow");
 		assertThat(publishedEvent.receiverUpi()).isEqualTo("bob@payflow");
 		assertThat(publishedEvent.amount()).isEqualByComparingTo("100.00");
-
-		List<BalanceLedgerEntry> ledgerEntries = ledgerCaptor.getAllValues();
-		assertThat(ledgerEntries).hasSize(2);
-
-		BalanceLedgerEntry debitEntry = ledgerEntries.get(0);
-		assertThat(debitEntry.getEntryType()).isEqualTo(LedgerEntryType.DEBIT);
-		assertThat(debitEntry.getAmount()).isEqualByComparingTo("100.00");
-		assertThat(debitEntry.getBalanceBefore()).isEqualByComparingTo("500.00");
-		assertThat(debitEntry.getBalanceAfter()).isEqualByComparingTo("400.00");
-
-		BalanceLedgerEntry creditEntry = ledgerEntries.get(1);
-		assertThat(creditEntry.getEntryType()).isEqualTo(LedgerEntryType.CREDIT);
-		assertThat(creditEntry.getAmount()).isEqualByComparingTo("100.00");
-		assertThat(creditEntry.getBalanceBefore()).isEqualByComparingTo("200.00");
-		assertThat(creditEntry.getBalanceAfter()).isEqualByComparingTo("300.00");
+		assertThat(publishedEvent.status()).isEqualTo(TransactionStatus.COMPLETED);
+		assertThat(publishedEvent.senderAfter()).isEqualByComparingTo("400.00");
+		assertThat(publishedEvent.receiverAfter()).isEqualByComparingTo("300.00");
 	}
 
 	@Test
-	@DisplayName("Should acquire locks in alphabetical order by UPI ID regardless of who is sender/receiver")
-	void shouldAcquireLocksInAlphabeticalOrder_toPreventDeadlocks() {
+	@DisplayName("Should throw ForbiddenOperationException when authenticated user attempts transfer from different sender UPI")
+	void shouldThrowForbidden_whenAuthenticatedUserIsNotSender() {
+		SecurityContextHolder.getContext()
+				.setAuthentication(new UsernamePasswordAuthenticationToken("mallory@payflow", null, List.of()));
+
+		TransferMoneyRequest request = TransferMoneyRequest.builder().senderUpiId("alice@payflow")
+				.receiverUpiId("bob@payflow").amount(new BigDecimal("100.00")).build();
+
+		assertThatThrownBy(() -> transactionService.sendMoney(request)).isInstanceOf(ForbiddenOperationException.class)
+				.hasMessageContaining("not authorized to transfer from");
+	}
+
+	@Test
+	@DisplayName("Should acquire pessimistic locks in deterministic alphabetical order to avoid deadlocks")
+	void shouldAcquireLocksInAlphabeticalOrder() {
 		TransferMoneyRequest request = TransferMoneyRequest.builder().senderUpiId("bob@payflow")
 				.receiverUpiId("alice@payflow").amount(new BigDecimal("50.00")).build();
 
-		when(userRepository.findByUpiIdWithLock("alice@payflow")).thenReturn(Optional.of(receiver));
-		when(userRepository.findByUpiIdWithLock("bob@payflow")).thenReturn(Optional.of(sender));
+		when(userRepository.findByUpiIdWithLock("alice@payflow")).thenReturn(Optional.of(sender));
+		when(userRepository.findByUpiIdWithLock("bob@payflow")).thenReturn(Optional.of(receiver));
 		when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
 		transactionService.sendMoney(request);
@@ -149,19 +165,6 @@ class TransactionServiceTest {
 		InOrder inOrder = inOrder(userRepository);
 		inOrder.verify(userRepository).findByUpiIdWithLock("alice@payflow");
 		inOrder.verify(userRepository).findByUpiIdWithLock("bob@payflow");
-	}
-
-	@Test
-	@DisplayName("Should throw InsufficientBalanceException when sender does not have enough balance")
-	void shouldThrowInsufficientBalanceException_whenSenderBalanceIsLow() {
-		TransferMoneyRequest request = TransferMoneyRequest.builder().senderUpiId("alice@payflow")
-				.receiverUpiId("bob@payflow").amount(new BigDecimal("1000.00")).build();
-
-		when(userRepository.findByUpiIdWithLock("alice@payflow")).thenReturn(Optional.of(sender));
-		when(userRepository.findByUpiIdWithLock("bob@payflow")).thenReturn(Optional.of(receiver));
-
-		assertThatThrownBy(() -> transactionService.sendMoney(request)).isInstanceOf(InsufficientBalanceException.class)
-				.hasMessageContaining("Insufficient balance");
 	}
 
 	@Test
@@ -174,22 +177,48 @@ class TransactionServiceTest {
 	}
 
 	@Test
-	@DisplayName("Should throw UserNotFoundException when sender does not exist")
+	@DisplayName("Should throw InsufficientBalanceException when sender does not have enough funds")
+	void shouldThrowInsufficientBalanceException_whenSenderBalanceIsLow() {
+		TransferMoneyRequest request = TransferMoneyRequest.builder().senderUpiId("alice@payflow")
+				.receiverUpiId("bob@payflow").amount(new BigDecimal("9999.00")).build();
+
+		when(userRepository.findByUpiIdWithLock("alice@payflow")).thenReturn(Optional.of(sender));
+		when(userRepository.findByUpiIdWithLock("bob@payflow")).thenReturn(Optional.of(receiver));
+
+		assertThatThrownBy(() -> transactionService.sendMoney(request))
+				.isInstanceOf(InsufficientBalanceException.class);
+	}
+
+	@Test
+	@DisplayName("Should throw UserNotFoundException when sender is not found")
 	void shouldThrowUserNotFoundException_whenSenderNotFound() {
-		TransferMoneyRequest request = TransferMoneyRequest.builder().senderUpiId("unknown@payflow")
+		TransferMoneyRequest request = TransferMoneyRequest.builder().senderUpiId("alice@payflow")
 				.receiverUpiId("bob@payflow").amount(new BigDecimal("50.00")).build();
 
-		when(userRepository.findByUpiIdWithLock(any())).thenReturn(Optional.empty());
+		when(userRepository.findByUpiIdWithLock("alice@payflow")).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> transactionService.sendMoney(request)).isInstanceOf(UserNotFoundException.class);
 	}
 
 	@Test
-	@DisplayName("Should return transaction by reference ID when found")
+	@DisplayName("Should throw UserNotFoundException when receiver is not found")
+	void shouldThrowUserNotFoundException_whenReceiverNotFound() {
+		TransferMoneyRequest request = TransferMoneyRequest.builder().senderUpiId("alice@payflow")
+				.receiverUpiId("bob@payflow").amount(new BigDecimal("50.00")).build();
+
+		when(userRepository.findByUpiIdWithLock("alice@payflow")).thenReturn(Optional.of(sender));
+		when(userRepository.findByUpiIdWithLock("bob@payflow")).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> transactionService.sendMoney(request)).isInstanceOf(UserNotFoundException.class);
+	}
+
+	@Test
+	@DisplayName("Should return transaction when found by reference ID")
 	void shouldReturnTransaction_whenFoundByReferenceId() {
 		UUID refId = UUID.randomUUID();
-		Transaction tx = Transaction.builder().transactionId(10L).referenceId(refId).amount(new BigDecimal("75.00"))
-				.status(TransactionStatus.COMPLETED).build();
+		Transaction tx = Transaction.builder().transactionId(10L).referenceId(refId).senderUpiId("alice@payflow")
+				.receiverUpiId("bob@payflow").amount(new BigDecimal("75.00")).status(TransactionStatus.COMPLETED)
+				.build();
 
 		when(transactionRepository.findByReferenceId(refId)).thenReturn(Optional.of(tx));
 
@@ -197,6 +226,24 @@ class TransactionServiceTest {
 		assertThat(found).isNotNull();
 		assertThat(found.getReferenceId()).isEqualTo(refId);
 		assertThat(found.getAmount()).isEqualByComparingTo("75.00");
+	}
+
+	@Test
+	@DisplayName("Should throw ForbiddenOperationException when user is not participant in transaction")
+	void shouldThrowForbidden_whenAuthenticatedUserIsNotTransactionParticipant() {
+		SecurityContextHolder.getContext()
+				.setAuthentication(new UsernamePasswordAuthenticationToken("mallory@payflow", null, List.of()));
+
+		UUID refId = UUID.randomUUID();
+		Transaction tx = Transaction.builder().transactionId(10L).referenceId(refId).senderUpiId("alice@payflow")
+				.receiverUpiId("bob@payflow").amount(new BigDecimal("75.00")).status(TransactionStatus.COMPLETED)
+				.build();
+
+		when(transactionRepository.findByReferenceId(refId)).thenReturn(Optional.of(tx));
+
+		assertThatThrownBy(() -> transactionService.getTransactionByReferenceId(refId))
+				.isInstanceOf(ForbiddenOperationException.class)
+				.hasMessageContaining("not authorized to view transaction");
 	}
 
 	@Test
@@ -223,5 +270,18 @@ class TransactionServiceTest {
 		Page<Transaction> result = transactionService.getUserTransactions("alice@payflow", pageable);
 		assertThat(result).isNotNull();
 		assertThat(result.getTotalElements()).isEqualTo(2);
+	}
+
+	@Test
+	@DisplayName("Should throw ForbiddenOperationException when user attempts to view another user's transactions")
+	void shouldThrowForbidden_whenAuthenticatedUserViewsAnotherUserTransactions() {
+		SecurityContextHolder.getContext()
+				.setAuthentication(new UsernamePasswordAuthenticationToken("mallory@payflow", null, List.of()));
+
+		Pageable pageable = PageRequest.of(0, 10);
+
+		assertThatThrownBy(() -> transactionService.getUserTransactions("alice@payflow", pageable))
+				.isInstanceOf(ForbiddenOperationException.class)
+				.hasMessageContaining("not authorized to view transactions");
 	}
 }

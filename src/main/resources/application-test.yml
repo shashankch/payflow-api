@@ -16,3 +16,7 @@ spring:
   h2:
     console:
       enabled: false
+
+payflow:
+  upi-validation:
+    enabled: false

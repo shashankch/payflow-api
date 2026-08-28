@@ -5,9 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.security.access.AccessDeniedException;
 
 class GlobalExceptionHandlerTest {
 
@@ -66,6 +66,36 @@ class GlobalExceptionHandlerTest {
 		assertEquals(HttpStatus.BAD_REQUEST.value(), problem.getStatus());
 		assertEquals("Self Transfer Prohibited", problem.getTitle());
 		assertEquals("Self-transfer is not permitted for UPI ID: test@upi", problem.getDetail());
+	}
+
+	@Test
+	void testHandleForbiddenOperation() {
+		ForbiddenOperationException ex = new ForbiddenOperationException("Unauthorized access");
+		ProblemDetail problem = handler.handleForbiddenOperation(ex);
+
+		assertEquals(HttpStatus.FORBIDDEN.value(), problem.getStatus());
+		assertEquals("Forbidden Operation", problem.getTitle());
+		assertEquals("Unauthorized access", problem.getDetail());
+	}
+
+	@Test
+	void testHandleAccessDenied() {
+		AccessDeniedException ex = new AccessDeniedException("Access is denied");
+		ProblemDetail problem = handler.handleAccessDenied(ex);
+
+		assertEquals(HttpStatus.FORBIDDEN.value(), problem.getStatus());
+		assertEquals("Access Denied", problem.getTitle());
+		assertEquals("Access is denied", problem.getDetail());
+	}
+
+	@Test
+	void testHandleInvalidUpi() {
+		InvalidUpiException ex = new InvalidUpiException("UPI ID is invalid: bad@upi");
+		ProblemDetail problem = handler.handleInvalidUpi(ex);
+
+		assertEquals(HttpStatus.UNPROCESSABLE_ENTITY.value(), problem.getStatus());
+		assertEquals("Invalid UPI ID", problem.getTitle());
+		assertEquals("UPI ID is invalid: bad@upi", problem.getDetail());
 	}
 
 	@Test

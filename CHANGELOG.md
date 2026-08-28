@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Phase 7C (RestClient, Declarative HTTP Interface Client & External UPI Validation)
+- Added `spring-retry` dependency to `pom.xml` for declarative retry management.
+- Created `UpiVerificationResponse.java` record representing third-party UPI verification response payloads.
+- Created `UpiValidationClient.java` declarative HTTP Interface Client interface with `@HttpExchange` and `@GetExchange` annotations.
+- Created `RestClientConfig.java` configuring `RestClient`, connection/read timeouts, `@EnableRetry`, and `HttpServiceProxyFactory` proxy generation.
+- Created `InvalidUpiException.java` domain exception and mapped to RFC 7807 `422 Unprocessable Entity` in `GlobalExceptionHandler.java`.
+- Created `UpiValidationService.java` implementing `@Retryable` outbound calls with exponential backoff and randomized jitter (`delay = 500ms`, `multiplier = 2.0`, `random = true`) and `@Recover` graceful degradation fallback on downstream service outages.
+- Integrated UPI validation into `UserService.registerUser()` during client onboarding.
+- Created `UpiValidationClientTest.java` verifying HTTP Interface Client serialization and deserialization via `MockRestServiceServer`.
+- Created `UpiValidationServiceTest.java` unit tests verifying validation pass, invalid UPI rejection, retry, and recover fallback.
+- Created `UpiValidationIT.java` Testcontainers PostgreSQL integration test verifying end-to-end user onboarding with upstream validation and failure handling.
+- Added ADR-019 (*Declarative HTTP Interface Client (RestClient) & Resilient External Service Integration*) to `docs/ADR.md`.
+
+### Added - Phase 7B (Authorization & Sender Verification)
+- Created `ForbiddenOperationException.java` domain exception extending `PayflowException`.
+- Created `SecurityUtils.java` static helper to retrieve the authenticated principal's UPI handle from `SecurityContextHolder`.
+- Created `JwtAccessDeniedHandler.java` implementing Spring Security's `AccessDeniedHandler`, emitting standardized RFC 7807 `403 Forbidden` (`application/problem+json`) problem details on access denial.
+- Enhanced `SecurityConfig.java` to register `JwtAccessDeniedHandler` in the security filter chain.
+- Enhanced `GlobalExceptionHandler.java` with `@ExceptionHandler` for `ForbiddenOperationException` and `AccessDeniedException` mapping to `403 Forbidden`.
+- Enforced strict sender authorization in `TransactionService.sendMoney()`: rejecting transfer requests when the authenticated subject does not match `senderUpiId` with `403 Forbidden` before acquiring database locks or mutating balances.
+- Enforced multi-party transaction visibility in `TransactionService.getTransactionByReferenceId()` and `getUserTransactions()`: ensuring only transaction participants (sender/receiver) or the account owner can view records.
+- Enforced balance ledger privacy in `UserService.getUserLedger()`: preventing users from inspecting other users' double-entry balance ledger audit entries.
+- Enforced profile ownership in `UserController.getUserById()` and `getUserByUpiId()`.
+- Created full-stack integration test `AuthorizationIT.java` against Testcontainers PostgreSQL verifying all 403 Forbidden boundaries and authorized user flows.
+- Added ADR-018 (*Principal-Bound Resource Access Control & Sender Verification*) to `docs/ADR.md`.
+
 ### Added - Phase 7A (Spring Security & Stateless JWT Authentication)
 - Added `spring-boot-starter-security`, `spring-security-test`, and JJWT 0.13.0 (`jjwt-api`, `jjwt-impl`, `jjwt-jackson`) dependencies to `pom.xml`.
 - Created `JwtTokenProvider.java` for HMAC-SHA256 (HS256) token generation, signature validation, expiration checking, and user claims extraction (`upiId`, `referenceId`, `roles`).

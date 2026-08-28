@@ -16,9 +16,11 @@ import com.payflow.dto.request.CreateUserRequest;
 import com.payflow.entity.BalanceLedgerEntry;
 import com.payflow.entity.User;
 import com.payflow.exception.DuplicateUpiIdException;
+import com.payflow.exception.ForbiddenOperationException;
 import com.payflow.exception.UserNotFoundException;
 import com.payflow.repository.BalanceLedgerRepository;
 import com.payflow.repository.UserRepository;
+import com.payflow.security.SecurityUtils;
 
 @Service
 public class UserService {
@@ -27,10 +29,14 @@ public class UserService {
 
 	private final UserRepository userRepository;
 	private final BalanceLedgerRepository balanceLedgerRepository;
+	private final UpiValidationService upiValidationService;
 
-	public UserService(UserRepository userRepository, BalanceLedgerRepository balanceLedgerRepository) {
+	public UserService(UserRepository userRepository, //
+			BalanceLedgerRepository balanceLedgerRepository, //
+			UpiValidationService upiValidationService) {
 		this.userRepository = userRepository;
 		this.balanceLedgerRepository = balanceLedgerRepository;
+		this.upiValidationService = upiValidationService;
 	}
 
 	@Transactional
@@ -38,6 +44,7 @@ public class UserService {
 		if (userRepository.findByUpiId(request.getUpiId()).isPresent()) {
 			throw new DuplicateUpiIdException(request.getUpiId());
 		}
+		upiValidationService.validateUpi(request.getUpiId());
 		LOG.info("Registering new user with UPI ID: {}", request.getUpiId());
 		User user = User.builder().name(request.getName()).upiId(request.getUpiId())
 				.phoneNumber(request.getPhoneNumber()).balance(request.getBalance()).build();
@@ -85,9 +92,15 @@ public class UserService {
 
 	@Transactional(readOnly = true)
 	public Page<BalanceLedgerEntry> getUserLedger(UUID userReferenceId, Pageable pageable) {
-		if (userRepository.findByReferenceId(userReferenceId).isEmpty()) {
-			throw new UserNotFoundException("User not found: " + userReferenceId);
+		User user = userRepository.findByReferenceId(userReferenceId)
+				.orElseThrow(() -> new UserNotFoundException("User not found: " + userReferenceId));
+
+		String authenticatedUpi = SecurityUtils.getAuthenticatedUpiId();
+		if (authenticatedUpi != null && !authenticatedUpi.equalsIgnoreCase(user.getUpiId())) {
+			throw new ForbiddenOperationException("Authenticated user '" + authenticatedUpi
+					+ "' is not authorized to view ledger for: " + userReferenceId);
 		}
+
 		return balanceLedgerRepository.findByUserReferenceIdOrderByCreatedAtDesc(userReferenceId, pageable);
 	}
 

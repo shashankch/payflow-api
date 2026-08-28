@@ -25,13 +25,16 @@ public class SecurityConfig {
 
 	private final JwtAuthenticationFilter jwtAuthenticationFilter;
 	private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+	private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
 	private final String allowedOrigins;
 
-	public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
-			JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint,
+	public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, //
+			JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint, //
+			JwtAccessDeniedHandler jwtAccessDeniedHandler, //
 			@Value("${payflow.security.cors.allowed-origins:*}") String allowedOrigins) {
 		this.jwtAuthenticationFilter = jwtAuthenticationFilter;
 		this.jwtAuthenticationEntryPoint = jwtAuthenticationEntryPoint;
+		this.jwtAccessDeniedHandler = jwtAccessDeniedHandler;
 		this.allowedOrigins = allowedOrigins;
 	}
 
@@ -40,7 +43,8 @@ public class SecurityConfig {
 		http.csrf(AbstractHttpConfigurer::disable);
 		http.cors(cors -> cors.configurationSource(corsConfigurationSource()));
 		http.sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
-		http.exceptionHandling(e -> e.authenticationEntryPoint(jwtAuthenticationEntryPoint));
+		http.exceptionHandling(e -> e.authenticationEntryPoint(jwtAuthenticationEntryPoint)
+				.accessDeniedHandler(jwtAccessDeniedHandler));
 		http.authorizeHttpRequests(this::configureAuth);
 		http.headers(h -> h.frameOptions(HeadersConfigurer.FrameOptionsConfig::disable));
 		http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

@@ -33,3 +33,8 @@ payflow:
       expiration-ms: 3600000
     cors:
       allowed-origins: "*"
+  upi-validation:
+    enabled: true
+    base-url: "http://localhost:9090"
+    connect-timeout-ms: 3000
+    read-timeout-ms: 5000
