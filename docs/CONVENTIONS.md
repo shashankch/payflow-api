@@ -25,7 +25,7 @@ This document outlines the coding standards, repository conventions, Git workflo
 - **Immutability**: Prefer immutable data structures. Response DTOs should use Java `record`s where possible.
 - **Financial Arithmetic**: Never use `double` or `float` for monetary calculations. Always use `BigDecimal` with explicit scale and `RoundingMode.HALF_EVEN` (banker's rounding).
 - **Error Responses**: All API errors must return standardized RFC 7807 `ProblemDetail` payloads via `@RestControllerAdvice`.
-- **Logging**: Never use `System.out.println()`. Use SLF4J loggers (`log.info()`, `log.warn()`, `log.error()`).
+- **Logging**: Never use `System.out.println()`. Use SLF4J loggers named `LOG` (`private static final Logger LOG = LoggerFactory.getLogger(...)`) with structured MDC enrichment (`LOG.info()`, `LOG.warn()`, `LOG.error()`).
 
 ---
 
@@ -64,7 +64,7 @@ This document outlines the coding standards, repository conventions, Git workflo
 ## 5. Documentation Standards
 
 - **Parity**: Every feature implemented in code must be documented in `README.md`, `docs/ARCHITECTURE.md`, and `docs/API_SPECIFICATION.md`.
-- **ADRs**: Any major architectural decision (e.g., locking strategy, caching library choice) must be recorded in `docs/ADR.md`.
+- **ADRs**: Any major architectural decision (e.g., locking strategy, caching library choice) must be recorded as an individual numbered ADR under `docs/adr/`.
 - **Changelog**: Every merged PR must include an entry in `CHANGELOG.md` under `[Unreleased]`.
 - **Design Document Structure**: All architectural design documents in `docs/` must incorporate standard design document sections:
   - **Metadata Header**: Short title, author, creation date, status (Draft/Approved), and authoritative relative link.

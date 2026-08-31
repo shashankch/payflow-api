@@ -6,7 +6,6 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mapstruct.factory.Mappers;
 
 import com.payflow.dto.response.LedgerEntryResponse;
 import com.payflow.entity.BalanceLedgerEntry;
@@ -18,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class LedgerMapperTest {
 
-	private final LedgerMapper ledgerMapper = Mappers.getMapper(LedgerMapper.class);
+	private final LedgerMapper ledgerMapper = new LedgerMapperImpl();
 
 	@Test
 	@DisplayName("Should correctly map BalanceLedgerEntry entity to LedgerEntryResponse record")

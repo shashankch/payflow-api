@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Phase 8A (Structured Logging, Prometheus Metrics & OpenTelemetry Tracing)
+- Added `spring-boot-starter-actuator`, `micrometer-registry-prometheus`, `micrometer-tracing-bridge-otel`, and `opentelemetry-exporter-otlp` dependencies to `pom.xml`.
+- Created `MetricsConfig.java` configuring `ObservedAspect` for `@Observed` annotation support and registering custom business meters:
+  - `payflow.transfers.total` (Counter tagged by status: `COMPLETED`, `FAILED`, `INSUFFICIENT_BALANCE`, `FORBIDDEN`).
+  - `payflow.transfers.amount` (DistributionSummary with p50/p95/p99 SLA percentiles).
+  - `payflow.transfers.duration` (Timer with p50/p95/p99 SLA percentiles).
+- Created `RequestLoggingFilter.java` logging incoming HTTP requests, status codes, execution duration (ms), and MDC tags (`http.status`, `http.method`, `http.uri`, `http.latency_ms`).
+- Enhanced `RequestIdFilter.java` with `@Order(Ordered.HIGHEST_PRECEDENCE + 1)`.
+- Enhanced `TransactionService.java` with `@Observed` and recording business metrics on transfer completion and failure.
+- Configured native ECS structured logging (`logging.structured.format.console: ecs`) in `application-prod.yml` and console trace pattern with `traceId`/`spanId` in `application.yml`.
+- Configured HikariCP connection pool monitoring (`PayflowHikariPool`) in `application.yml` and `application-prod.yml`.
+- Updated `SecurityConfig.java` to permit `/actuator/prometheus` and `/actuator/metrics/**` endpoints.
+- Created unit tests `MetricsConfigTest.java` and `RequestLoggingFilterTest.java`.
+- Created full-stack integration test `ObservabilityIT.java` against Testcontainers PostgreSQL verifying `/actuator/health`, `/actuator/prometheus`, custom metrics, and HikariCP connection metrics.
+- Added ADR-020 (*Structured Logging, Prometheus Metrics & OpenTelemetry Observability Architecture*) to `docs/adr/`.
+
 ### Added - Phase 7C (RestClient, Declarative HTTP Interface Client & External UPI Validation)
 - Added `spring-retry` dependency to `pom.xml` for declarative retry management.
 - Created `UpiVerificationResponse.java` record representing third-party UPI verification response payloads.
@@ -20,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Created `UpiValidationClientTest.java` verifying HTTP Interface Client serialization and deserialization via `MockRestServiceServer`.
 - Created `UpiValidationServiceTest.java` unit tests verifying validation pass, invalid UPI rejection, retry, and recover fallback.
 - Created `UpiValidationIT.java` Testcontainers PostgreSQL integration test verifying end-to-end user onboarding with upstream validation and failure handling.
-- Added ADR-019 (*Declarative HTTP Interface Client (RestClient) & Resilient External Service Integration*) to `docs/ADR.md`.
+- Added ADR-019 (*Declarative HTTP Interface Client (RestClient) & Resilient External Service Integration*) to `docs/adr/`.
 
 ### Added - Phase 7B (Authorization & Sender Verification)
 - Created `ForbiddenOperationException.java` domain exception extending `PayflowException`.
@@ -33,7 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enforced balance ledger privacy in `UserService.getUserLedger()`: preventing users from inspecting other users' double-entry balance ledger audit entries.
 - Enforced profile ownership in `UserController.getUserById()` and `getUserByUpiId()`.
 - Created full-stack integration test `AuthorizationIT.java` against Testcontainers PostgreSQL verifying all 403 Forbidden boundaries and authorized user flows.
-- Added ADR-018 (*Principal-Bound Resource Access Control & Sender Verification*) to `docs/ADR.md`.
+- Added ADR-018 (*Principal-Bound Resource Access Control & Sender Verification*) to `docs/adr/`.
 
 ### Added - Phase 7A (Spring Security & Stateless JWT Authentication)
 - Added `spring-boot-starter-security`, `spring-security-test`, and JJWT 0.13.0 (`jjwt-api`, `jjwt-impl`, `jjwt-jackson`) dependencies to `pom.xml`.
@@ -45,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Created DTOs `LoginRequest.java` and `AuthResponse.java`.
 - Created unit tests `JwtTokenProviderTest.java` and `AuthControllerTest.java`.
 - Created full-stack integration test `AuthenticationIT.java` against Testcontainers PostgreSQL verifying 401 unauthorized rejection, login token acquisition, and authenticated transaction execution.
-- Added ADR-017 (*Stateless JWT Authentication & Spring Security Architecture*) to `docs/ADR.md`.
+- Added ADR-017 (*Stateless JWT Authentication & Spring Security Architecture*) to `docs/adr/`.
 
 ---
 
@@ -62,7 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hardened `IdempotencyFilter.java` with in-flight lease timeout (2 min) for automatic recovery from crashed worker nodes, and catch for `DataIntegrityViolationException` to gracefully handle concurrent insert collisions as `409 Conflict`.
 - Enhanced `GlobalExceptionHandler.java` with structured error logging (`LOG.error`) for unhandled server exceptions and data integrity violations.
 - Standardized deterministic alphabetical lock acquisition in `TransactionService.java` with `String.CASE_INSENSITIVE_ORDER`.
-- Added ADR-016 (*Spring Modulith Event Publication Registry & Transactional Outbox Pattern*) to `docs/ADR.md`.
+- Added ADR-016 (*Spring Modulith Event Publication Registry & Transactional Outbox Pattern*) to `docs/adr/`.
 
 ### Added - Phase 6A (Durable Idempotency Engine)
 - Created `IdempotencyFilter.java` (`OncePerRequestFilter`) with `CachedBodyHttpServletRequest` wrapper to intercept `POST /api/v1/transactions`, enforcing mandatory `Idempotency-Key` header with SHA-256 request payload hashing.
@@ -72,7 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Implemented validation and conflict handling: rejecting missing `Idempotency-Key` headers or key reuse with mismatched payloads with `400 Bad Request`, and concurrent in-flight requests with `409 Conflict` (RFC 7807 problem details).
 - Created `IdempotencyCleanupService.java` with `@Scheduled` purge job for removing expired idempotency records past configured TTL (`payflow.idempotency.ttl-hours`, default 24h).
 - Added unit test suite `IdempotencyFilterTest.java` and integration test suite `IdempotencyIT.java` against Testcontainers PostgreSQL.
-- Added ADR-015 (*SHA-256 Request Payload Hashing & Durable Database-Backed Idempotency Engine*) to `docs/ADR.md`.
+- Added ADR-015 (*SHA-256 Request Payload Hashing & Durable Database-Backed Idempotency Engine*) to `docs/adr/`.
 
 ---
 
@@ -101,14 +117,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integrated Testcontainers PostgreSQL (`org.testcontainers:postgresql`) and `spring-boot-testcontainers` BOM.
 - Abstract base class `AbstractIntegrationTest.java` with `@Testcontainers(disabledWithoutDocker = true)` and `@DynamicPropertySource` for 100% production-parity integration testing.
 - Created `PostgreSQLIntegrationTest.java` verifying real PostgreSQL container startup, Flyway schema migration execution, and Hibernate `ddl-auto=validate` verification.
-- Added `ADR-014` (Spring Environment Profiles and Testcontainers Integration Testing Strategy) to `docs/ADR.md`.
+- Added `ADR-014` (Spring Environment Profiles and Testcontainers Integration Testing Strategy) to `docs/adr/`.
 
 ### Added - Phase 4A (Flyway Migrations & PostgreSQL Integration)
 - Version-controlled Flyway DDL migration scripts (`V1__create_users_table.sql`, `V2__create_transactions_table.sql`, `V3__create_balance_ledger_table.sql`, `V4__add_performance_indexes.sql`).
 - Performance indexes added to database schema for UPI lookups (`idx_users_upi_id`), UUID reference lookups (`idx_users_reference_id`, `idx_tx_reference_id`), transaction history statements (`idx_tx_sender_created`, `idx_tx_receiver_created`), and balance ledger audits (`idx_ledger_user_created`).
 - Added PostgreSQL driver (`postgresql`), `flyway-core`, and `flyway-database-postgresql` dependencies.
 - Converted monolithic `application.properties` configuration to structured `application.yml` setting `spring.jpa.hibernate.ddl-auto=validate`.
-- Added `ADR-013` (Flyway Database Migrations over DDL Auto-Generation) to `docs/ADR.md`.
+- Added `ADR-013` (Flyway Database Migrations over DDL Auto-Generation) to `docs/adr/`.
 
 ---
 
@@ -119,13 +135,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Balance audit tracking capturing `amount`, `balanceBefore`, and `balanceAfter` state transitions for complete financial auditability.
 - Balance reconciliation aggregate SQL query `calculateReconciledBalanceByUserId()` in `BalanceLedgerRepository` allowing reconstruction of authoritative balance state from ledger rows.
 - `GET /api/v1/users/{id}/ledger` endpoint returning paginated balance ledger history for a user by UUID reference ID.
-- Added `ADR-012` (Double-Entry Balance Ledger as Immutable Audit Trail) to `docs/ADR.md`.
+- Added `ADR-012` (Double-Entry Balance Ledger as Immutable Audit Trail) to `docs/adr/`.
 
 ### Added - Phase 3B (Pessimistic Locking & Deadlock Avoidance)
 - Pessimistic write locking (`@Lock(LockModeType.PESSIMISTIC_WRITE)`) on `UserRepository.findByUpiIdWithLock()` generating `SELECT ... FOR UPDATE` SQL statements to prevent race conditions during high-concurrency balance mutations.
 - Deterministic alphabetical lock acquisition ordering by UPI ID in `TransactionService.sendMoney()` to prevent database deadlock cycles during concurrent reciprocal transfers.
 - JPA N+1 query optimization via `@EntityGraph(attributePaths = {"sender", "receiver"})` on `TransactionRepository` query methods.
-- Added `ADR-010` (Pessimistic Locking for High-Concurrency Balance Operations) and `ADR-011` (Deterministic Lock Ordering for Deadlock Prevention) to `docs/ADR.md`.
+- Added `ADR-010` (Pessimistic Locking for High-Concurrency Balance Operations) and `ADR-011` (Deterministic Lock Ordering for Deadlock Prevention) to `docs/adr/`.
 
 ### Added - Phase 3A (Money Transfer Implementation)
 - Money transfer orchestration service (`TransactionService.sendMoney()`) executed under `@Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class, timeout = 5)`.
@@ -145,7 +161,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enforced transfer upper bound cap (`@DecimalMax("1000000.00")`) on `TransferMoneyRequest`.
 - Added MDC `%X{requestId}` tracking pattern to application console logger.
 - Removed obsolete static `fromEntity()` factories from response DTO records.
-- Added `ADR-007` (UUID Reference IDs over Auto-Increment Primary Keys in APIs) to `docs/ADR.md`.
+- Added `ADR-007` (UUID Reference IDs over Auto-Increment Primary Keys in APIs) to `docs/adr/`.
 
 ### Added - Phase 2D (Error Handling & RFC 7807 Exception Framework)
 - Implemented custom domain exception hierarchy (`PayflowException`, `UserNotFoundException`, `TransactionNotFoundException`, `InsufficientBalanceException`, `DuplicateUpiIdException`, `SelfTransferException`).
@@ -153,14 +169,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Implemented `RequestIdFilter` (`OncePerRequestFilter`) for `X-Request-Id` MDC logging and response header correlation tracking.
 - Updated domain services (`UserService`, `TransactionService`) and controllers to throw domain exceptions for clean, centralized handling.
 - Added unit test suites for `GlobalExceptionHandlerTest` and `RequestIdFilterTest`.
-- Added `ADR-006` (RFC 7807 ProblemDetail & Centralized Exception Handling) to `docs/ADR.md`.
+- Added `ADR-006` (RFC 7807 ProblemDetail & Centralized Exception Handling) to `docs/adr/`.
 
 ### Added - Phase 2C (Mapper Layer & API Documentation)
 - Integrated MapStruct `1.6.3` compile-time mappers (`UserMapper`, `TransactionMapper`) for type-safe DTO <-> Entity conversions.
 - Integrated Springdoc OpenAPI `3.0.3` (`springdoc-openapi-starter-webmvc-ui`) for live interactive Swagger UI (`/swagger-ui.html`) and OpenAPI JSON specs (`/v3/api-docs`).
 - Added OpenAPI configuration bean (`OpenApiConfig`) and controller OpenAPI annotations (`@Tag`, `@Operation`, `@ApiResponse`).
 - Added MapStruct mapper unit test suite (`UserMapperTest`, `TransactionMapperTest`).
-- Added `ADR-005` (MapStruct for compile-time type-safe DTO mapping) to `docs/ADR.md`.
+- Added `ADR-005` (MapStruct for compile-time type-safe DTO mapping) to `docs/adr/`.
 
 ### Added - Phase 2B (DTO Layer, Input Validation & API Versioning)
 - Versioned REST controllers under `/api/v1/users` and `/api/v1/transactions`.
@@ -168,7 +184,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Implemented request DTOs: `CreateUserRequest` and `TransferMoneyRequest` with strict validation rules.
 - Implemented response DTO records: `UserResponse`, `TransactionResponse`, and generic `PagedResponse<T>` pagination wrapper.
 - Added controller web slice tests (`UserControllerTest`, `TransactionControllerTest`) verifying HTTP status codes and input validation enforcement.
-- Added `ADR-004` (URI-based API Versioning and DTO Isolation Layer) to `docs/ADR.md`.
+- Added `ADR-004` (URI-based API Versioning and DTO Isolation Layer) to `docs/adr/`.
 
 ### Added - Phase 2A (Entity Model Hardening & Rich Domain)
 - Replaced `Double` primitives with `BigDecimal` (`precision = 19, scale = 4`) across `User` and `Transaction` entities.
@@ -193,7 +209,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial Spring Boot 4.1.0 project configuration with Java 25.
 - System Architecture documentation (`docs/ARCHITECTURE.md`), API Specification (`docs/API_SPECIFICATION.md`), and Phased Roadmap (`docs/ROADMAP.md`).
 - Project scaffolding: MIT `LICENSE`, `CHANGELOG.md`, `.editorconfig`.
-- Architectural Decision Records log (`docs/ADR.md`) and engineering standards guide (`docs/CONVENTIONS.md`).
+- Architectural Decision Records log (`docs/adr/`) and engineering standards guide (`docs/CONVENTIONS.md`).
 - Spotless code formatting plugin (`com.diffplug.spotless:spotless-maven-plugin`) integrated into Maven build.
 - Checkstyle static analysis (`checkstyle.xml`) plugin (`maven-checkstyle-plugin`) enforcing coding rules on `validate` phase.
 - GitHub Actions CI pipeline (`.github/workflows/ci.yml`) for automated build, linting, formatting, and test execution on Java 25.

@@ -56,7 +56,8 @@ public class SecurityConfig {
 			AuthorizeHttpRequestsConfigurer<HttpSecurity>.AuthorizationManagerRequestMatcherRegistry auth) {
 		auth.requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/users").permitAll();
 		auth.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll();
-		auth.requestMatchers("/actuator/health/**", "/actuator/info").permitAll();
+		auth.requestMatchers("/actuator/health/**", "/actuator/info", //
+				"/actuator/prometheus", "/actuator/metrics/**").permitAll();
 		auth.requestMatchers("/h2-console/**").permitAll();
 		auth.anyRequest().authenticated();
 	}

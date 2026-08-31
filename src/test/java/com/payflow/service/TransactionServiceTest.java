@@ -47,6 +47,7 @@ import com.payflow.exception.TransactionNotFoundException;
 import com.payflow.exception.UserNotFoundException;
 import com.payflow.repository.BalanceLedgerRepository;
 import com.payflow.repository.TransactionRepository;
+import com.payflow.config.MetricsConfig;
 import com.payflow.repository.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -63,6 +64,9 @@ class TransactionServiceTest {
 
 	@Mock
 	private ApplicationEventPublisher eventPublisher;
+
+	@Mock
+	private MetricsConfig metricsConfig;
 
 	@InjectMocks
 	private TransactionService transactionService;

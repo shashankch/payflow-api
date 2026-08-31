@@ -104,10 +104,10 @@ Declarative HTTP Interface Client (`@HttpExchange`/`@GetExchange`) backed by `Re
 
 ---
 
-## Phase 8 — Observability, Resilience & Caching ⬜
+## Phase 8 — Observability, Resilience & Caching 🟡
 
-### 8A — Logging, Metrics & Tracing ⬜
-JSON-structured logging, MDC trace correlation, Prometheus metrics (`micrometer-registry-prometheus`), OpenTelemetry distributed tracing (`micrometer-tracing-bridge-otel`), custom business metrics (transfer TPS, latency percentiles), HikariCP monitoring.
+### 8A — Logging, Metrics & Tracing ✅
+JSON-structured logging (ECS in prod), MDC correlation (`requestId`, `traceId`, `spanId`, `http.status`, `http.latency_ms`), Prometheus metrics (`micrometer-registry-prometheus`, `/actuator/prometheus`), OpenTelemetry distributed tracing (`micrometer-tracing-bridge-otel`, `opentelemetry-exporter-otlp`), custom business metrics (`payflow.transfers.total`, `payflow.transfers.amount`, `payflow.transfers.duration` with p50/p95/p99 percentiles), HikariCP pool monitoring.
 
 ### 8B — Resilience4j ⬜
 Per-user rate limiting, retry with exponential backoff, timeout policies.
