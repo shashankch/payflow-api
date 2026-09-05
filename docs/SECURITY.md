@@ -45,7 +45,7 @@ The system's attack surface has been systematically modeled against the **STRIDE
 | **Tampering** | Modifying transfer amounts, recipients, or ledger records | Man-in-the-middle payload tampering or key reuse with altered body | SHA-256 raw request byte hashing in `IdempotencyFilter`; immutable append-only `balance_ledger`; TLS 1.3 transport. | [ADR-012](adr/0012-double-entry-balance-ledger-as-immutable-audit-trail.md), [ADR-015](adr/0015-sha-256-request-payload-hashing-and-durable-idempotency-engine.md) |
 | **Repudiation** | Denying a completed money transfer occurred | Claiming a transaction was executed without authorization or never recorded | Immutable double-entry balance ledger documenting `balanceBefore`, `balanceAfter`, and `amount`; correlation tracking via `X-Request-Id` and OpenTelemetry `traceId`. | [ADR-012](adr/0012-double-entry-balance-ledger-as-immutable-audit-trail.md), [ADR-020](adr/0020-structured-logging-prometheus-metrics-and-opentelemetry-observability.md) |
 | **Information Disclosure** | Scraping user profiles or observing total transaction volume | Sequential auto-increment ID scanning (`/users/1`, `/users/2`) | Non-enumerable UUID v4 `referenceId` for all public REST APIs; RFC 7807 sanitized error responses; PII redaction in logs. | [ADR-006](adr/006-rfc-7807-problemdetail-and-centralized-exception-handling.md), [ADR-007](adr/0007-uuid-reference-ids-over-auto-increment-primary-keys.md) |
-| **Denial of Service (DoS)** | Exhausting database locks or flooding duplicate transfer requests | High-concurrency cross-transfers causing deadlocks or duplicate debits | Deterministic alphabetical row locking; `@Transactional(timeout = 5)`; database-backed idempotency lease locks; bounded HikariCP connection pool. | [ADR-010](adr/0010-pessimistic-locking-for-high-concurrency-balance-operations.md), [ADR-011](adr/0011-deterministic-lock-ordering-for-deadlock-prevention.md), [ADR-015](adr/0015-sha-256-request-payload-hashing-and-durable-idempotency-engine.md) |
+| **Denial of Service (DoS)** | Exhausting database locks, high-frequency request floods, or external dependency cascade failures | Flooding transfer API or hammering hanging downstream UPI validation service | Dynamic per-user rate limiting (10 req/s, RFC 6585 `Retry-After: 1`); external circuit breaking (`upiValidation` 50% threshold, fallback); deterministic alphabetical row locking; `@Transactional(timeout = 5)`; durable idempotency lease locks; bounded HikariCP pool. | [ADR-010](adr/0010-pessimistic-locking-for-high-concurrency-balance-operations.md), [ADR-011](adr/0011-deterministic-lock-ordering-for-deadlock-prevention.md), [ADR-015](adr/0015-sha-256-request-payload-hashing-and-durable-idempotency-engine.md), [ADR-021](adr/0021-resilience4j-circuit-breaker-per-user-rate-limiting.md) |
 | **Elevation of Privilege** | Bypassing authorization to inspect other users' balances | Accessing `/api/v1/users/{id}/ledger` or `/api/v1/transactions/{id}` | Principal-bound authorization; multi-party participant visibility (sender/receiver only); RFC 7807 `403 Forbidden` on unauthorized access. | [ADR-018](adr/0018-principal-bound-resource-access-control-and-sender-verification.md) |
 
 ---
@@ -134,7 +134,26 @@ sequenceDiagram
 
 ---
 
-## 6. Observability, Auditability & Data Privacy
+## 6. Resilience, Fault Tolerance & DoS Mitigation
+
+### A. Dynamic Per-User Rate Limiting
+- **Partitioned Rate Limiting**: Implemented via `@PerUserRateLimiter(name = "transferLimiter")` and dynamic Resilience4j registries. Limits are segregated per authenticated user principal (or remote IP for unauthenticated routes).
+- **Default Baseline Policy**: 10 requests per second (`limit-for-period = 10`, `limit-refresh-period = 1s`, `timeout-duration = 0ms`).
+- **RFC 6585 & RFC 7807 Compliance**: Rejections immediately short-circuit with HTTP `429 Too Many Requests`, an explicit `Retry-After: 1` header, and standardized ProblemDetail payload (`https://api.payflow.com/errors/rate-limit-exceeded`).
+- **Memory Leak Protection**: Inactive user limiters are automatically audited and evicted every 15 minutes by `evictInactiveLimiters()`.
+
+### B. Circuit Breaker & Cascade Failure Protection
+- **External UPI Integration**: Downstream UPI banking network calls via `UpiValidationService` are wrapped in a Resilience4j `@CircuitBreaker(name = "upiValidation")`.
+- **Sliding Window Evaluation**: Monitors the last 10 requests (`COUNT_BASED`). If 50% or more fail within a minimum of 5 recorded calls, the circuit opens.
+- **Fail-Fast & Fallback**: In the `OPEN` state, requests fail fast with RFC 7807 `503 Service Unavailable` (`https://api.payflow.com/errors/service-unavailable`) without saturating thread pools or hammering downstream systems.
+- **Auto-Recovery**: After 5 seconds, the circuit transitions to `HALF_OPEN`, permitting 3 canary probe requests to verify downstream health before closing.
+
+### C. Execution Timeouts
+- **Strict Time Limits**: External validation and outbound integrations enforce Resilience4j `TimeLimiter` policies (default 5 seconds), preventing connection starvation and pool exhaustion.
+
+---
+
+## 7. Observability, Auditability & Data Privacy
 
 ### A. Immutable Double-Entry Balance Ledger
 - Direct balance updates without ledger entries are forbidden.
@@ -153,7 +172,7 @@ sequenceDiagram
 
 ---
 
-## 7. Vulnerability Disclosure & Incident Response
+## 8. Vulnerability Disclosure & Incident Response
 
 We take the security of Payflow API seriously. If you discover a security vulnerability or potential threat, please report it responsibly.
 

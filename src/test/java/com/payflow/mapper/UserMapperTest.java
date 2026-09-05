@@ -11,11 +11,13 @@ import com.payflow.dto.request.CreateUserRequest;
 import com.payflow.dto.response.UserResponse;
 import com.payflow.entity.User;
 
+import org.mapstruct.factory.Mappers;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class UserMapperTest {
 
-	private final UserMapper userMapper = new UserMapperImpl();
+	private final UserMapper userMapper = Mappers.getMapper(UserMapper.class);
 
 	@Test
 	@DisplayName("Should correctly map User entity to UserResponse record")

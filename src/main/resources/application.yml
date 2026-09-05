@@ -21,6 +21,11 @@ management:
       show-components: when-authorized
       probes:
         enabled: true
+  health:
+    circuitbreakers:
+      enabled: true
+    ratelimiters:
+      enabled: true
   prometheus:
     metrics:
       export:
@@ -53,3 +58,41 @@ payflow:
     base-url: "http://localhost:9090"
     connect-timeout-ms: 3000
     read-timeout-ms: 5000
+  rate-limit:
+    enabled: true
+    limit-for-period: 10
+    limit-refresh-period-ms: 1000
+    timeout-duration-ms: 0
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      upiValidation:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50.0
+        waitDurationInOpenState: 5s
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        recordExceptions:
+          - org.springframework.web.client.RestClientException
+          - java.io.IOException
+        ignoreExceptions:
+          - com.payflow.exception.InvalidUpiException
+  ratelimiter:
+    instances:
+      transferLimiter:
+        registerHealthIndicator: true
+        limitForPeriod: 10
+        limitRefreshPeriod: 1s
+        timeoutDuration: 0
+  timelimiter:
+    instances:
+      upiValidation:
+        timeoutDuration: 5s
+        cancelRunningFuture: true
+      transferLimiter:
+        timeoutDuration: 5s
+        cancelRunningFuture: false

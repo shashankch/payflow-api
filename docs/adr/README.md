@@ -30,6 +30,7 @@ Each record documents the business and technical context, options evaluated, rat
 | [0018](0018-principal-bound-resource-access-control-and-sender-verification.md) | [Principal-Bound Resource Access Control & Sender Verification](0018-principal-bound-resource-access-control-and-sender-verification.md) | 2026-08-18 | **Accepted** | Phase 7B |
 | [0019](0019-declarative-http-interface-client-and-resilient-external-service-integration.md) | [Declarative HTTP Interface Client (RestClient) & Resilient External Service Integration](0019-declarative-http-interface-client-and-resilient-external-service-integration.md) | 2026-08-26 | **Accepted** | Phase 7C |
 | [0020](0020-structured-logging-prometheus-metrics-and-opentelemetry-observability.md) | [Structured Logging, Prometheus Metrics & OpenTelemetry Observability Architecture](0020-structured-logging-prometheus-metrics-and-opentelemetry-observability.md) | 2026-08-27 | **Accepted** | Phase 8A |
+| [0021](0021-resilience4j-circuit-breaker-per-user-rate-limiting.md) | [Resilience4j Circuit Breaking, Per-User Rate Limiting & Fault-Tolerance Policies](0021-resilience4j-circuit-breaker-per-user-rate-limiting.md) | 2026-09-05 | **Accepted** | Phase 8B |
 
 ---
 

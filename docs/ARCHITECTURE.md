@@ -5,7 +5,7 @@
 > - **Author**: Payflow Engineering (`shashakchandel@gmail.com`)
 > - **Status**: Approved / Living Design Document
 > - **Created Date**: 2026-08-01
-> - **Last Updated**: 2026-08-28
+> - **Last Updated**: 2026-09-05
 > - **Authoritative Location**: [ARCHITECTURE.md](ARCHITECTURE.md)
 > - **Related Documents**: [API Specification](API_SPECIFICATION.md) | [Security Architecture](SECURITY.md) | [Architecture Decisions (ADRs)](adr/README.md) | [Phased Roadmap](ROADMAP.md) | [Engineering Conventions](CONVENTIONS.md)
 
@@ -571,7 +571,63 @@ Payflow implements the **Three Pillars of Observability** — Metrics, Tracing, 
 
 ---
 
-## 13. Testing Strategy (Rigor, Concurrency & Unit Verification)
+## 13. Resilience Architecture & Fault Tolerance (Phase 8B)
+
+Payflow API incorporates **Resilience4j** to safeguard system stability under peak traffic spikes, noisy neighbor conditions, and downstream service degradations.
+
+### A. Resilience Policy Configuration Matrix
+| Policy | Component | Target | Key Configuration Parameters | Failure Behavior |
+| :--- | :--- | :--- | :--- | :--- |
+| **Rate Limiter** | `transferLimiter` | `TransactionService.sendMoney()` | `limitForPeriod: 10`, `limitRefreshPeriod: 1s`, `timeoutDuration: 0s` | Returns HTTP `429 Too Many Requests` with `Retry-After: 1` |
+| **Circuit Breaker** | `upiValidation` | `UpiValidationService` | `COUNT_BASED`, sliding window `10`, min calls `5`, failure threshold `50%`, wait in open `5s`, half-open calls `3` | Trips to `OPEN`; returns HTTP `503 Service Unavailable` or executes graceful fallback |
+| **Time Limiter** | `upiValidation` | Outbound HTTP calls | `timeoutDuration: 5s`, `cancelRunningFuture: true` | Terminates slow hanging requests, preventing thread starvation |
+| **Transaction Timeout** | Database Engine | Balance debit/credit & ledger write | `timeout = 5s` (Spring `@Transactional`) | Aborts deadlock-prone or hung SQL transactions |
+
+### B. Dynamic Per-User Rate Limiting Pattern
+Unlike traditional global rate limiting, which allows a single abusive script to exhaust server throughput for all customers, Payflow enforces **per-authenticated-user partition isolation**:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as Client / User A
+    participant Filter as JwtAuthenticationFilter
+    participant Resolver as SecurityContextRateLimiterKeyResolver
+    participant Service as UserRateLimiterService
+    participant Reg as RateLimiterRegistry
+    participant Core as TransactionService
+
+    Client->>Filter: POST /api/v1/transactions (Bearer JWT)
+    Filter->>Resolver: Resolve User Principal (alice@payflow)
+    Resolver->>Service: Key = "transferLimiter:alice@payflow"
+    Service->>Reg: rateLimiter("transferLimiter:alice@payflow", "transferLimiter")
+    Note over Service,Reg: Inherits base 10 req/s template & tracks access timestamp
+    alt Permitted (<= 10 req/s)
+        Service->>Core: Proceed with transfer
+        Core-->>Client: 201 Created (TransactionResponse)
+    else Exceeded (> 10 req/s)
+        Service-->>Client: 429 Too Many Requests (Retry-After: 1)
+    end
+```
+
+- **Memory Eviction Safeguard**: Dynamically generated rate limiter instances are tracked by access timestamp. `UserRateLimiterService.evictInactiveLimiters()` executes periodically, purging partitions inactive for >15 minutes from the registry to prevent unbounded memory growth.
+
+### C. Downstream Circuit Breaking & Selective Exception Filtering
+The external UPI verification gateway is guarded by a Resilience4j Circuit Breaker:
+- **Count-Based Sliding Window**: Measures the outcome of the last 10 calls. Once 5 calls are completed, if >=50% fail with network exceptions (`RestClientException`, `IOException`), the circuit trips to `OPEN`.
+- **Selective Exception Filtering**: Client data errors (such as `InvalidUpiException` mapped to HTTP 422) are domain validation rejections and explicitly excluded via `ignoreExceptions`, ensuring bad user inputs do not falsely trip downstream infrastructure breakers.
+- **Fail-Fast & Recovery**: In `OPEN` state, downstream calls fail fast without network traversal. After 5 seconds, the circuit transitions to `HALF_OPEN`, testing 3 probe requests to automatically heal back to `CLOSED`.
+
+### D. Resilience Metrics & Actuator Integration
+- **Prometheus Gauges & Counters**:
+  - `resilience4j.circuitbreaker.state`: Current state (`closed`, `open`, `half_open`).
+  - `resilience4j.circuitbreaker.calls`: Total calls tagged by `kind` (`successful`, `failed`, `ignored`).
+  - `resilience4j.ratelimiter.available_permissions`: Current remaining quota per partition.
+  - `resilience4j.ratelimiter.waiting_threads`: Threads blocked waiting for permits.
+- **Health Indicators**: Exposed under `/actuator/health` with `circuitBreakers` and `rateLimiters` component statuses.
+
+---
+
+## 14. Testing Strategy (Rigor, Concurrency & Unit Verification)
 
 To ensure maximum code coverage and high system reliability, the project defines a two-tier testing strategy consisting of isolated unit tests and full-stack integration tests.
 
@@ -608,7 +664,7 @@ Integration tests verify the full lifecycle of a transaction across actual conta
 
 ---
 
-## 14. Entity Model & Rich Domain Architecture
+## 15. Entity Model & Rich Domain Architecture
 
 To establish robust domain boundaries and prevent corrupt data state, the entity layer adheres to Rich Domain Model principles and precise database constraints:
 
@@ -629,7 +685,7 @@ The `Transaction` entity maintains explicit JPA `@ManyToOne(fetch = FetchType.LA
 
 ---
 
-## 15. External Service Integration (RestClient & HTTP Interface Client)
+## 16. External Service Integration (RestClient & HTTP Interface Client)
 
 Payflow validates UPI IDs against an external validation service during user registration using modern Spring outbound HTTP communication patterns:
 
@@ -670,7 +726,7 @@ Graceful fallback: if the UPI validation service is unavailable, registration pr
 
 ---
 
-## 16. Security, Privacy & Threat Modeling
+## 17. Security, Privacy & Threat Modeling
 
 Payment backends operate under strict security and regulatory requirements. The system architecture addresses key threat vectors:
 
@@ -689,7 +745,7 @@ Payment backends operate under strict security and regulatory requirements. The 
 
 ---
 
-## 17. Alternatives Considered & Trade-off Analysis
+## 18. Alternatives Considered & Trade-off Analysis
 
 Documenting rejected alternatives and evaluating the penalty ("cost of getting it wrong") is critical to preventing architectural regressions.
 
@@ -704,7 +760,7 @@ Documenting rejected alternatives and evaluating the penalty ("cost of getting i
 
 ---
 
-## 18. Open & Resolved Design Issues
+## 19. Open & Resolved Design Issues
 
 ### Resolved Design Decisions
 - **`RES-001`: MapStruct for DTO Mapping** — Resolved in Phase 2C. Replaced custom manual factories with type-safe MapStruct mappers.

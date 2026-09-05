@@ -99,6 +99,37 @@ class GlobalExceptionHandlerTest {
 	}
 
 	@Test
+	void testHandleRequestNotPermitted() {
+		io.github.resilience4j.ratelimiter.RateLimiter rateLimiter = io.github.resilience4j.ratelimiter.RateLimiter
+				.ofDefaults("testLimiter");
+		io.github.resilience4j.ratelimiter.RequestNotPermitted ex = io.github.resilience4j.ratelimiter.RequestNotPermitted
+				.createRequestNotPermitted(rateLimiter);
+		org.springframework.http.ResponseEntity<ProblemDetail> response = handler.handleRequestNotPermitted(ex);
+
+		assertEquals(HttpStatus.TOO_MANY_REQUESTS, response.getStatusCode());
+		assertEquals("1", response.getHeaders().getFirst(org.springframework.http.HttpHeaders.RETRY_AFTER));
+		ProblemDetail problem = response.getBody();
+		assertNotNull(problem);
+		assertEquals(HttpStatus.TOO_MANY_REQUESTS.value(), problem.getStatus());
+		assertEquals("Rate Limit Exceeded", problem.getTitle());
+	}
+
+	@Test
+	void testHandleCallNotPermitted() {
+		io.github.resilience4j.circuitbreaker.CircuitBreaker circuitBreaker = io.github.resilience4j.circuitbreaker.CircuitBreaker
+				.ofDefaults("testBreaker");
+		io.github.resilience4j.circuitbreaker.CallNotPermittedException ex = io.github.resilience4j.circuitbreaker.CallNotPermittedException
+				.createCallNotPermittedException(circuitBreaker);
+		org.springframework.http.ResponseEntity<ProblemDetail> response = handler.handleCallNotPermitted(ex);
+
+		assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode());
+		ProblemDetail problem = response.getBody();
+		assertNotNull(problem);
+		assertEquals(HttpStatus.SERVICE_UNAVAILABLE.value(), problem.getStatus());
+		assertEquals("Service Unavailable", problem.getTitle());
+	}
+
+	@Test
 	void testHandleUncaughtException() {
 		Exception ex = new RuntimeException("Unexpected error");
 		ProblemDetail problem = handler.handleUncaughtException(ex);

@@ -297,6 +297,8 @@ Headers: `Location: /api/v1/transactions/550e8400-e29b-41d4-a716-446655440000`
 - `403 Forbidden`: Authenticated user is not authorized to transfer from requested sender UPI.
 - `409 Conflict`: A request with the same `Idempotency-Key` is currently in-flight.
 - `422 Unprocessable Entity`: Validation constraint failure or insufficient sender balance.
+- `429 Too Many Requests`: Per-user rate limit exceeded (maximum 10 requests per second; response includes `Retry-After: 1` header).
+- `503 Service Unavailable`: Downstream dependency circuit breaker is open (`upiValidation`) or external provider failure.
 
 ---
 
@@ -364,15 +366,15 @@ Retrieves paginated transfer history (sent and received) for a given UPI ID.
 
 ## 7. Observability & Telemetry Endpoints (Actuator)
 
-Payflow API exposes standard Spring Boot Actuator endpoints for container health probes and Prometheus metrics collection:
+Payflow API exposes standard Spring Boot Actuator endpoints for container health probes, Resilience4j status, and Prometheus metrics collection:
 
 | Endpoint | Method | Auth Required | Description |
 | :--- | :--- | :--- | :--- |
-| `/actuator/health` | `GET` | No | Basic liveness status (`{"status": "UP"}`). Detailed status shown when authorized. |
+| `/actuator/health` | `GET` | No | Basic liveness status (`{"status": "UP"}`). Detailed status (DB, CircuitBreakers, RateLimiters) shown when authorized. |
 | `/actuator/health/liveness` | `GET` | No | Kubernetes liveness probe confirming process health. |
-| `/actuator/health/readiness` | `GET` | No | Kubernetes readiness probe verifying database connectivity. |
+| `/actuator/health/readiness` | `GET` | No | Kubernetes readiness probe verifying database and circuit breaker health. |
 | `/actuator/info` | `GET` | No | Application build and version information. |
-| `/actuator/prometheus` | `GET` | No | Prometheus format scrape output including custom `payflow_transfers_*` metrics and `hikaricp_connections`. |
+| `/actuator/prometheus` | `GET` | No | Prometheus format scrape output including `payflow_transfers_*`, `hikaricp_connections`, `resilience4j_circuitbreaker_*`, and `resilience4j_ratelimiter_*`. |
 | `/actuator/metrics` | `GET` | No | JSON catalog of available Micrometer metric names. |
 
 ---
@@ -381,6 +383,7 @@ Payflow API exposes standard Spring Boot Actuator endpoints for container health
 
 All API errors return standardized RFC 7807 `application/problem+json` response bodies enriched with timestamp and `requestId` (`X-Request-Id` correlation tracking header):
 
+### Validation Failure (`422 Unprocessable Entity`)
 ```json
 {
   "type": "https://api.payflow.com/errors/validation-error",
@@ -393,6 +396,33 @@ All API errors return standardized RFC 7807 `application/problem+json` response 
   "errors": {
     "phoneNumber": "Phone number must be exactly 10 digits"
   }
+}
+```
+
+### Rate Limit Exceeded (`429 Too Many Requests`)
+*Response includes header: `Retry-After: 1`*
+```json
+{
+  "type": "https://api.payflow.com/errors/rate-limit-exceeded",
+  "title": "Rate Limit Exceeded",
+  "status": 429,
+  "detail": "Too many requests. You have exceeded your rate limit of 10 requests per second. Please retry after 1 seconds.",
+  "instance": "/api/v1/transactions",
+  "timestamp": "2026-09-05T12:00:00Z",
+  "requestId": "b7c9d1e2-3456-789a-bcde-f0123456789a"
+}
+```
+
+### Service Unavailable / Circuit Breaker Open (`503 Service Unavailable`)
+```json
+{
+  "type": "https://api.payflow.com/errors/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "Circuit breaker 'upiValidation' is OPEN and does not permit further calls",
+  "instance": "/api/v1/transactions",
+  "timestamp": "2026-09-05T12:00:01Z",
+  "requestId": "c8d0e2f3-4567-89ab-cdef-0123456789ab"
 }
 ```
 
@@ -410,4 +440,6 @@ All API errors return standardized RFC 7807 `application/problem+json` response 
 | **404** | `Not Found` | User or transaction lookup returned no matching records (`UserNotFoundException`). |
 | **409** | `Conflict` | Resource conflict (e.g. duplicate UPI ID registration, in-flight idempotency conflict, or constraint violation). |
 | **422** | `Unprocessable Entity` | Jakarta validation constraint violation or insufficient account balance (`InsufficientBalanceException`). |
+| **429** | `Too Many Requests` | Dynamic per-user rate limit exceeded (RFC 6585 with `Retry-After: 1` header). |
 | **500** | `Internal Error` | Unexpected server error (sanitized, stack traces suppressed). |
+| **503** | `Service Unavailable` | Downstream service circuit breaker is OPEN (`CallNotPermittedException`). |
