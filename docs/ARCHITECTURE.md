@@ -5,7 +5,7 @@
 > - **Author**: Payflow Engineering (`shashakchandel@gmail.com`)
 > - **Status**: Approved / Living Design Document
 > - **Created Date**: 2026-08-01
-> - **Last Updated**: 2026-09-05
+> - **Last Updated**: 2026-09-06
 > - **Authoritative Location**: [ARCHITECTURE.md](ARCHITECTURE.md)
 > - **Related Documents**: [API Specification](API_SPECIFICATION.md) | [Security Architecture](SECURITY.md) | [Architecture Decisions (ADRs)](adr/README.md) | [Phased Roadmap](ROADMAP.md) | [Engineering Conventions](CONVENTIONS.md)
 
@@ -627,7 +627,73 @@ The external UPI verification gateway is guarded by a Resilience4j Circuit Break
 
 ---
 
-## 14. Testing Strategy (Rigor, Concurrency & Unit Verification)
+## 14. Distributed Caching Architecture & Cache-Aside Pattern (Phase 8C)
+
+To achieve sub-10ms response latencies on repetitive user profile lookups and balance ledger inspection while shielding PostgreSQL from read connection exhaustion, Payflow API implements a **Profile-Conditional Cache-Aside Architecture** using Spring Cache, Redis (Lettuce), and Caffeine.
+
+### A. Cache-Aside Workflow & Sequence Diagram
+In the Cache-Aside pattern, the application service inspects the cache before accessing the underlying database. On write operations, the cache entries are evicted rather than updated inline, eliminating race conditions between concurrent database writes and cache updates.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as API Client / Controller
+    participant Service as UserService / TxService
+    participant Cache as CacheManager (Redis / Caffeine)
+    participant DB as PostgreSQL Database
+
+    alt Read Query (e.g. getUserByReferenceId)
+        Client->>Service: Read User Profile / Ledger
+        Service->>Cache: GET key (e.g. "users::refId")
+        alt Cache Hit
+            Cache-->>Service: Return cached JSON / entity
+            Service-->>Client: Return UserResponse / LedgerResponse
+        else Cache Miss
+            Cache-->>Service: null
+            Service->>DB: SELECT query
+            DB-->>Service: Entity record
+            Service->>Cache: PUT key with configured TTL
+            Service-->>Client: Return UserResponse / LedgerResponse
+        end
+    else Write Mutation (e.g. sendMoney or registerUser)
+        Client->>Service: Transfer Funds / Register User
+        Service->>DB: Execute ACID transaction & commit
+        DB-->>Service: Transaction committed
+        Service->>Cache: EVICT affected caches (users, user_ledgers)
+        Service-->>Client: Return Success Response
+    end
+```
+
+### B. Profile-Conditional Cache Strategy
+The cache infrastructure adapts transparently across environments via `CacheConfig.java`:
+
+| Environment / Profile | Cache Provider | Implementation Class | Characteristics & Configuration |
+| :--- | :--- | :--- | :--- |
+| **`prod`** | **Redis (Lettuce)** | `RedisCacheManager` | Centralized distributed cache across multi-pod deployments. Configured via `LettuceConnectionFactory` with standalone host/port. Serialization uses `RedisSerializer.string()` for keys and `RedisSerializer.json()` for values. |
+| **`!prod` (`local`, `test`, `prod-light`)** | **Caffeine** | `CaffeineCacheManager` | High-performance in-memory cache requiring zero external network dependencies or Docker containers. Spec: `maximumSize=1000,expireAfterWrite=600s`. |
+
+### C. Cache Names, Key Schemes & TTL Matrix
+Cache policies are externalized in `application.yml` and tuned based on data volatility and freshness requirements:
+
+| Cache Name | Cached Methods | Key Scheme | TTL | Eviction Triggers |
+| :--- | :--- | :--- | :--- | :--- |
+| `users` | `getUserById()`, `getUserByReferenceId()`, `findByUpiId()`, `getUserByUpiId()` | `#id`, `#referenceId`, `#upiId` (single method arg) | **10 minutes** (`600s`) | Purged on `UserService.registerUser()` and `TransactionService.sendMoney()` |
+| `user_ledgers` | `getUserLedger()` | `#userReferenceId + '_' + #pageable.pageNumber` | **1 minute** (`60s`) | Purged on `TransactionService.sendMoney()` |
+
+### D. Serialization & Entity Hardening
+1. **Modern JSON Serialization (`RedisSerializer.json()`)**:
+   Spring Data Redis 3.x / Spring Framework 7 deprecates `GenericJackson2JsonRedisSerializer`. Payflow leverages `RedisSerializer.json()` for non-intrusive, polymorphic JSON value encoding. This avoids native Java binary serialization vulnerabilities while ensuring human-readable inspectability in Redis CLI (`redis-cli`).
+2. **Null-Safety Handling**:
+   Read operations use `@Cacheable(..., unless = "#result == null")`. When a service method returns `Optional<User>`, Spring's caching aspect unwraps the `Optional` before SpEL condition evaluation. The `#result == null` guard ensures empty optionals are not cached, preventing false positive hits for non-existent users.
+3. **Circular Reference & Proxy Isolation**:
+   Domain entities are hardened for JSON serialization:
+   - `User` and `BalanceLedgerEntry` implement `java.io.Serializable` (`serialVersionUID = 1L`).
+   - `BalanceLedgerEntry` is decorated with `@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})` to prevent Jackson serialization failures on uninitialized Hibernate bytecode proxies.
+   - Lazy JPA relationships (`user`, `transaction`) in `BalanceLedgerEntry` are annotated with `@JsonIgnore` to eliminate circular reference graphs during JSON marshaling.
+
+---
+
+## 15. Testing Strategy (Rigor, Concurrency & Unit Verification)
 
 To ensure maximum code coverage and high system reliability, the project defines a two-tier testing strategy consisting of isolated unit tests and full-stack integration tests.
 
@@ -664,7 +730,7 @@ Integration tests verify the full lifecycle of a transaction across actual conta
 
 ---
 
-## 15. Entity Model & Rich Domain Architecture
+## 16. Entity Model & Rich Domain Architecture
 
 To establish robust domain boundaries and prevent corrupt data state, the entity layer adheres to Rich Domain Model principles and precise database constraints:
 
@@ -685,7 +751,7 @@ The `Transaction` entity maintains explicit JPA `@ManyToOne(fetch = FetchType.LA
 
 ---
 
-## 16. External Service Integration (RestClient & HTTP Interface Client)
+## 17. External Service Integration (RestClient & HTTP Interface Client)
 
 Payflow validates UPI IDs against an external validation service during user registration using modern Spring outbound HTTP communication patterns:
 
@@ -726,7 +792,7 @@ Graceful fallback: if the UPI validation service is unavailable, registration pr
 
 ---
 
-## 17. Security, Privacy & Threat Modeling
+## 18. Security, Privacy & Threat Modeling
 
 Payment backends operate under strict security and regulatory requirements. The system architecture addresses key threat vectors:
 
@@ -745,7 +811,7 @@ Payment backends operate under strict security and regulatory requirements. The 
 
 ---
 
-## 18. Alternatives Considered & Trade-off Analysis
+## 19. Alternatives Considered & Trade-off Analysis
 
 Documenting rejected alternatives and evaluating the penalty ("cost of getting it wrong") is critical to preventing architectural regressions.
 
@@ -760,7 +826,7 @@ Documenting rejected alternatives and evaluating the penalty ("cost of getting i
 
 ---
 
-## 19. Open & Resolved Design Issues
+## 20. Open & Resolved Design Issues
 
 ### Resolved Design Decisions
 - **`RES-001`: MapStruct for DTO Mapping** — Resolved in Phase 2C. Replaced custom manual factories with type-safe MapStruct mappers.
@@ -770,6 +836,8 @@ Documenting rejected alternatives and evaluating the penalty ("cost of getting i
 - **`RES-005`: OpenTelemetry over Vendor-Specific Tracing** — Resolved in architecture review. Micrometer Tracing + OTel bridge provides portable, W3C-standard distributed tracing.
 - **`RES-006`: RestClient + HTTP Interface Client over RestTemplate** — Resolved in architecture review. `RestTemplate` is deprecated in Framework 7; `RestClient` + declarative `@GetExchange`/`@PostExchange` interfaces are the modern standard.
 - **`RES-007`: Framework 7 @Retryable + Resilience4j Complementary Use** — Resolved in architecture review. Use spring-core native `@Retryable` for basic outbound HTTP retry; use Resilience4j for advanced patterns (per-user rate limiting, circuit breakers) not yet in spring-core.
+- **`RES-008`: Profile-Conditional Cache-Aside (Redis in Prod, Caffeine in Dev/Test)** — Resolved in Phase 8C. Decoupled local development from external Redis while ensuring multi-pod cluster state consistency with JSON value serialization.
 
 ### Open Questions & Future Evaluation
 - **`OPEN-001`: Transfer Amount Cap Configuration** — Default cap set to ₹1,00,000 (`100,000.00`). Evaluating whether per-user dynamic velocity caps should be stored in Redis.
+

@@ -112,8 +112,8 @@ JSON-structured logging (ECS in prod), MDC correlation (`requestId`, `traceId`, 
 ### 8B — Resilience4j ✅
 Dynamic per-user rate limiting (`@PerUserRateLimiter`, 10 req/s, RFC 6585 `Retry-After: 1`, RFC 7807 429 ProblemDetail), circuit breaker on external UPI validation (`@CircuitBreaker(name = "upiValidation")`, sliding window 10, 50% failure rate threshold, 5s wait duration, RFC 7807 503 ProblemDetail), timeout policies (`TimeLimiter` 5s), inactive limiter eviction, and Micrometer/Prometheus metrics integration.
 
-### 8C — Caching (Redis) ⬜
-Cache-aside pattern, `@CacheEvict` on writes, Caffeine fallback for local/test.
+### 8C — Caching (Redis) ✅
+Cache-aside pattern with profile-conditional caching: Redis in `prod` with modern `RedisSerializer.json()`, string keys, configurable TTLs (10m default/users, 1m user_ledgers), Caffeine in `!prod` (`local`/`test`). `@Cacheable` on user lookups and ledger queries with null-safe conditions, `@CacheEvict(allEntries = true)` on `UserService.registerUser()` and `TransactionService.sendMoney()`. Entity serialization hardening with lazy relation exclusions. Comprehensive slice & integration test coverage (110 passing tests).
 
 ### 8D — Distributed Locking ⬜
 Redisson Redlock for multi-instance idempotency coordination, NoOp fallback.
