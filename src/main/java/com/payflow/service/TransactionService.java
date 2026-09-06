@@ -29,6 +29,7 @@ import com.payflow.exception.UserNotFoundException;
 import com.payflow.repository.BalanceLedgerRepository;
 import com.payflow.repository.TransactionRepository;
 import com.payflow.repository.UserRepository;
+import com.payflow.resilience.PerUserRateLimiter;
 import com.payflow.security.SecurityUtils;
 
 import io.micrometer.observation.annotation.Observed;
@@ -54,6 +55,7 @@ public class TransactionService {
 		this.metricsConfig = metricsConfig;
 	}
 
+	@PerUserRateLimiter(name = "transferLimiter")
 	@Observed(name = "payflow.transfers.send", contextualName = "send-money-transfer")
 	@Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class, timeout = 5)
 	public Transaction sendMoney(TransferMoneyRequest request) {

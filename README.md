@@ -4,7 +4,7 @@
   <a href="https://github.com/shashankch/payflow-api/actions/workflows/ci.yml"><img src="https://github.com/shashankch/payflow-api/actions/workflows/ci.yml/badge.svg" alt="Build"></a>
   <a href="https://dev.java/"><img src="https://img.shields.io/badge/Java-25-ED8B00?logo=openjdk&logoColor=white" alt="Java 25"></a>
   <a href="https://spring.io/projects/spring-boot"><img src="https://img.shields.io/badge/Spring%20Boot-4.1.0-6DB33F?logo=springboot&logoColor=white" alt="Spring Boot"></a>
-  <a href="https://junit.org/junit5/"><img src="https://img.shields.io/badge/Tests-85%20Passing-brightgreen?logo=junit5" alt="Tests"></a>
+  <a href="https://junit.org/junit5/"><img src="https://img.shields.io/badge/Tests-101%20Passing-brightgreen?logo=junit5" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
 </p>
 
@@ -14,6 +14,7 @@ Payflow API is an enterprise-grade peer-to-peer (P2P) payment backend and double
 
 ## 🚀 Key Architectural Pillars
 
+- **🛡️ Resilience4j Fault Tolerance & Dynamic Rate Limiting (Phase 8B)**: Dynamic per-user rate limiting (`@PerUserRateLimiter`, 10 req/s with RFC 6585 `Retry-After: 1` header & RFC 7807 429 ProblemDetail), circuit breaker on external integrations (`@CircuitBreaker(name = "upiValidation")`, sliding window 10, 50% threshold, 5s recovery wait), automated inactive limiter eviction, and Actuator/Prometheus metrics integration.
 - **📊 Structured Logging, Prometheus Metrics & OpenTelemetry Tracing (Phase 8A)**: Native ECS JSON structured logging in production, MDC correlation (`requestId`, `traceId`, `spanId`, `http.status`, `http.latency_ms`), Prometheus metrics (`/actuator/prometheus`), HikariCP connection pool monitoring (`PayflowHikariPool`), custom business meters (`payflow.transfers.total`, `payflow.transfers.amount`, `payflow.transfers.duration` with p50/p95/p99 histograms), and `@Observed` OpenTelemetry span generation.
 - **🛡️ Spring Security, JWT Authentication & Authorization (Phase 7A/7B)**: Stateless HMAC-SHA256 bearer token authentication (`POST /api/v1/auth/login`), `JwtAuthenticationFilter`, strict sender verification on transfers, multi-party transaction visibility (sender/receiver only), ledger privacy, and RFC 7807 401/403 problem details.
 - **🌐 RestClient & Declarative HTTP Interface Client (Phase 7C)**: Spring 6.1+ `@HttpExchange`/`@GetExchange` declarative client proxying via `HttpServiceProxyFactory` with Spring Retry (`@Retryable` exponential backoff + jitter) and non-blocking graceful onboarding fallback.
@@ -92,7 +93,7 @@ graph TD
 | 🗓️ **[Phased Roadmap](docs/ROADMAP.md)** | Full 12-phase technical expansion blueprint |
 | 🌐 **[API Specification](docs/API_SPECIFICATION.md)** | Complete REST endpoint contracts, schemas, RFC 7807 payloads |
 | 📋 **[Engineering Conventions](docs/CONVENTIONS.md)** | Java 25 standards, Spotless/Checkstyle rules, testing guidelines |
-| 📜 **[Architecture Decisions (ADRs)](docs/adr/)** | Master index of modular architectural decision records (ADR-001 through ADR-020) |
+| 📜 **[Architecture Decisions (ADRs)](docs/adr/)** | Master index of modular architectural decision records (ADR-001 through ADR-021) |
 | 📝 **[Changelog](CHANGELOG.md)** | Version-by-version implementation notes |
 
 ---

@@ -9,9 +9,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -124,6 +129,29 @@ public class GlobalExceptionHandler {
 		problem.setTitle("Data Integrity Violation");
 		enrichProblemDetail(problem);
 		return problem;
+	}
+
+	@ExceptionHandler(RequestNotPermitted.class)
+	public ResponseEntity<ProblemDetail> handleRequestNotPermitted(RequestNotPermitted ex) {
+		LOG.warn("Rate limit exceeded: {}", ex.getMessage());
+		ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS,
+				"Rate limit exceeded. Maximum 10 requests per second allowed per user.");
+		problem.setType(URI.create("https://api.payflow.com/errors/rate-limit-exceeded"));
+		problem.setTitle("Rate Limit Exceeded");
+		enrichProblemDetail(problem);
+		var response = ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).header(HttpHeaders.RETRY_AFTER, "1");
+		return response.body(problem);
+	}
+
+	@ExceptionHandler(CallNotPermittedException.class)
+	public ResponseEntity<ProblemDetail> handleCallNotPermitted(CallNotPermittedException ex) {
+		LOG.error("Circuit breaker is open: {}", ex.getMessage());
+		ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE,
+				"External service circuit breaker is open. Service temporarily unavailable.");
+		problem.setType(URI.create("https://api.payflow.com/errors/service-unavailable"));
+		problem.setTitle("Service Unavailable");
+		enrichProblemDetail(problem);
+		return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(problem);
 	}
 
 	@ExceptionHandler(Exception.class)

@@ -13,11 +13,13 @@ import com.payflow.entity.LedgerEntryType;
 import com.payflow.entity.Transaction;
 import com.payflow.entity.User;
 
+import org.mapstruct.factory.Mappers;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class LedgerMapperTest {
 
-	private final LedgerMapper ledgerMapper = new LedgerMapperImpl();
+	private final LedgerMapper ledgerMapper = Mappers.getMapper(LedgerMapper.class);
 
 	@Test
 	@DisplayName("Should correctly map BalanceLedgerEntry entity to LedgerEntryResponse record")

@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Phase 8B (Resilience4j Fault Tolerance, Dynamic Rate Limiting & Circuit Breakers)
+- Added `resilience4j-spring-boot3` and `resilience4j-micrometer` (version 2.4.0) dependencies to `pom.xml`.
+- Created `@PerUserRateLimiter` custom annotation and `PerUserRateLimiterAspect` for declarative, principal-partitioned rate limiting with optional fallback handling.
+- Created `RateLimiterKeyResolver` interface and `SecurityContextRateLimiterKeyResolver` resolving partition keys by authenticated principal (UPI handle) or remote client IP as fallback.
+- Created `UserRateLimiterService` managing dynamic per-user Resilience4j `RateLimiter` instances with automated memory leak eviction (`evictInactiveLimiters()`) every 15 minutes.
+- Enforced per-user rate limiting (10 req/s) on `TransactionService.sendMoney()` via `@PerUserRateLimiter(name = "transferLimiter")`.
+- Protected downstream UPI validation in `UpiValidationService.executeValidationWithRetry()` using Resilience4j `@CircuitBreaker(name = "upiValidation", fallbackMethod = "recoverFromValidationFailure")`.
+- Enhanced `GlobalExceptionHandler.java` with centralized RFC 7807 / RFC 6585 error handling:
+  - `RequestNotPermitted` -> HTTP `429 Too Many Requests` (`https://api.payflow.com/errors/rate-limit-exceeded`) with `Retry-After: 1` header.
+  - `CallNotPermittedException` -> HTTP `503 Service Unavailable` (`https://api.payflow.com/errors/service-unavailable`).
+- Configured externalized Resilience4j settings in `application.yml` for circuit breaker (COUNT_BASED sliding window 10, min calls 5, 50% threshold, wait duration 5s, ignores `InvalidUpiException`), rate limiter (10 req/s, 0 timeout), and time limiter (5s timeout).
+- Enabled Actuator health contributors (`management.health.circuitbreakers.enabled`, `management.health.ratelimiters.enabled`) and Micrometer/Prometheus metric exports (`resilience4j_circuitbreaker_*`, `resilience4j_ratelimiter_*`).
+- Created unit tests `RateLimiterTest.java`, `CircuitBreakerTest.java`, `PerUserRateLimiterAspectTest.java`, and enhanced `GlobalExceptionHandlerTest.java` and `UpiValidationServiceTest.java`.
+- Created full-stack integration test `ResilienceIT.java` on Testcontainers PostgreSQL verifying 10-call rate limit rejection with HTTP 429 and `Retry-After: 1`, and circuit breaker transitions.
+- Added ADR-021 (*Resilience4j Circuit Breaker, Dynamic Per-User Rate Limiting & Timeout Policies*) to `docs/adr/`.
+
 ### Added - Phase 8A (Structured Logging, Prometheus Metrics & OpenTelemetry Tracing)
 - Added `spring-boot-starter-actuator`, `micrometer-registry-prometheus`, `micrometer-tracing-bridge-otel`, and `opentelemetry-exporter-otlp` dependencies to `pom.xml`.
 - Created `MetricsConfig.java` configuring `ObservedAspect` for `@Observed` annotation support and registering custom business meters:

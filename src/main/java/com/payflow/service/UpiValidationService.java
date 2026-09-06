@@ -15,6 +15,8 @@ import com.payflow.client.UpiValidationClient;
 import com.payflow.client.UpiVerificationResponse;
 import com.payflow.exception.InvalidUpiException;
 
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+
 @Service
 public class UpiValidationService {
 
@@ -45,6 +47,7 @@ public class UpiValidationService {
 				response != null ? response.bankName() : "UNKNOWN");
 	}
 
+	@CircuitBreaker(name = "upiValidation", fallbackMethod = "recoverFromValidationFailure")
 	@Retryable(retryFor = {RestClientException.class, IOException.class}, //
 			maxAttempts = 3, //
 			backoff = @Backoff(delay = 500, multiplier = 2.0, random = true))
@@ -56,6 +59,12 @@ public class UpiValidationService {
 	@Recover
 	public UpiVerificationResponse recoverFromValidationFailure(Exception ex, String upiId) {
 		String msg = "All retries failed for UPI validation of " + upiId + ": " + ex.getMessage();
+		LOG.warn("{}. Proceeding with graceful fallback.", msg);
+		return new UpiVerificationResponse(true, "UNKNOWN (FALLBACK)", "UNKNOWN");
+	}
+
+	public UpiVerificationResponse recoverFromValidationFailure(String upiId, Throwable t) {
+		String msg = "Circuit breaker fallback for UPI: " + upiId + ": " + t.getMessage();
 		LOG.warn("{}. Proceeding with graceful fallback.", msg);
 		return new UpiVerificationResponse(true, "UNKNOWN (FALLBACK)", "UNKNOWN");
 	}

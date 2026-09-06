@@ -109,8 +109,8 @@ Declarative HTTP Interface Client (`@HttpExchange`/`@GetExchange`) backed by `Re
 ### 8A — Logging, Metrics & Tracing ✅
 JSON-structured logging (ECS in prod), MDC correlation (`requestId`, `traceId`, `spanId`, `http.status`, `http.latency_ms`), Prometheus metrics (`micrometer-registry-prometheus`, `/actuator/prometheus`), OpenTelemetry distributed tracing (`micrometer-tracing-bridge-otel`, `opentelemetry-exporter-otlp`), custom business metrics (`payflow.transfers.total`, `payflow.transfers.amount`, `payflow.transfers.duration` with p50/p95/p99 percentiles), HikariCP pool monitoring.
 
-### 8B — Resilience4j ⬜
-Per-user rate limiting, retry with exponential backoff, timeout policies.
+### 8B — Resilience4j ✅
+Dynamic per-user rate limiting (`@PerUserRateLimiter`, 10 req/s, RFC 6585 `Retry-After: 1`, RFC 7807 429 ProblemDetail), circuit breaker on external UPI validation (`@CircuitBreaker(name = "upiValidation")`, sliding window 10, 50% failure rate threshold, 5s wait duration, RFC 7807 503 ProblemDetail), timeout policies (`TimeLimiter` 5s), inactive limiter eviction, and Micrometer/Prometheus metrics integration.
 
 ### 8C — Caching (Redis) ⬜
 Cache-aside pattern, `@CacheEvict` on writes, Caffeine fallback for local/test.

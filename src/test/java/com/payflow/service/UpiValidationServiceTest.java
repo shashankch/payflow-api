@@ -85,4 +85,19 @@ class UpiValidationServiceTest {
 		assertThat(fallback.valid()).isTrue();
 		assertThat(fallback.bankName()).contains("FALLBACK");
 	}
+
+	@Test
+	@DisplayName("Should recover gracefully when CircuitBreaker fallback is invoked")
+	void shouldRecoverGracefully_whenCircuitBreakerFallbackInvoked() {
+		UpiValidationService service = new UpiValidationService(upiValidationClient, true);
+		Throwable cause = io.github.resilience4j.circuitbreaker.CallNotPermittedException
+				.createCallNotPermittedException(
+						io.github.resilience4j.circuitbreaker.CircuitBreaker.ofDefaults("upiValidation"));
+
+		UpiVerificationResponse fallback = service.recoverFromValidationFailure("alice@payflow", cause);
+
+		assertThat(fallback).isNotNull();
+		assertThat(fallback.valid()).isTrue();
+		assertThat(fallback.bankName()).contains("FALLBACK");
+	}
 }
