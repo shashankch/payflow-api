@@ -104,7 +104,7 @@ Declarative HTTP Interface Client (`@HttpExchange`/`@GetExchange`) backed by `Re
 
 ---
 
-## Phase 8 — Observability, Resilience & Caching 🟡
+## Phase 8 — Observability, Resilience, Caching & Distributed Locking ✅
 
 ### 8A — Logging, Metrics & Tracing ✅
 JSON-structured logging (ECS in prod), MDC correlation (`requestId`, `traceId`, `spanId`, `http.status`, `http.latency_ms`), Prometheus metrics (`micrometer-registry-prometheus`, `/actuator/prometheus`), OpenTelemetry distributed tracing (`micrometer-tracing-bridge-otel`, `opentelemetry-exporter-otlp`), custom business metrics (`payflow.transfers.total`, `payflow.transfers.amount`, `payflow.transfers.duration` with p50/p95/p99 percentiles), HikariCP pool monitoring.
@@ -115,12 +115,12 @@ Dynamic per-user rate limiting (`@PerUserRateLimiter`, 10 req/s, RFC 6585 `Retry
 ### 8C — Caching (Redis) ✅
 Cache-aside pattern with profile-conditional caching: Redis in `prod` with modern `RedisSerializer.json()`, string keys, configurable TTLs (10m default/users, 1m user_ledgers), Caffeine in `!prod` (`local`/`test`). `@Cacheable` on user lookups and ledger queries with null-safe conditions, `@CacheEvict(allEntries = true)` on `UserService.registerUser()` and `TransactionService.sendMoney()`. Entity serialization hardening with lazy relation exclusions. Comprehensive slice & integration test coverage (110 passing tests).
 
-### 8D — Distributed Locking ⬜
-Redisson Redlock for multi-instance idempotency coordination, NoOp fallback.
+### 8D — Distributed Locking (Redis / Redisson) ✅
+Redisson 4.7.0 distributed locking (`payflow:lock:idemp:<key>`) for multi-instance idempotency coordination, fail-safe automatic lease expiration (10s), bounded wait time (2s) for cached replay resolution, safe thread-bound release (`isHeldByCurrentThread()`), and `NoOpDistributedLockService` fallback for zero-dependency non-prod profiles (`local`, `test`, `prod-light`). (125 passing tests).
 
 ---
 
-## Phase 9 — Event Streaming ⬜
+## Phase 9 — Event Streaming ⬜ (Next Up)
 
 ### 9A — Kafka via Spring Modulith Event Externalization ⬜
 Spring Modulith `spring-modulith-events-kafka` auto-externalizes domain events to Kafka topics with zero domain code changes. Kafka producer (`acks=all`, idempotent), Testcontainers Kafka tests. Local/test profiles remain in-process.

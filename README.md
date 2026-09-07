@@ -4,7 +4,7 @@
   <a href="https://github.com/shashankch/payflow-api/actions/workflows/ci.yml"><img src="https://github.com/shashankch/payflow-api/actions/workflows/ci.yml/badge.svg" alt="Build"></a>
   <a href="https://dev.java/"><img src="https://img.shields.io/badge/Java-25-ED8B00?logo=openjdk&logoColor=white" alt="Java 25"></a>
   <a href="https://spring.io/projects/spring-boot"><img src="https://img.shields.io/badge/Spring%20Boot-4.1.0-6DB33F?logo=springboot&logoColor=white" alt="Spring Boot"></a>
-  <a href="https://junit.org/junit5/"><img src="https://img.shields.io/badge/Tests-110%20Passing-brightgreen?logo=junit5" alt="Tests"></a>
+  <a href="https://junit.org/junit5/"><img src="https://img.shields.io/badge/Tests-125%20Passing-brightgreen?logo=junit5" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
 </p>
 
@@ -14,6 +14,7 @@ Payflow API is an enterprise-grade peer-to-peer (P2P) payment backend and double
 
 ## 🚀 Key Architectural Pillars
 
+- **🔒 Distributed Locking & Redisson Coordination (Phase 8D)**: Profile-conditional distributed locking via Redisson `RLock` with single-instance/sentinel/cluster configuration in `prod` profile and seamless no-op (`NoOpDistributedLockService`) fallback in non-prod environments. Coordinates concurrent idempotency key acquisitions (`payflow:lock:idemp:<key>`) with bounded wait time (2s) and fail-safe lease duration (10s) to eliminate distributed race conditions prior to database operations.
 - **⚡ Distributed Caching & Caffeine Fallback (Phase 8C)**: Profile-conditional cache-aside pattern via `@Cacheable` on user lookups and ledger queries with null-safe conditions, Redis distributed cache in `prod` with `RedisSerializer.json()`, string keys, and granular TTL policies (10m users, 1m user_ledgers), local in-memory Caffeine cache fallback in `!prod`, and `@CacheEvict(allEntries = true)` on registration and transfer balance mutations.
 - **🛡️ Resilience4j Fault Tolerance & Dynamic Rate Limiting (Phase 8B)**: Dynamic per-user rate limiting (`@PerUserRateLimiter`, 10 req/s with RFC 6585 `Retry-After: 1` header & RFC 7807 429 ProblemDetail), circuit breaker on external integrations (`@CircuitBreaker(name = "upiValidation")`, sliding window 10, 50% threshold, 5s recovery wait), automated inactive limiter eviction, and Actuator/Prometheus metrics integration.
 - **📊 Structured Logging, Prometheus Metrics & OpenTelemetry Tracing (Phase 8A)**: Native ECS JSON structured logging in production, MDC correlation (`requestId`, `traceId`, `spanId`, `http.status`, `http.latency_ms`), Prometheus metrics (`/actuator/prometheus`), HikariCP connection pool monitoring (`PayflowHikariPool`), custom business meters (`payflow.transfers.total`, `payflow.transfers.amount`, `payflow.transfers.duration` with p50/p95/p99 histograms), and `@Observed` OpenTelemetry span generation.
@@ -21,7 +22,7 @@ Payflow API is an enterprise-grade peer-to-peer (P2P) payment backend and double
 - **🌐 RestClient & Declarative HTTP Interface Client (Phase 7C)**: Spring 6.1+ `@HttpExchange`/`@GetExchange` declarative client proxying via `HttpServiceProxyFactory` with Spring Retry (`@Retryable` exponential backoff + jitter) and non-blocking graceful onboarding fallback.
 - **⚡ Spring Modulith Events & Transactional Outbox (Phase 6B)**: Event publication registry (`spring-modulith-starter-jpa`), domain event `TransferCompletedEvent` published atomically inside `@Transactional` to `event_publication` table, and async `@ApplicationModuleListener` handler with modular boundary verification (`ModulithStructureTest`).
 - **🔁 Database-Backed Idempotency Engine (Phase 6A)**: `Idempotency-Key` header with SHA-256 request payload hashing, cached 201 response replay, in-flight lease recovery, 409 conflict detection, and background TTL purge job.
-- **🧪 Multi-Tier Testing Suite (Phase 5–8)**: 110 unit, slice, and integration tests passing (`mvn clean verify`), featuring Mockito service isolation (`UserServiceTest`, `TransactionServiceTest`, `UpiValidationServiceTest`, `UserServiceCacheTest`, `TransactionServiceCacheTest`), Cache configuration tests (`CacheConfigTest`), Data JPA repository slice tests (`@DataJpaTest`), WebMvc slice tests (`@WebMvcTest`), `MockRestServiceServer` client tests (`UpiValidationClientTest`), and Testcontainers PostgreSQL concurrency & security tests (`ConcurrentTransferIT`, `MutualTransferDeadlockIT`, `TransferLifecycleIT`, `IdempotencyIT`, `OutboxIT`, `AuthenticationIT`, `AuthorizationIT`, `UpiValidationIT`, `ObservabilityIT`, `ResilienceIT`, `CacheIT`).
+- **🧪 Multi-Tier Testing Suite (Phase 5–8)**: 125 unit, slice, and integration tests passing (`mvn clean verify`), featuring Mockito service isolation (`UserServiceTest`, `TransactionServiceTest`, `UpiValidationServiceTest`, `UserServiceCacheTest`, `TransactionServiceCacheTest`, `RedissonDistributedLockServiceTest`, `NoOpDistributedLockServiceTest`), Distributed lock and cache configuration tests (`DistributedLockConfigTest`, `CacheConfigTest`), Data JPA repository slice tests (`@DataJpaTest`), WebMvc slice tests (`@WebMvcTest`), `MockRestServiceServer` client tests (`UpiValidationClientTest`), and Testcontainers PostgreSQL concurrency & security tests (`ConcurrentTransferIT`, `MutualTransferDeadlockIT`, `TransferLifecycleIT`, `IdempotencyIT`, `OutboxIT`, `AuthenticationIT`, `AuthorizationIT`, `UpiValidationIT`, `ObservabilityIT`, `ResilienceIT`, `CacheIT`).
 - **🐳 Profile Matrix & Testcontainers (Phase 4B)**: Environment profiles (`local`, `test`, `prod`) with production-parity PostgreSQL container testing (`@Testcontainers`, `@ServiceConnection`).
 - **🗄️ Flyway Migrations & Performance Indexing (Phase 4A)**: Versioned DDL migrations (`V1`..`V6`) managing schemas with custom performance indexes and Hibernate `ddl-auto=validate` enforcement.
 - **🔒 Concurrency Control & Double-Entry Ledger (Phase 3)**: Database write locking (`SELECT ... FOR UPDATE`) with deterministic alphabetical lock ordering by UPI ID to prevent race conditions and cross-transfer deadlocks.
@@ -44,7 +45,7 @@ Payflow API evolves through a structured, multi-phase engineering roadmap:
 | **Phase 5** | Multi-Tier Test Suite (Unit, `@DataJpaTest`, `@WebMvcTest`, Testcontainers Concurrency) | ✅ Complete |
 | **Phase 6** | Durable Idempotency Engine (6A) & Spring Modulith Transactional Outbox (6B) | ✅ Complete |
 | **Phase 7** | Spring Security & JWT (7A), Authorization (7B) & RestClient Integration (7C) | ✅ Complete |
-| **Phase 8** | Observability, Metrics & Tracing (8A), Resilience4j (8B) & Redis Caching (8C) | 🟡 In Progress |
+| **Phase 8** | Observability, Metrics & Tracing (8A), Resilience4j (8B), Redis Caching (8C) & Distributed Locking (8D) | ✅ Complete |
 
 > 📌 *See full multi-phase evolution details in [docs/ROADMAP.md](docs/ROADMAP.md).*
 
@@ -94,7 +95,7 @@ graph TD
 | 🗓️ **[Phased Roadmap](docs/ROADMAP.md)** | Full 12-phase technical expansion blueprint |
 | 🌐 **[API Specification](docs/API_SPECIFICATION.md)** | Complete REST endpoint contracts, schemas, RFC 7807 payloads |
 | 📋 **[Engineering Conventions](docs/CONVENTIONS.md)** | Java 25 standards, Spotless/Checkstyle rules, testing guidelines |
-| 📜 **[Architecture Decisions (ADRs)](docs/adr/)** | Master index of modular architectural decision records (ADR-001 through ADR-022) |
+| 📜 **[Architecture Decisions (ADRs)](docs/adr/)** | Master index of modular architectural decision records (ADR-001 through ADR-023) |
 | 📝 **[Changelog](CHANGELOG.md)** | Version-by-version implementation notes |
 
 ---

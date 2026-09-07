@@ -32,6 +32,8 @@ Each record documents the business and technical context, options evaluated, rat
 | [0020](0020-structured-logging-prometheus-metrics-and-opentelemetry-observability.md) | [Structured Logging, Prometheus Metrics & OpenTelemetry Observability Architecture](0020-structured-logging-prometheus-metrics-and-opentelemetry-observability.md) | 2026-08-27 | **Accepted** | Phase 8A |
 | [0021](0021-resilience4j-circuit-breaker-per-user-rate-limiting.md) | [Resilience4j Circuit Breaking, Per-User Rate Limiting & Fault-Tolerance Policies](0021-resilience4j-circuit-breaker-per-user-rate-limiting.md) | 2026-09-05 | **Accepted** | Phase 8B |
 | [0022](0022-redis-distributed-caching-and-caffeine-fallback.md) | [Redis Distributed Caching and Caffeine Local Fallback Strategy](0022-redis-distributed-caching-and-caffeine-fallback.md) | 2026-09-06 | **Accepted** | Phase 8C |
+| [0023](0023-redis-distributed-locking-redisson.md) | [Redis Distributed Locking with Redisson and Fail-Safe Local Fallback](0023-redis-distributed-locking-redisson.md) | 2026-09-07 | **Accepted** | Phase 8D |
+
 
 
 ---

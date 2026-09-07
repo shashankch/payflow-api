@@ -69,6 +69,9 @@ payflow:
     user-ledgers-ttl-seconds: 60
     caffeine:
       spec: "maximumSize=1000,expireAfterWrite=600s"
+  lock:
+    wait-time: 2s
+    lease-time: 10s
 
 resilience4j:
   circuitbreaker:

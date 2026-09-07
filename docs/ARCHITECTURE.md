@@ -5,7 +5,7 @@
 > - **Author**: Payflow Engineering (`shashakchandel@gmail.com`)
 > - **Status**: Approved / Living Design Document
 > - **Created Date**: 2026-08-01
-> - **Last Updated**: 2026-09-06
+> - **Last Updated**: 2026-09-07
 > - **Authoritative Location**: [ARCHITECTURE.md](ARCHITECTURE.md)
 > - **Related Documents**: [API Specification](API_SPECIFICATION.md) | [Security Architecture](SECURITY.md) | [Architecture Decisions (ADRs)](adr/README.md) | [Phased Roadmap](ROADMAP.md) | [Engineering Conventions](CONVENTIONS.md)
 
@@ -133,10 +133,55 @@ Optional<User> findByUpiIdWithLock(@Param("upiId") String upiId);
 *This executes a `SELECT ... FOR UPDATE` query in PostgreSQL, blocking other transactions from modifying these specific rows until the current transaction commits.*
 * **Deadlock Avoidance**: Lock acquisition is performed in a deterministic order (e.g., sorting the user UPI IDs alphabetically). This prevents deadlock loops when two users perform mutual transfers at the same time.
 
-### B. Distributed Locking (Cross-Service Coordination)
-When transaction logic spans distributed systems (such as reserve balance operations, third-party payment gateways, or rate limiting across multiple application nodes), we introduce a **Redis Distributed Lock (Redlock)** via Redisson:
-- **Use Case**: Locking a payment request before database transactions begin, preventing thundering herds and duplicate submission processing at the gateway container boundaries.
-- **Failover**: Configured with a short lease time (TTL) to prevent permanent resource locking if a pod node crashes during transaction execution.
+### B. Distributed Locking (Cross-Service & Multi-Instance Coordination)
+When payment requests enter a distributed, multi-pod Kubernetes cluster, duplicate submissions with identical `Idempotency-Key` headers can reach different application instances concurrently. To intercept race conditions at the API gateway layer before database connection pool allocation or transactional row locking, Payflow API implements a **Redis Distributed Lock (Redlock)** using **Redisson** (`RLock`):
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as API Client / Ingress
+    participant Pod1 as Pod 1 (IdempotencyFilter)
+    participant Pod2 as Pod 2 (IdempotencyFilter)
+    participant Redis as Redis Distributed Lock (Redisson)
+    participant DB as PostgreSQL Database
+
+    Client->>Pod1: POST /api/v1/transactions (Key: tx-123)
+    Client->>Pod2: POST /api/v1/transactions (Key: tx-123 [Duplicate])
+    
+    par Pod 1 tries lock
+        Pod1->>Redis: tryLock("payflow:lock:idemp:tx-123", wait=2s, lease=10s)
+        Redis-->>Pod1: true (Lock Acquired)
+    and Pod 2 tries lock
+        Pod2->>Redis: tryLock("payflow:lock:idemp:tx-123", wait=2s, lease=10s)
+        Note over Pod2,Redis: Pod 2 blocks waiting (up to 2s)
+    end
+
+    Pod1->>DB: Check & record PROCESSING status
+    Pod1->>DB: Execute transaction & commit
+    Pod1->>DB: Record SUCCESS with response body
+    Pod1->>Redis: unlock("payflow:lock:idemp:tx-123")
+    Redis-->>Pod1: Lock Released
+    Pod1-->>Client: 201 Created (Transaction Response)
+
+    Redis-->>Pod2: Lock Acquired (after Pod 1 release)
+    Pod2->>DB: Find existing idempotency record
+    Note over Pod2,DB: Status is SUCCESS
+    Pod2-->>Client: 201 Created (Replay Cached Response)
+    Pod2->>Redis: unlock("payflow:lock:idemp:tx-123")
+```
+
+#### Key Design Characteristics:
+1. **Profile-Conditional Architecture**:
+   - **`prod` Profile**: Activates `RedissonDistributedLockService` backed by `RedissonClient` using `SingleServerConfig` (connection pool: 20, idle: 5, timeout: 3000ms).
+   - **`!prod` Profiles (`local`, `test`, `prod-light`)**: Activates `NoOpDistributedLockService`, delivering zero-dependency instant local startup without requiring a Redis daemon.
+2. **Bounded Wait Time (`LOCK_WAIT_TIME = 2s`)**:
+   Instead of immediately rejecting duplicate requests with a 409 Conflict, the second request waits up to 2 seconds for the first request to finish, enabling seamless cached response replay.
+3. **Fail-Safe Automatic Lease (`LOCK_LEASE_TIME = 10s`)**:
+   Guarantees that if a pod crashes or is terminated (`SIGKILL`) during execution, the lock automatically expires in Redis after 10 seconds, preventing permanent distributed deadlocks.
+4. **Thread-Ownership Verification (`isHeldByCurrentThread()`)**:
+   Before executing `unlock()`, the service confirms that the current thread owns the lock. This prevents `IllegalMonitorStateException` hazards if the lease expired during an unusually slow downstream call.
+5. **Defensive Slice Test Fallback**:
+   In slice tests (`@WebMvcTest`) where service beans are not scanned, `IdempotencyFilter` falls back gracefully to `new NoOpDistributedLockService()`, eliminating test configuration boilerplate.
 
 ### C. Append-Only Double-Entry Balance Ledger
 All financial balance operations execute double-entry bookkeeping by persisting two immutable `BalanceLedgerEntry` records (`DEBIT` for sender, `CREDIT` for receiver) within the same `@Transactional` database boundary as the money transfer:
@@ -837,6 +882,7 @@ Documenting rejected alternatives and evaluating the penalty ("cost of getting i
 - **`RES-006`: RestClient + HTTP Interface Client over RestTemplate** — Resolved in architecture review. `RestTemplate` is deprecated in Framework 7; `RestClient` + declarative `@GetExchange`/`@PostExchange` interfaces are the modern standard.
 - **`RES-007`: Framework 7 @Retryable + Resilience4j Complementary Use** — Resolved in architecture review. Use spring-core native `@Retryable` for basic outbound HTTP retry; use Resilience4j for advanced patterns (per-user rate limiting, circuit breakers) not yet in spring-core.
 - **`RES-008`: Profile-Conditional Cache-Aside (Redis in Prod, Caffeine in Dev/Test)** — Resolved in Phase 8C. Decoupled local development from external Redis while ensuring multi-pod cluster state consistency with JSON value serialization.
+- **`RES-009`: Redisson Distributed Locking for Multi-Instance Idempotency Coordination** — Resolved in Phase 8D. Integrated Redisson 4.7.0 distributed locking (`payflow:lock:idemp:<key>`) with fail-safe lease time (10s) and bounded wait time (2s) in `prod`, paired with `NoOpDistributedLockService` fallback in `!prod` (local/test).
 
 ### Open Questions & Future Evaluation
 - **`OPEN-001`: Transfer Amount Cap Configuration** — Default cap set to ₹1,00,000 (`100,000.00`). Evaluating whether per-user dynamic velocity caps should be stored in Redis.
