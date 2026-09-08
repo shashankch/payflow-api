@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Phase 8D (Redis Distributed Locking with Redisson & Fail-Safe Fallback)
+- Added `org.redisson:redisson` (version 4.7.0) dependency to `pom.xml`, aligning with Netty `4.2.15.Final` in Spring Boot 4.1.0.
+- Created `DistributedLockService.java` interface defining `tryLock(key, waitTime, leaseTime)`, fail-fast `tryLock(key, leaseTime)`, `unlock(key)`, and `isLocked(key)`.
+- Created `RedissonDistributedLockService.java` (`@Profile("prod")`) implementing distributed locking with Redisson `RLock`:
+  - Safely verifies `lock.isHeldByCurrentThread()` before calling `unlock()` to eliminate `IllegalMonitorStateException`.
+  - Restores thread interrupt status on `InterruptedException`.
+- Created `NoOpDistributedLockService.java` (`@Profile("!prod")`) providing an in-memory pass-through for `local`, `test`, and `prod-light` profiles.
+- Created `DistributedLockConfig.java` (`@Profile("prod")`) configuring `RedissonClient` bean with connection pool (20), idle connections (5), and timeout (3000ms).
+- Configured externalized lock properties under `payflow.lock` (`wait-time: 2s`, `lease-time: 10s`) in `application.yml`.
+- Enhanced `IdempotencyFilter.java` with distributed locking:
+  - Acquires distributed lock on `payflow:lock:idemp:<key>` before inspecting database records.
+  - Automatically releases lock in `finally` block across all execution paths (success, conflict, error, and exception).
+  - Returns HTTP `409 Conflict` with `Lock Contention` ProblemDetail when lock acquisition fails within the 2-second wait window.
+  - Defensively defaults to `NoOpDistributedLockService` when `DistributedLockService` bean is omitted in slice tests (`@WebMvcTest`).
+- Created comprehensive unit tests:
+  - `NoOpDistributedLockServiceTest.java` verifying pass-through behavior.
+  - `RedissonDistributedLockServiceTest.java` verifying lock acquisition, contention timeout, interrupt handling, thread-bound unlocking, and exception safety.
+  - `DistributedLockConfigTest.java` verifying profile-conditional bean wiring.
+  - Updated `IdempotencyFilterTest.java` verifying lock acquisition, contention rejection, and guaranteed unlock in `finally`.
+- Added ADR-023 (*Redis Distributed Locking with Redisson and Fail-Safe Local Fallback*) to `docs/adr/`.
+
 ### Added - Phase 8C (Redis Distributed Caching & Caffeine Local Fallback)
 - Added `spring-boot-starter-cache`, `spring-boot-starter-data-redis`, and `caffeine` (version 3.2.0) dependencies to `pom.xml`.
 - Created `CacheConfig.java` enabling `@EnableCaching` with profile-conditional CacheManager resolution:

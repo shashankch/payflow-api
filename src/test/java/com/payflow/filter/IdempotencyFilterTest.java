@@ -3,6 +3,7 @@ package com.payflow.filter;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -27,11 +28,16 @@ import com.payflow.repository.IdempotencyRepository;
 
 import jakarta.servlet.ServletException;
 
+import com.payflow.service.DistributedLockService;
+
 @ExtendWith(MockitoExtension.class)
 class IdempotencyFilterTest {
 
 	@Mock
 	private IdempotencyRepository idempotencyRepository;
+
+	@Mock
+	private DistributedLockService distributedLockService;
 
 	private ObjectMapper objectMapper;
 	private IdempotencyFilter idempotencyFilter;
@@ -39,7 +45,8 @@ class IdempotencyFilterTest {
 	@BeforeEach
 	void setUp() {
 		objectMapper = new ObjectMapper();
-		idempotencyFilter = new IdempotencyFilter(idempotencyRepository, objectMapper);
+		lenient().when(distributedLockService.tryLock(any(), any(), any())).thenReturn(true);
+		idempotencyFilter = new IdempotencyFilter(idempotencyRepository, objectMapper, distributedLockService);
 	}
 
 	@Test
@@ -146,5 +153,49 @@ class IdempotencyFilterTest {
 
 		assertThat(response.getStatus()).isEqualTo(400);
 		assertThat(response.getContentAsString()).contains("Key Reuse");
+	}
+
+	@Test
+	@DisplayName("Should reject mutation request with 409 Conflict when distributed lock cannot be acquired")
+	void shouldRejectRequest_whenDistributedLockCannotBeAcquired() throws ServletException, IOException {
+		String payload = "{\"amount\":100}";
+		String key = "locked-key-123";
+
+		MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/transactions");
+		request.addHeader(IdempotencyFilter.IDEMPOTENCY_KEY_HEADER, key);
+		request.setContent(payload.getBytes(StandardCharsets.UTF_8));
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		MockFilterChain filterChain = new MockFilterChain();
+
+		given(distributedLockService.tryLock(any(), any(), any())).willReturn(false);
+
+		idempotencyFilter.doFilter(request, response, filterChain);
+
+		assertThat(response.getStatus()).isEqualTo(409);
+		assertThat(response.getContentAsString()).contains("Lock Contention");
+		verify(idempotencyRepository, never()).findById(any());
+		verify(distributedLockService, never()).unlock(any());
+	}
+
+	@Test
+	@DisplayName("Should always release distributed lock in finally block even when downstream filter throws")
+	void shouldAlwaysReleaseLockInFinallyBlock_evenWhenExceptionOccurs() {
+		String payload = "{\"amount\":100}";
+		String key = "exception-key-999";
+
+		MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/transactions");
+		request.addHeader(IdempotencyFilter.IDEMPOTENCY_KEY_HEADER, key);
+		request.setContent(payload.getBytes(StandardCharsets.UTF_8));
+		MockHttpServletResponse response = new MockHttpServletResponse();
+
+		jakarta.servlet.FilterChain throwingChain = (req, res) -> {
+			throw new RuntimeException("Simulated filter failure");
+		};
+
+		org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () -> {
+			idempotencyFilter.doFilter(request, response, throwingChain);
+		});
+
+		verify(distributedLockService).unlock("payflow:lock:idemp:" + key);
 	}
 }

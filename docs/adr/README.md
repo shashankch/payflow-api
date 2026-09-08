@@ -32,7 +32,20 @@ Each record documents the business and technical context, options evaluated, rat
 | [0020](0020-structured-logging-prometheus-metrics-and-opentelemetry-observability.md) | [Structured Logging, Prometheus Metrics & OpenTelemetry Observability Architecture](0020-structured-logging-prometheus-metrics-and-opentelemetry-observability.md) | 2026-08-27 | **Accepted** | Phase 8A |
 | [0021](0021-resilience4j-circuit-breaker-per-user-rate-limiting.md) | [Resilience4j Circuit Breaking, Per-User Rate Limiting & Fault-Tolerance Policies](0021-resilience4j-circuit-breaker-per-user-rate-limiting.md) | 2026-09-05 | **Accepted** | Phase 8B |
 | [0022](0022-redis-distributed-caching-and-caffeine-fallback.md) | [Redis Distributed Caching and Caffeine Local Fallback Strategy](0022-redis-distributed-caching-and-caffeine-fallback.md) | 2026-09-06 | **Accepted** | Phase 8C |
+| [0023](0023-redis-distributed-locking-redisson.md) | [Redis Distributed Locking with Redisson and Fail-Safe Local Fallback](0023-redis-distributed-locking-redisson.md) | 2026-09-07 | **Accepted** | Phase 8D |
 
+---
+
+### 🔮 Planned ADRs (Roadmap)
+
+| ADR # | Title | Target Phase | Status |
+| :--- | :--- | :--- | :--- |
+| `0024` | Kafka Event Streaming via Spring Modulith Event Externalization | Phase 9A | Planned |
+| `0025` | Gen-AI Spend Categorization with Spring AI and Circuit Breaker Fallback | Phase 10A | Planned |
+| `0026` | Java 25 Virtual Threads and Bounded HikariCP Connection Pool Optimization | Phase 10B | Planned |
+| `0027` | Multi-Stage Containerization and Full-Stack Local Orchestration with Docker Compose | Phase 11A | Planned |
+| `0028` | Cloud-Native Kubernetes Deployment Topology and Horizontal Pod Autoscaling | Phase 11B | Planned |
+| `0029` | Automated CI/CD Quality Gates, Coverage Thresholds, and Bytecode Analysis | Phase 11C | Planned |
 
 ---
 

@@ -16,7 +16,7 @@ Floating-point primitive types (`double`, `float`) use IEEE 754 binary represent
 Chosen Option: **Java `BigDecimal`**
 
 ### Rationale
-`BigDecimal` provides exact precision representation for decimal currency values with configurable scale (`precision = 19, scale = 4` in database mapping) and explicit rounding modes (`RoundingMode.HALF_EVEN`).
+`BigDecimal` provides exact precision representation for decimal currency values in Indian Rupees (INR, symbol: `₹`) with configurable scale (`precision = 19, scale = 4` in database mapping) and explicit rounding modes (`RoundingMode.HALF_EVEN`).
 
 ## Consequences
 * **Positive**: Zero floating-point rounding errors in monetary balance arithmetic and ledger entries.

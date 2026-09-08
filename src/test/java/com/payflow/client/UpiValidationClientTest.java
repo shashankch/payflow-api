@@ -34,19 +34,18 @@ class UpiValidationClientTest {
 	@Test
 	@DisplayName("Should parse valid UPI response from external service")
 	void shouldVerifyValidUpi() {
-		mockServer.expect(requestTo("http://localhost:9090/api/v1/upi/verify/alice%40payflow"))
-				.andExpect(method(HttpMethod.GET))
-				.andRespond(withSuccess(
-						"{\"valid\":true,\"bankName\":\"HDFC Bank\",\"accountHolderName\":\"Alice Johnson\"}",
-						MediaType.APPLICATION_JSON));
+		mockServer.expect(requestTo("http://localhost:9090/api/v1/upi/verify/priya%40payflow"))
+				.andExpect(method(HttpMethod.GET)).andRespond(
+						withSuccess("{\"valid\":true,\"bankName\":\"HDFC Bank\",\"accountHolderName\":\"Priya Patel\"}",
+								MediaType.APPLICATION_JSON));
 
-		UpiVerificationResponse response = client.verify("alice@payflow");
+		UpiVerificationResponse response = client.verify("priya@payflow");
 
 		mockServer.verify();
 		assertThat(response).isNotNull();
 		assertThat(response.valid()).isTrue();
 		assertThat(response.bankName()).isEqualTo("HDFC Bank");
-		assertThat(response.accountHolderName()).isEqualTo("Alice Johnson");
+		assertThat(response.accountHolderName()).isEqualTo("Priya Patel");
 	}
 
 	@Test

@@ -1,31 +1,22 @@
 # Security Policy — Payflow API
 
-Payflow API handles financial transactions and ledger records, and we maintain rigorous security standards to protect users and systems.
-
-For full architectural details on our security model, threat modeling (STRIDE analysis), cryptographic practices, concurrency controls, and defense-in-depth authorization, please read our [Security Architecture & Threat Model](docs/SECURITY.md).
+> **Project Status**: Payflow API is an open-source educational and reference architecture project licensed under the [MIT License](LICENSE). The project is currently under active development and is not deployed to production environments.
 
 ---
 
-## Supported Versions
+## Architectural Security Model
 
-| Version | Supported |
-| :--- | :--- |
-| `0.7.x` | :white_check_mark: Supported |
-| `< 0.7.0` | :x: Unsupported |
+Payflow API implements defense-in-depth security principles for financial ledger integrity, including Zero-Trust request validation, STRIDE threat mitigations, deterministic row locking, immutable double-entry balance ledgers, and SHA-256 payload verification.
+
+For full architectural specifications, see [Security Architecture & Threat Model](docs/ARCHITECTURE.md#18-security-architecture-and-threat-model).
 
 ---
 
-## Reporting a Vulnerability
+## Reporting Vulnerabilities & Security Issues
 
-If you discover a security vulnerability in Payflow API, please report it responsibly:
+Because this repository is in active development:
 
-- **Contact**: Email at **`shashakchandel@gmail.com`**.
-- **Subject**: `[SECURITY VULNERABILITY] Payflow API - <Brief Summary>`
-- **Content**: Include steps to reproduce, impact analysis, and proof-of-concept (PoC) if available.
-
-### Response SLA
-- **Initial Response**: Within 24 hours.
-- **Triage & Classification**: Within 72 hours.
-- **Patch Release**: Critical and High severity issues are prioritized for patch release within 7 business days.
-
-Please do not open public GitHub issues for security vulnerabilities.
+- **Bug & Vulnerability Reports**: If you discover a security flaw, vulnerability, or architectural weakness, please open an issue on [GitHub Issues](https://github.com/shashankch/payflow-api/issues) labeled `security`.
+- **Private Advisory**: If you prefer private disclosure, you may submit a [GitHub Private Vulnerability Report](https://github.com/shashankch/payflow-api/security/advisories/new).
+- **Details to Include**: Provide a concise summary of the issue, affected component/endpoint, and reproduction steps or proof-of-concept.
+- **Contributions**: Pull requests hardening configurations or patching security vulnerabilities are warmly welcomed.

@@ -24,9 +24,12 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingResponseWrapper;
 
 import tools.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import com.payflow.entity.IdempotencyRecord;
 import com.payflow.entity.IdempotencyStatus;
 import com.payflow.repository.IdempotencyRepository;
+import com.payflow.service.DistributedLockService;
+import com.payflow.service.NoOpDistributedLockService;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ReadListener;
@@ -41,14 +44,22 @@ public class IdempotencyFilter extends OncePerRequestFilter {
 
 	public static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
 	private static final Duration IN_FLIGHT_TIMEOUT = Duration.ofMinutes(2);
+	private static final Duration LOCK_WAIT_TIME = Duration.ofSeconds(2);
+	private static final Duration LOCK_LEASE_TIME = Duration.ofSeconds(10);
+	private static final String LOCK_KEY_PREFIX = "payflow:lock:idemp:";
 	private static final Logger LOG = LoggerFactory.getLogger(IdempotencyFilter.class);
 
 	private final IdempotencyRepository idempotencyRepository;
 	private final ObjectMapper objectMapper;
+	private final DistributedLockService distributedLockService;
 
-	public IdempotencyFilter(IdempotencyRepository idempotencyRepository, ObjectMapper objectMapper) {
+	public IdempotencyFilter(IdempotencyRepository idempotencyRepository, ObjectMapper objectMapper,
+			@Autowired(required = false) DistributedLockService distributedLockService) {
 		this.idempotencyRepository = idempotencyRepository;
 		this.objectMapper = objectMapper;
+		this.distributedLockService = distributedLockService != null
+				? distributedLockService
+				: new NoOpDistributedLockService();
 	}
 
 	@Override
@@ -71,87 +82,100 @@ public class IdempotencyFilter extends OncePerRequestFilter {
 			return;
 		}
 
-		byte[] requestBytes = req.getInputStream().readAllBytes();
-		String requestHash = computeSha256(requestBytes);
-		CachedBodyHttpServletRequest wrappedRequest = new CachedBodyHttpServletRequest(req, requestBytes);
-
-		Optional<IdempotencyRecord> existingOpt = idempotencyRepository.findById(key);
-		IdempotencyRecord record;
-
-		if (existingOpt.isPresent()) {
-			IdempotencyRecord existing = existingOpt.get();
-
-			if (!existing.getRequestHash().equals(requestHash)) {
-				LOG.warn("Idempotency key reuse: key={}", key);
-				String msg = "Key reused with different payload.";
-				sendError(res, HttpStatus.BAD_REQUEST, "Key Reuse", msg, uri);
-				return;
-			}
-
-			boolean isInFlight = existing.getStatus() == IdempotencyStatus.PROCESSING
-					|| existing.getStatus() == IdempotencyStatus.INITIATED;
-
-			if (isInFlight) {
-				Instant leaseCutoff = Instant.now().minus(IN_FLIGHT_TIMEOUT);
-				Instant recordUpdated = existing.getUpdatedAt() != null
-						? existing.getUpdatedAt()
-						: existing.getCreatedAt();
-				if (recordUpdated == null || recordUpdated.isAfter(leaseCutoff)) {
-					LOG.warn("Concurrent request in-flight: key={}", key);
-					String msg = "Request with key is in-flight.";
-					sendError(res, HttpStatus.CONFLICT, "In Flight", msg, uri);
-					return;
-				}
-				LOG.warn("In-flight lease expired for key={}. Allowing retry execution.", key);
-			}
-
-			if (existing.getStatus() == IdempotencyStatus.SUCCESS) {
-				LOG.info("Replaying cached response: key={}", key);
-				Integer code = existing.getResponseCode();
-				res.setStatus(code != null ? code : 200);
-				res.setContentType(MediaType.APPLICATION_JSON_VALUE);
-				if (existing.getResponseBody() != null) {
-					res.getWriter().write(existing.getResponseBody());
-				}
-				return;
-			}
-
-			existing.setStatus(IdempotencyStatus.PROCESSING);
-			record = existing;
-		} else {
-			record = new IdempotencyRecord();
-			record.setIdempotencyKey(key);
-			record.setRequestHash(requestHash);
-			record.setStatus(IdempotencyStatus.PROCESSING);
-		}
-
-		try {
-			idempotencyRepository.saveAndFlush(record);
-		} catch (DataIntegrityViolationException ex) {
-			LOG.warn("Concurrent insert race detected for key={}: {}", key, ex.getMessage());
-			String msg = "Concurrent request with this key is being processed.";
-			sendError(res, HttpStatus.CONFLICT, "Concurrent Conflict", msg, uri);
+		String lockKey = LOCK_KEY_PREFIX + key;
+		boolean acquired = distributedLockService.tryLock(lockKey, LOCK_WAIT_TIME, LOCK_LEASE_TIME);
+		if (!acquired) {
+			LOG.warn("Could not acquire distributed lock for idempotency key={}", key);
+			String msg = "Concurrent request with this key is being processed by another instance.";
+			sendError(res, HttpStatus.CONFLICT, "Lock Contention", msg, uri);
 			return;
 		}
 
-		ContentCachingResponseWrapper wrappedResponse = new ContentCachingResponseWrapper(res);
 		try {
-			chain.doFilter(wrappedRequest, wrappedResponse);
-			int statusCode = wrappedResponse.getStatus();
-			byte[] responseBytes = wrappedResponse.getContentAsByteArray();
-			String responseBody = new String(responseBytes, StandardCharsets.UTF_8);
+			byte[] requestBytes = req.getInputStream().readAllBytes();
+			String requestHash = computeSha256(requestBytes);
+			var wrappedRequest = new CachedBodyHttpServletRequest(req, requestBytes);
 
-			boolean is2xx = statusCode >= 200 && statusCode < 300;
-			record.setStatus(is2xx ? IdempotencyStatus.SUCCESS : IdempotencyStatus.FAILED);
-			record.setResponseCode(statusCode);
-			record.setResponseBody(responseBody);
-			idempotencyRepository.save(record);
+			Optional<IdempotencyRecord> existingOpt = idempotencyRepository.findById(key);
+			IdempotencyRecord record;
 
-			wrappedResponse.copyBodyToResponse();
-		} catch (Exception ex) {
-			record.setStatus(IdempotencyStatus.FAILED);
-			idempotencyRepository.save(record);
-			throw ex;
+			if (existingOpt.isPresent()) {
+				IdempotencyRecord existing = existingOpt.get();
+
+				if (!existing.getRequestHash().equals(requestHash)) {
+					LOG.warn("Idempotency key reuse: key={}", key);
+					String msg = "Key reused with different payload.";
+					sendError(res, HttpStatus.BAD_REQUEST, "Key Reuse", msg, uri);
+					return;
+				}
+
+				boolean isInFlight = existing.getStatus() == IdempotencyStatus.PROCESSING
+						|| existing.getStatus() == IdempotencyStatus.INITIATED;
+
+				if (isInFlight) {
+					Instant leaseCutoff = Instant.now().minus(IN_FLIGHT_TIMEOUT);
+					Instant recordUpdated = existing.getUpdatedAt() != null
+							? existing.getUpdatedAt()
+							: existing.getCreatedAt();
+					if (recordUpdated == null || recordUpdated.isAfter(leaseCutoff)) {
+						LOG.warn("Concurrent request in-flight: key={}", key);
+						String msg = "Request with key is in-flight.";
+						sendError(res, HttpStatus.CONFLICT, "In Flight", msg, uri);
+						return;
+					}
+					LOG.warn("In-flight lease expired for key={}. Allowing retry execution.", key);
+				}
+
+				if (existing.getStatus() == IdempotencyStatus.SUCCESS) {
+					LOG.info("Replaying cached response: key={}", key);
+					Integer code = existing.getResponseCode();
+					res.setStatus(code != null ? code : 200);
+					res.setContentType(MediaType.APPLICATION_JSON_VALUE);
+					if (existing.getResponseBody() != null) {
+						res.getWriter().write(existing.getResponseBody());
+					}
+					return;
+				}
+
+				existing.setStatus(IdempotencyStatus.PROCESSING);
+				record = existing;
+			} else {
+				record = new IdempotencyRecord();
+				record.setIdempotencyKey(key);
+				record.setRequestHash(requestHash);
+				record.setStatus(IdempotencyStatus.PROCESSING);
+			}
+
+			try {
+				idempotencyRepository.saveAndFlush(record);
+			} catch (DataIntegrityViolationException ex) {
+				LOG.warn("Concurrent insert race detected for key={}: {}", key, ex.getMessage());
+				String msg = "Concurrent request with this key is being processed.";
+				sendError(res, HttpStatus.CONFLICT, "Concurrent Conflict", msg, uri);
+				return;
+			}
+
+			ContentCachingResponseWrapper wrappedResponse = new ContentCachingResponseWrapper(res);
+			try {
+				chain.doFilter(wrappedRequest, wrappedResponse);
+				int statusCode = wrappedResponse.getStatus();
+				byte[] responseBytes = wrappedResponse.getContentAsByteArray();
+				String responseBody = new String(responseBytes, StandardCharsets.UTF_8);
+
+				boolean is2xx = statusCode >= 200 && statusCode < 300;
+				record.setStatus(is2xx ? IdempotencyStatus.SUCCESS : IdempotencyStatus.FAILED);
+				record.setResponseCode(statusCode);
+				record.setResponseBody(responseBody);
+				idempotencyRepository.save(record);
+
+				wrappedResponse.copyBodyToResponse();
+			} catch (Exception ex) {
+				record.setStatus(IdempotencyStatus.FAILED);
+				idempotencyRepository.save(record);
+				throw ex;
+			}
+		} finally {
+			distributedLockService.unlock(lockKey);
 		}
 	}
 
