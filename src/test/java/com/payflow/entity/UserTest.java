@@ -17,7 +17,7 @@ class UserTest {
 
 	@BeforeEach
 	void setUp() {
-		user = User.builder().name("John Doe").upiId("john@upi").phoneNumber("9876543210")
+		user = User.builder().name("Aarav Sharma").upiId("aarav@upi").phoneNumber("9876543210")
 				.balance(new BigDecimal("500.00")).build();
 	}
 

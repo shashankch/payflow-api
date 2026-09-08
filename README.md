@@ -1,53 +1,46 @@
-# Payflow API — Enterprise Transaction & Payment Ledger Engine
+<div align="center">
 
-<p align="left">
-  <a href="https://github.com/shashankch/payflow-api/actions/workflows/ci.yml"><img src="https://github.com/shashankch/payflow-api/actions/workflows/ci.yml/badge.svg" alt="Build"></a>
-  <a href="https://dev.java/"><img src="https://img.shields.io/badge/Java-25-ED8B00?logo=openjdk&logoColor=white" alt="Java 25"></a>
-  <a href="https://spring.io/projects/spring-boot"><img src="https://img.shields.io/badge/Spring%20Boot-4.1.0-6DB33F?logo=springboot&logoColor=white" alt="Spring Boot"></a>
-  <a href="https://junit.org/junit5/"><img src="https://img.shields.io/badge/Tests-125%20Passing-brightgreen?logo=junit5" alt="Tests"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+# ₹ Payflow API
+
+### Enterprise Transaction & Double-Entry Payment Ledger Engine
+
+[![CI Build](https://img.shields.io/badge/CI-Passing-brightgreen?logo=githubactions&logoColor=white&style=flat-square)](https://github.com/shashankch/payflow-api/actions/workflows/ci.yml)
+[![Java 25](https://img.shields.io/badge/Java-25-ED8B00?logo=openjdk&logoColor=white&style=flat-square)](https://dev.java/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.0-6DB33F?logo=springboot&logoColor=white&style=flat-square)](https://spring.io/projects/spring-boot)
+[![Tests](https://img.shields.io/badge/Tests-125%20Passing-brightgreen?logo=junit5&logoColor=white&style=flat-square)](https://junit.org/junit5/)
+[![Architecture](https://img.shields.io/badge/Architecture-Modular%20Monolith-6366f1?style=flat-square)](docs/ARCHITECTURE.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
+
+<p align="center">
+  A high-concurrency peer-to-peer payment backend built with <b>Java 25</b> & <b>Spring Boot 4.x</b>.<br>
+  Guaranteed zero double-spending • Deterministic row locking • Distributed Redisson locks • Immutable balance ledger
 </p>
 
-Payflow API is an enterprise-grade peer-to-peer (P2P) payment backend and double-entry transaction ledger built with **Java 25** and **Spring Boot 4.x**. It is engineered to process high-concurrency payment transfers with zero double-spending, guaranteed base-10 financial precision, and complete auditability.
+</div>
 
 ---
 
 ## 🚀 Key Architectural Pillars
 
-- **🔒 Distributed Locking & Redisson Coordination (Phase 8D)**: Profile-conditional distributed locking via Redisson `RLock` with single-instance/sentinel/cluster configuration in `prod` profile and seamless no-op (`NoOpDistributedLockService`) fallback in non-prod environments. Coordinates concurrent idempotency key acquisitions (`payflow:lock:idemp:<key>`) with bounded wait time (2s) and fail-safe lease duration (10s) to eliminate distributed race conditions prior to database operations.
-- **⚡ Distributed Caching & Caffeine Fallback (Phase 8C)**: Profile-conditional cache-aside pattern via `@Cacheable` on user lookups and ledger queries with null-safe conditions, Redis distributed cache in `prod` with `RedisSerializer.json()`, string keys, and granular TTL policies (10m users, 1m user_ledgers), local in-memory Caffeine cache fallback in `!prod`, and `@CacheEvict(allEntries = true)` on registration and transfer balance mutations.
-- **🛡️ Resilience4j Fault Tolerance & Dynamic Rate Limiting (Phase 8B)**: Dynamic per-user rate limiting (`@PerUserRateLimiter`, 10 req/s with RFC 6585 `Retry-After: 1` header & RFC 7807 429 ProblemDetail), circuit breaker on external integrations (`@CircuitBreaker(name = "upiValidation")`, sliding window 10, 50% threshold, 5s recovery wait), automated inactive limiter eviction, and Actuator/Prometheus metrics integration.
-- **📊 Structured Logging, Prometheus Metrics & OpenTelemetry Tracing (Phase 8A)**: Native ECS JSON structured logging in production, MDC correlation (`requestId`, `traceId`, `spanId`, `http.status`, `http.latency_ms`), Prometheus metrics (`/actuator/prometheus`), HikariCP connection pool monitoring (`PayflowHikariPool`), custom business meters (`payflow.transfers.total`, `payflow.transfers.amount`, `payflow.transfers.duration` with p50/p95/p99 histograms), and `@Observed` OpenTelemetry span generation.
-- **🛡️ Spring Security, JWT Authentication & Authorization (Phase 7A/7B)**: Stateless HMAC-SHA256 bearer token authentication (`POST /api/v1/auth/login`), `JwtAuthenticationFilter`, strict sender verification on transfers, multi-party transaction visibility (sender/receiver only), ledger privacy, and RFC 7807 401/403 problem details.
-- **🌐 RestClient & Declarative HTTP Interface Client (Phase 7C)**: Spring 6.1+ `@HttpExchange`/`@GetExchange` declarative client proxying via `HttpServiceProxyFactory` with Spring Retry (`@Retryable` exponential backoff + jitter) and non-blocking graceful onboarding fallback.
-- **⚡ Spring Modulith Events & Transactional Outbox (Phase 6B)**: Event publication registry (`spring-modulith-starter-jpa`), domain event `TransferCompletedEvent` published atomically inside `@Transactional` to `event_publication` table, and async `@ApplicationModuleListener` handler with modular boundary verification (`ModulithStructureTest`).
-- **🔁 Database-Backed Idempotency Engine (Phase 6A)**: `Idempotency-Key` header with SHA-256 request payload hashing, cached 201 response replay, in-flight lease recovery, 409 conflict detection, and background TTL purge job.
-- **🧪 Multi-Tier Testing Suite (Phase 5–8)**: 125 unit, slice, and integration tests passing (`mvn clean verify`), featuring Mockito service isolation (`UserServiceTest`, `TransactionServiceTest`, `UpiValidationServiceTest`, `UserServiceCacheTest`, `TransactionServiceCacheTest`, `RedissonDistributedLockServiceTest`, `NoOpDistributedLockServiceTest`), Distributed lock and cache configuration tests (`DistributedLockConfigTest`, `CacheConfigTest`), Data JPA repository slice tests (`@DataJpaTest`), WebMvc slice tests (`@WebMvcTest`), `MockRestServiceServer` client tests (`UpiValidationClientTest`), and Testcontainers PostgreSQL concurrency & security tests (`ConcurrentTransferIT`, `MutualTransferDeadlockIT`, `TransferLifecycleIT`, `IdempotencyIT`, `OutboxIT`, `AuthenticationIT`, `AuthorizationIT`, `UpiValidationIT`, `ObservabilityIT`, `ResilienceIT`, `CacheIT`).
-- **🐳 Profile Matrix & Testcontainers (Phase 4B)**: Environment profiles (`local`, `test`, `prod`) with production-parity PostgreSQL container testing (`@Testcontainers`, `@ServiceConnection`).
-- **🗄️ Flyway Migrations & Performance Indexing (Phase 4A)**: Versioned DDL migrations (`V1`..`V6`) managing schemas with custom performance indexes and Hibernate `ddl-auto=validate` enforcement.
-- **🔒 Concurrency Control & Double-Entry Ledger (Phase 3)**: Database write locking (`SELECT ... FOR UPDATE`) with deterministic alphabetical lock ordering by UPI ID to prevent race conditions and cross-transfer deadlocks.
-- **🌐 DTO Isolation & RFC 7807 Error Framework (Phases 1–2)**: Versioned `/api/v1` endpoints exposing Java records, compile-time MapStruct DTO mappings, non-enumerable UUID reference IDs, and standardized RFC 7807 `ProblemDetail` error payloads.
+| Architectural Pillar | Core Guarantee & Engineering Mechanics |
+| :--- | :--- |
+| **🔒 Concurrency Safety** | Row-level pessimistic write locking (`SELECT ... FOR UPDATE`) paired with deterministic alphabetical lock ordering by UPI ID, eliminating race conditions and deadlocks during concurrent account debits and credits. |
+| **📜 Double-Entry Ledger** | Atomic paired `DEBIT` and `CREDIT` records with strict base-10 `BigDecimal` arithmetic precision denominated in Indian Rupees (`INR`, symbol: `₹`, scale = 4) and Banker's Rounding (`HALF_EVEN`), preserving an immutable financial audit trail. |
+| **🔁 Durable Idempotency** | Mandatory `Idempotency-Key` headers backed by raw SHA-256 payload hashing to prevent tampering, coupled with Redisson distributed locking (`payflow:lock:idemp:{key}`) to coordinate mutations across multi-instance clusters. |
+| **🛡️ Resilience & Fault Tolerance** | Dynamic per-user rate limiting (10 req/s, RFC 6585 `Retry-After: 1`), Resilience4j circuit breaking on external banking rails, bounded timeouts, and automatic memory eviction of inactive limiter buckets. |
+| **⚡ Transactional Outbox** | Spring Modulith Event Publication Registry atomically persisting domain events (`TransferCompletedEvent`) within the database transaction, bridging to Apache Kafka without dual-write inconsistency. |
+| **🔐 Zero-Trust Security** | Stateless HMAC-SHA256 JWT tokens, strict principal-bound sender verification, multi-party access control, non-enumerable UUID reference IDs, and RFC 7807 ProblemDetail error responses. |
+| **📊 Enterprise Observability** | Native Elastic Common Schema (ECS) JSON structured logging, MDC trace correlation (`requestId`, `traceId`, `spanId`), Prometheus metrics, and profile-conditional Redis distributed caching with Caffeine local fallback. |
 
-> 👉 **For architectural deep-dives, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/SECURITY.md](docs/SECURITY.md), [docs/adr/](docs/adr/), and [CHANGELOG.md](CHANGELOG.md).**
+👉 **Architectural Deep-Dives**: Detailed design documents are available in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/adr/](docs/adr/), [SECURITY.md](SECURITY.md), and [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
-## 🗺️ Project Evolution & Roadmap
+## 🗺️ Engineering Roadmap
 
-Payflow API evolves through a structured, multi-phase engineering roadmap:
+Payflow API evolves through a structured, 12-phase capability roadmap advancing from core transactional domain modeling to distributed systems, Kafka event streaming, containerization, and production Kubernetes orchestration.
 
-| Phase | Core Capability | Status |
-| :--- | :--- | :--- |
-| **Phase 1** | Foundation & Project Hygiene (JDK 25, Spring Boot 4.1, Spotless, Checkstyle) | ✅ Complete |
-| **Phase 2** | Domain Modeling, OpenAPI Docs, RFC 7807 Error Handling, UUID References | ✅ Complete |
-| **Phase 3** | ACID Transfer Engine, Pessimistic Locking, Double-Entry Balance Ledger | ✅ Complete |
-| **Phase 4** | Flyway Database Migrations (`V1`..`V4`), Spring Profiles & Testcontainers | ✅ Complete |
-| **Phase 5** | Multi-Tier Test Suite (Unit, `@DataJpaTest`, `@WebMvcTest`, Testcontainers Concurrency) | ✅ Complete |
-| **Phase 6** | Durable Idempotency Engine (6A) & Spring Modulith Transactional Outbox (6B) | ✅ Complete |
-| **Phase 7** | Spring Security & JWT (7A), Authorization (7B) & RestClient Integration (7C) | ✅ Complete |
-| **Phase 8** | Observability, Metrics & Tracing (8A), Resilience4j (8B), Redis Caching (8C) & Distributed Locking (8D) | ✅ Complete |
-
-> 📌 *See full multi-phase evolution details in [docs/ROADMAP.md](docs/ROADMAP.md).*
+📖 **Full Specification & Milestones**: See the complete phase-by-phase deliverables, technical specifications, and status in [**docs/ROADMAP.md**](docs/ROADMAP.md).
 
 ---
 
@@ -91,7 +84,8 @@ graph TD
 | Document | Description |
 | :--- | :--- |
 | 📘 **[System Architecture](docs/ARCHITECTURE.md)** | Deep-dive concurrency models, pessimistic locking mechanics, test pyramid |
-| 🛡️ **[Security Architecture & Threat Model](docs/SECURITY.md)** | Financial threat model (STRIDE), IAM, zero double-spending, vulnerability disclosure |
+| 🛡️ **[Security Architecture & Threat Model](docs/ARCHITECTURE.md#18-security-architecture-and-threat-model)** | Zero-Trust filter chain, STRIDE threat model, IAM policy matrix, financial concurrency controls |
+| 🔒 **[Security Policy](SECURITY.md)** | Open-source vulnerability reporting guidelines and project security posture |
 | 🗓️ **[Phased Roadmap](docs/ROADMAP.md)** | Full 12-phase technical expansion blueprint |
 | 🌐 **[API Specification](docs/API_SPECIFICATION.md)** | Complete REST endpoint contracts, schemas, RFC 7807 payloads |
 | 📋 **[Engineering Conventions](docs/CONVENTIONS.md)** | Java 25 standards, Spotless/Checkstyle rules, testing guidelines |
@@ -109,13 +103,13 @@ graph TD
 ### Build & Run Tests
 ```bash
 # Verify spotless code format, checkstyle, and run unit & slice tests
-./mvnw clean verify
+mvn clean verify
 ```
 
 ### Launch Local Server
 ```bash
 # Start server with active 'local' profile (H2 in-memory, port 8080)
-./mvnw spring-boot:run
+mvn spring-boot:run
 ```
 
 - **Swagger UI Interactive Docs**: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)

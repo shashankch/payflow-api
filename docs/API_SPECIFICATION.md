@@ -2,12 +2,12 @@
 
 > **Document Metadata**
 > - **Title**: Payflow REST API Interface & Schema Specification
-> - **Author**: Payflow Engineering(`shashakchandel@gmail.com`)
+> - **Author**: Payflow Engineering (shashakchandel@gmail.com)
 > - **Status**: Approved / Living Specification
 > - **Created Date**: 2026-08-01
-> - **Last Updated**: 2026-08-28
+> - **Last Updated**: 2026-09-08
 > - **Authoritative Location**: [API_SPECIFICATION.md](API_SPECIFICATION.md)
-> - **Related Documents**: [System Architecture](ARCHITECTURE.md) | [Security Architecture](SECURITY.md) | [Architecture Decisions (ADRs)](adr/README.md) | [Phased Roadmap](ROADMAP.md) | [Engineering Conventions](CONVENTIONS.md)
+> - **Related Documents**: [System Architecture](ARCHITECTURE.md) | [Security Architecture](ARCHITECTURE.md#18-security-architecture-and-threat-model) | [Architecture Decisions (ADRs)](adr/README.md) | [Phased Roadmap](ROADMAP.md) | [Engineering Conventions](CONVENTIONS.md)
 
 This document details the REST API endpoints, request/response models, input validation rules, and error handling behaviors for the Payflow API service.
 
@@ -17,7 +17,7 @@ This document details the REST API endpoints, request/response models, input val
 
 - **API Base Prefix**: All endpoints are versioned and prefixed with `/api/v1`.
 - **Content-Type**: All request and response bodies use `application/json`.
-- **Monetary Precision**: All monetary values are encoded as standard JSON numbers with up to 4 decimal places (e.g. `100.0000`).
+- **Monetary Currency & Precision**: All monetary values are strictly denominated in Indian Rupees (**INR**, symbol: **₹**) and encoded as exact base-10 decimals with up to 4 decimal places (e.g. `100.0000` = ₹100.00).
 - **Pagination**: Default page size is 10, with a hard maximum of 100 per page (`@Min(1) @Max(100)`).
 - **Authentication**: Mutation and secure history endpoints require a cryptographically signed JWT token passed via the `Authorization: Bearer <token>` header.
 - **Idempotency**: All mutation write operations require a unique identifier passed in the `Idempotency-Key` header.
@@ -94,13 +94,13 @@ Registers a new client profile with an initial balance.
   - `name`: String, required (`@NotBlank`), max 100 chars (`@Size(max = 100)`).
   - `upiId`: String, required (`@NotBlank`), max 100 chars (`@Size(max = 100)`), valid UPI format (`@Pattern(regexp = "^[a-zA-Z0-9.\\-_]{2,64}@[a-zA-Z]{2,32}$")`).
   - `phoneNumber`: String, required (`@NotBlank`), exactly 10 digits (`@Pattern(regexp = "^\\d{10}$")`).
-  - `balance`: BigDecimal, required (`@NotNull`), non-negative (`@DecimalMin("0.0")`).
+  - `balance`: BigDecimal, required (`@NotNull`), non-negative (`@DecimalMin("0.0")`), denominated in Indian Rupees (INR, ₹).
 
 #### Request Example
 ```json
 {
-  "name": "Jane Doe",
-  "upiId": "janedoe@upi",
+  "name": "Aarav Sharma",
+  "upiId": "aarav@upi",
   "phoneNumber": "9876543210",
   "balance": 1000.00
 }
@@ -111,8 +111,8 @@ Headers: `Location: /api/v1/users/a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d`
 ```json
 {
   "referenceId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
-  "name": "Jane Doe",
-  "upiId": "janedoe@upi",
+  "name": "Aarav Sharma",
+  "upiId": "aarav@upi",
   "phoneNumber": "9876543210",
   "balance": 1000.0000,
   "createdAt": "2026-08-01T16:00:00Z",
@@ -143,8 +143,8 @@ Retrieves a paginated list of registered users.
   "content": [
     {
       "referenceId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
-      "name": "Jane Doe",
-      "upiId": "janedoe@upi",
+      "name": "Aarav Sharma",
+      "upiId": "aarav@upi",
       "phoneNumber": "9876543210",
       "balance": 1000.0000,
       "createdAt": "2026-08-01T16:00:00Z",
@@ -173,8 +173,8 @@ Fetches a single user record by their unique UUID reference ID.
 ```json
 {
   "referenceId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
-  "name": "Jane Doe",
-  "upiId": "janedoe@upi",
+  "name": "Aarav Sharma",
+  "upiId": "aarav@upi",
   "phoneNumber": "9876543210",
   "balance": 1000.0000,
   "createdAt": "2026-08-01T16:00:00Z",
@@ -196,8 +196,8 @@ Fetches a single user record by their unique UPI ID.
 ```json
 {
   "userId": 2,
-  "name": "John Smith",
-  "upiId": "johnsmith@upi",
+  "name": "Priya Patel",
+  "upiId": "priya@upi",
   "phoneNumber": "9876543211",
   "balance": 50.0000,
   "version": 0,
@@ -257,7 +257,7 @@ Executes a peer-to-peer fund transfer request with guaranteed exactly-once idemp
 - **Request Body DTO (`TransferMoneyRequest`)**:
   - `senderUpiId`: String, required (`@NotBlank`), max 100 chars (`@Size(max = 100)`), valid UPI format (`@Pattern(...)`).
   - `receiverUpiId`: String, required (`@NotBlank`), max 100 chars (`@Size(max = 100)`), valid UPI format (`@Pattern(...)`).
-  - `amount`: BigDecimal, required (`@NotNull`), minimum `0.01` (`@DecimalMin("0.01")`), maximum `1,000,000` (`@DecimalMax("1000000.00")`).
+  - `amount`: BigDecimal, required (`@NotNull`), minimum ₹0.01 (`@DecimalMin("0.01")`), maximum ₹10,00,000 (`@DecimalMax("1000000.00")`), denominated in Indian Rupees (INR, ₹).
   - `note`: String, optional, max 255 characters (`@Size(max = 255)`).
 
 #### Request Example
@@ -268,8 +268,8 @@ Idempotency-Key: 9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d
 Content-Type: application/json
 
 {
-  "senderUpiId": "janedoe@upi",
-  "receiverUpiId": "johnsmith@upi",
+  "senderUpiId": "aarav@upi",
+  "receiverUpiId": "priya@upi",
   "amount": 150.00,
   "note": "Dinner bill split"
 }
@@ -281,8 +281,8 @@ Headers: `Location: /api/v1/transactions/550e8400-e29b-41d4-a716-446655440000`
 {
   "transactionId": 1,
   "referenceId": "550e8400-e29b-41d4-a716-446655440000",
-  "senderUpiId": "janedoe@upi",
-  "receiverUpiId": "johnsmith@upi",
+  "senderUpiId": "aarav@upi",
+  "receiverUpiId": "priya@upi",
   "amount": 150.0000,
   "status": "COMPLETED",
   "type": "TRANSFER",
@@ -314,8 +314,8 @@ Fetches details of a single transaction by its unique UUID reference ID.
 {
   "transactionId": 1,
   "referenceId": "550e8400-e29b-41d4-a716-446655440000",
-  "senderUpiId": "janedoe@upi",
-  "receiverUpiId": "johnsmith@upi",
+  "senderUpiId": "aarav@upi",
+  "receiverUpiId": "priya@upi",
   "amount": 150.0000,
   "status": "COMPLETED",
   "type": "TRANSFER",
@@ -323,19 +323,20 @@ Fetches details of a single transaction by its unique UUID reference ID.
   "createdAt": "2026-08-01T16:05:00Z"
 }
 ```
-*If not found, returns `404 Not Found` (`TransactionNotFoundException`).*
 
 ---
 
-### 8. Retrieve User Transaction History (Paginated)
-Retrieves paginated transfer history (sent and received) for a given UPI ID.
+### 8. List Transactions for a User (Paginated)
+Retrieves a paginated list of all transactions where the specified UPI ID is either the sender or receiver.
 
 - **HTTP Method**: `GET`
-- **Path**: `/api/v1/transactions/user/{upiId}`
+- **Path**: `/api/v1/transactions`
+- **Authentication**: `Authorization: Bearer <token>`
 - **Query Parameters**:
-  - `page` (optional, default: `0`) — Zero-based page index.
-  - `size` (optional, default: `10`, max: `100`) — Page size limit.
-  - `sortBy` (optional, default: `createdAt`) — Field name to sort by (descending).
+  - `upiId`: String, required. UPI ID to filter transactions.
+  - `page`: Integer, optional. Page index (0-based, `@Min(0)`). Default: `0`.
+  - `size`: Integer, optional. Page size (`@Min(1) @Max(100)`). Default: `10`.
+  - `sortBy`: String, optional. Column name to sort. Default: `createdAt`.
 
 #### Response Example (`200 OK`)
 ```json
@@ -344,8 +345,8 @@ Retrieves paginated transfer history (sent and received) for a given UPI ID.
     {
       "transactionId": 1,
       "referenceId": "550e8400-e29b-41d4-a716-446655440000",
-      "senderUpiId": "janedoe@upi",
-      "receiverUpiId": "johnsmith@upi",
+      "senderUpiId": "aarav@upi",
+      "receiverUpiId": "priya@upi",
       "amount": 150.0000,
       "status": "COMPLETED",
       "type": "TRANSFER",
@@ -376,6 +377,40 @@ Payflow API exposes standard Spring Boot Actuator endpoints for container health
 | `/actuator/info` | `GET` | No | Application build and version information. |
 | `/actuator/prometheus` | `GET` | No | Prometheus format scrape output including `payflow_transfers_*`, `hikaricp_connections`, `resilience4j_circuitbreaker_*`, and `resilience4j_ratelimiter_*`. |
 | `/actuator/metrics` | `GET` | No | JSON catalog of available Micrometer metric names. |
+
+---
+
+### 8. Planned Endpoints — Gen-AI Spend Insights (Phase 10A)
+
+#### Generate Spend Insights for Transaction
+Analyzes transaction metadata, user note, and recipient handle using Spring AI structured prompt engineering to classify the expenditure into personal finance categories and generate actionable budget insights.
+
+- **HTTP Method**: `POST`
+- **Path**: `/api/v1/transactions/{id}/insights`
+- **Authentication**: Principal-Bound (`Bearer JWT` — caller must be transaction sender or receiver)
+- **Feature Toggle**: Controlled by `payflow.ai.enabled: true` (returns `503 Service Unavailable` with explanatory ProblemDetail when disabled)
+- **Path Parameters**:
+  - `id`: Long (or transaction reference ID)
+- **Response Model (`SpendInsightResponse`)**:
+  - `transactionReferenceId`: UUID
+  - `category`: String (e.g., `FOOD_AND_DINING`, `UTILITIES`, `ENTERTAINMENT`, `INVESTMENTS`, `PEER_TRANSFER`)
+  - `confidenceScore`: Double (0.0 to 1.0)
+  - `insight`: String (contextual budgeting advice)
+  - `source`: String (`LLM` or `HEURISTIC_FALLBACK`)
+
+##### Response Example (`200 OK`)
+```json
+{
+  "transactionReferenceId": "11410662-b080-4416-b739-77fcd753097b",
+  "category": "FOOD_AND_DINING",
+  "confidenceScore": 0.94,
+  "insight": "High food & dining expenditure detected. Consider setting a weekly dining budget.",
+  "source": "LLM"
+}
+```
+
+##### Fault-Tolerant Behavior:
+- External LLM timeouts (10s) or outages trip Resilience4j `aiCircuitBreaker`, automatically executing `fallbackInsights()` with deterministic regex rule-based categorization (`source: "HEURISTIC_FALLBACK"`), ensuring zero API downtime for end users.
 
 ---
 

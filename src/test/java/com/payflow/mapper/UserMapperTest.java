@@ -24,7 +24,7 @@ class UserMapperTest {
 	void shouldMapUserEntityToUserResponse() {
 		Instant now = Instant.now();
 		UUID refId = UUID.randomUUID();
-		User user = User.builder().userId(100L).referenceId(refId).name("Alice Smith").upiId("alice@upi")
+		User user = User.builder().userId(100L).referenceId(refId).name("Aarav Sharma").upiId("aarav@upi")
 				.phoneNumber("9876543210").balance(new BigDecimal("1500.50")).version(1L).createdAt(now).updatedAt(now)
 				.build();
 
@@ -32,8 +32,8 @@ class UserMapperTest {
 
 		assertThat(response).isNotNull();
 		assertThat(response.referenceId()).isEqualTo(refId);
-		assertThat(response.name()).isEqualTo("Alice Smith");
-		assertThat(response.upiId()).isEqualTo("alice@upi");
+		assertThat(response.name()).isEqualTo("Aarav Sharma");
+		assertThat(response.upiId()).isEqualTo("aarav@upi");
 		assertThat(response.phoneNumber()).isEqualTo("9876543210");
 		assertThat(response.balance()).isEqualTo(new BigDecimal("1500.50"));
 		assertThat(response.createdAt()).isEqualTo(now);
@@ -43,14 +43,14 @@ class UserMapperTest {
 	@Test
 	@DisplayName("Should correctly map CreateUserRequest to User entity")
 	void shouldMapCreateUserRequestToUserEntity() {
-		CreateUserRequest request = CreateUserRequest.builder().name("Bob Jones").upiId("bob@upi")
+		CreateUserRequest request = CreateUserRequest.builder().name("Priya Patel").upiId("priya@upi")
 				.phoneNumber("9876543211").balance(new BigDecimal("250.00")).build();
 
 		User user = userMapper.toEntity(request);
 
 		assertThat(user).isNotNull();
-		assertThat(user.getName()).isEqualTo("Bob Jones");
-		assertThat(user.getUpiId()).isEqualTo("bob@upi");
+		assertThat(user.getName()).isEqualTo("Priya Patel");
+		assertThat(user.getUpiId()).isEqualTo("priya@upi");
 		assertThat(user.getPhoneNumber()).isEqualTo("9876543211");
 		assertThat(user.getBalance()).isEqualTo(new BigDecimal("250.00"));
 	}

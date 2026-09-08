@@ -38,12 +38,12 @@ class BalanceLedgerRepositoryTest {
 
 	@BeforeEach
 	void setUp() {
-		sampleUser = entityManager.persistAndFlush(User.builder().referenceId(UUID.randomUUID()).name("Charlie Brown")
-				.upiId("charlie@payflow").phoneNumber("9123456789").balance(new BigDecimal("300.0000")).version(0L)
+		sampleUser = entityManager.persistAndFlush(User.builder().referenceId(UUID.randomUUID()).name("Vikram Malhotra")
+				.upiId("vikram@payflow").phoneNumber("9123456789").balance(new BigDecimal("300.0000")).version(0L)
 				.createdAt(Instant.now()).updatedAt(Instant.now()).build());
 
 		sampleTx = entityManager.persistAndFlush(Transaction.builder().referenceId(UUID.randomUUID()).sender(sampleUser)
-				.receiver(sampleUser).senderUpiId("charlie@payflow").receiverUpiId("charlie@payflow")
+				.receiver(sampleUser).senderUpiId("vikram@payflow").receiverUpiId("vikram@payflow")
 				.amount(new BigDecimal("500.0000")).status(TransactionStatus.COMPLETED).type(TransactionType.TRANSFER)
 				.createdAt(Instant.now()).build());
 	}

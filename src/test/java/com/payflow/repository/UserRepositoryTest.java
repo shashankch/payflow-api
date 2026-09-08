@@ -33,7 +33,7 @@ class UserRepositoryTest {
 	@BeforeEach
 	void setUp() {
 		sampleReferenceId = UUID.randomUUID();
-		User user = User.builder().referenceId(sampleReferenceId).name("Bob Miller").upiId("bob@payflow")
+		User user = User.builder().referenceId(sampleReferenceId).name("Aarav Sharma").upiId("aarav@payflow")
 				.phoneNumber("9988776655").balance(new BigDecimal("750.0000")).version(0L).createdAt(Instant.now())
 				.updatedAt(Instant.now()).build();
 		savedUser = entityManager.persistAndFlush(user);
@@ -42,10 +42,10 @@ class UserRepositoryTest {
 	@Test
 	@DisplayName("Should find user by UPI ID")
 	void shouldFindByUpiId() {
-		Optional<User> found = userRepository.findByUpiId("bob@payflow");
+		Optional<User> found = userRepository.findByUpiId("aarav@payflow");
 
 		assertThat(found).isPresent();
-		assertThat(found.get().getName()).isEqualTo("Bob Miller");
+		assertThat(found.get().getName()).isEqualTo("Aarav Sharma");
 		assertThat(found.get().getReferenceId()).isEqualTo(sampleReferenceId);
 	}
 
@@ -55,13 +55,13 @@ class UserRepositoryTest {
 		Optional<User> found = userRepository.findByReferenceId(sampleReferenceId);
 
 		assertThat(found).isPresent();
-		assertThat(found.get().getUpiId()).isEqualTo("bob@payflow");
+		assertThat(found.get().getUpiId()).isEqualTo("aarav@payflow");
 	}
 
 	@Test
 	@DisplayName("Should acquire pessimistic lock when finding by UPI ID with lock")
 	void shouldFindByUpiIdWithLock() {
-		Optional<User> found = userRepository.findByUpiIdWithLock("bob@payflow");
+		Optional<User> found = userRepository.findByUpiIdWithLock("aarav@payflow");
 
 		assertThat(found).isPresent();
 		assertThat(found.get().getUserId()).isEqualTo(savedUser.getUserId());
@@ -70,7 +70,7 @@ class UserRepositoryTest {
 	@Test
 	@DisplayName("Should return true when checking exists by UPI ID")
 	void shouldReturnTrue_whenExistsByUpiId() {
-		boolean exists = userRepository.existsByUpiId("bob@payflow");
+		boolean exists = userRepository.existsByUpiId("aarav@payflow");
 
 		assertThat(exists).isTrue();
 	}

@@ -23,7 +23,7 @@ This document outlines the coding standards, repository conventions, Git workflo
 - **Constructor Injection**: Always use constructor injection for Spring beans. Field injection via `@Autowired` is prohibited.
 - **DTO Separation**: Database entities (`@Entity`) must never be exposed directly via REST controllers. Use DTOs for request input and Java `record`s for API response models.
 - **Immutability**: Prefer immutable data structures. Response DTOs should use Java `record`s where possible.
-- **Financial Arithmetic**: Never use `double` or `float` for monetary calculations. Always use `BigDecimal` with explicit scale and `RoundingMode.HALF_EVEN` (banker's rounding).
+- **Financial Arithmetic & Currency**: All monetary amounts are strictly denominated in Indian Rupees (**INR**, symbol: **₹**). Never use `double` or `float` for monetary calculations. Always use `BigDecimal` with explicit scale (`precision = 19, scale = 4`) and `RoundingMode.HALF_EVEN` (banker's rounding).
 - **Error Responses**: All API errors must return standardized RFC 7807 `ProblemDetail` payloads via `@RestControllerAdvice`.
 - **Logging**: Never use `System.out.println()`. Use SLF4J loggers named `LOG` (`private static final Logger LOG = LoggerFactory.getLogger(...)`) with structured MDC enrichment (`LOG.info()`, `LOG.warn()`, `LOG.error()`).
 
