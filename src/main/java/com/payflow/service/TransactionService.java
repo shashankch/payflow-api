@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -57,6 +58,7 @@ public class TransactionService {
 
 	@PerUserRateLimiter(name = "transferLimiter")
 	@Observed(name = "payflow.transfers.send", contextualName = "send-money-transfer")
+	@CacheEvict(value = {"users", "user_ledgers"}, allEntries = true)
 	@Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class, timeout = 5)
 	public Transaction sendMoney(TransferMoneyRequest request) {
 		long startTime = System.currentTimeMillis();

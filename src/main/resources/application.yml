@@ -63,6 +63,12 @@ payflow:
     limit-for-period: 10
     limit-refresh-period-ms: 1000
     timeout-duration-ms: 0
+  cache:
+    default-ttl-seconds: 600
+    users-ttl-seconds: 600
+    user-ledgers-ttl-seconds: 60
+    caffeine:
+      spec: "maximumSize=1000,expireAfterWrite=600s"
 
 resilience4j:
   circuitbreaker:

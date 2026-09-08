@@ -7,6 +7,8 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -40,6 +42,7 @@ public class UserService {
 	}
 
 	@Transactional
+	@CacheEvict(value = {"users", "user_ledgers"}, allEntries = true)
 	public User registerUser(CreateUserRequest request) {
 		if (userRepository.findByUpiId(request.getUpiId()).isPresent()) {
 			throw new DuplicateUpiIdException(request.getUpiId());
@@ -65,21 +68,25 @@ public class UserService {
 	}
 
 	@Transactional(readOnly = true)
+	@Cacheable(value = "users", key = "'id:' + #id", unless = "#result == null")
 	public Optional<User> getUserById(Long id) {
 		return userRepository.findById(id);
 	}
 
 	@Transactional(readOnly = true)
+	@Cacheable(value = "users", key = "'ref:' + #referenceId", unless = "#result == null")
 	public Optional<User> getUserByReferenceId(UUID referenceId) {
 		return userRepository.findByReferenceId(referenceId);
 	}
 
 	@Transactional(readOnly = true)
+	@Cacheable(value = "users", key = "'upi:' + #upiId", unless = "#result == null")
 	public Optional<User> findByUpiId(String upiId) {
 		return userRepository.findByUpiId(upiId);
 	}
 
 	@Transactional(readOnly = true)
+	@Cacheable(value = "users", key = "'upi:' + #upiId")
 	public User getUserByUpiId(String upiId) {
 		return userRepository.findByUpiId(upiId)
 				.orElseThrow(() -> new UserNotFoundException("User not found with UPI ID: " + upiId));
@@ -91,6 +98,7 @@ public class UserService {
 	}
 
 	@Transactional(readOnly = true)
+	@Cacheable(value = "user_ledgers", key = "#userReferenceId + '_' + #pageable.pageNumber")
 	public Page<BalanceLedgerEntry> getUserLedger(UUID userReferenceId, Pageable pageable) {
 		User user = userRepository.findByReferenceId(userReferenceId)
 				.orElseThrow(() -> new UserNotFoundException("User not found: " + userReferenceId));

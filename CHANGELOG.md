@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Phase 8C (Redis Distributed Caching & Caffeine Local Fallback)
+- Added `spring-boot-starter-cache`, `spring-boot-starter-data-redis`, and `caffeine` (version 3.2.0) dependencies to `pom.xml`.
+- Created `CacheConfig.java` enabling `@EnableCaching` with profile-conditional CacheManager resolution:
+  - Redis CacheManager in `prod` profile with `RedisSerializer.string()` keys, modern non-deprecated `RedisSerializer.json()` values, and granular TTL configurations (10 minutes default and `users`, 1 minute for `user_ledgers`).
+  - Caffeine CacheManager in `!prod` (`local`, `test`, `prod-light`) using spec `maximumSize=1000,expireAfterWrite=600s`.
+- Created `RedisConfig.java` (`@Profile("prod")`) configuring `LettuceConnectionFactory` with standalone configuration and generic `RedisTemplate<String, Object>`.
+- Annotated `UserService.java` query operations with `@Cacheable`:
+  - `getUserById(Long id)` -> `@Cacheable(value = "users", key = "#id", unless = "#result == null")`.
+  - `getUserByReferenceId(UUID referenceId)` -> `@Cacheable(value = "users", key = "#referenceId", unless = "#result == null")`.
+  - `findByUpiId(String upiId)` -> `@Cacheable(value = "users", key = "#upiId", unless = "#result == null")`.
+  - `getUserByUpiId(String upiId)` -> `@Cacheable(value = "users", key = "#upiId", unless = "#result == null")`.
+  - `getUserLedger(UUID userReferenceId, Pageable pageable)` -> `@Cacheable(value = "user_ledgers", key = "#userReferenceId + '_' + #pageable.pageNumber", unless = "#result == null")`.
+- Annotated mutation operations with `@CacheEvict`:
+  - `UserService.registerUser()` -> `@CacheEvict(value = "users", allEntries = true)`.
+  - `TransactionService.sendMoney()` -> `@CacheEvict(value = {"users", "user_ledgers"}, allEntries = true)` upon successful transfer execution.
+- Hardened domain entities for distributed JSON caching:
+  - `User.java`: Added `implements Serializable` and `serialVersionUID = 1L`.
+  - `BalanceLedgerEntry.java`: Added `implements Serializable`, `serialVersionUID = 1L`, `@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})` to ignore Hibernate proxy fields, and `@JsonIgnore` on lazy associations (`user`, `transaction`) to prevent circular serialization graphs.
+- Externalized cache TTL configurations in `application.yml` (`payflow.cache.*`) and Redis connection parameters in `application-prod.yml`.
+- Created unit and slice tests:
+  - `CacheConfigTest.java` verifying Caffeine CacheManager bean creation, cache operations, and profile-conditional activation.
+  - `UserServiceCacheTest.java` verifying cache hits on reference ID, UPI, and ledger queries, and `@CacheEvict` on `registerUser()`.
+  - `TransactionServiceCacheTest.java` verifying multi-cache eviction on `sendMoney()`.
+- Created full-stack integration test `CacheIT.java` against Testcontainers PostgreSQL verifying caching and eviction mechanics.
+- Added ADR-022 (*Redis Distributed Caching and Caffeine Local Fallback Strategy*) to `docs/adr/`.
+
 ### Added - Phase 8B (Resilience4j Fault Tolerance, Dynamic Rate Limiting & Circuit Breakers)
 - Added `resilience4j-spring-boot3` and `resilience4j-micrometer` (version 2.4.0) dependencies to `pom.xml`.
 - Created `@PerUserRateLimiter` custom annotation and `PerUserRateLimiterAspect` for declarative, principal-partitioned rate limiting with optional fallback handling.

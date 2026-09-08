@@ -1,9 +1,13 @@
 package com.payflow.entity;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.Instant;
 
 import org.hibernate.annotations.CreationTimestamp;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -19,16 +23,21 @@ import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "balance_ledger")
-public class BalanceLedgerEntry {
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+public class BalanceLedgerEntry implements Serializable {
+
+	private static final long serialVersionUID = 1L;
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long ledgerId;
 
+	@JsonIgnore
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "user_id", nullable = false)
 	private User user;
 
+	@JsonIgnore
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "transaction_id", nullable = false)
 	private Transaction transaction;
