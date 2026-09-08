@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Planned - Phase 9A (Kafka Event Streaming via Spring Modulith)
+- Apache Kafka event streaming for Spring Modulith transactional outbox domain events.
+
+---
+
+## [0.8.0] - 2026-09-09
+
 ### Added - Phase 8D (Redis Distributed Locking with Redisson & Fail-Safe Fallback)
 - Added `org.redisson:redisson` (version 4.7.0) dependency to `pom.xml`, aligning with Netty `4.2.15.Final` in Spring Boot 4.1.0.
 - Created `DistributedLockService.java` interface defining `tryLock(key, waitTime, leaseTime)`, fail-fast `tryLock(key, leaseTime)`, `unlock(key)`, and `isLocked(key)`.
@@ -87,6 +94,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Created unit tests `MetricsConfigTest.java` and `RequestLoggingFilterTest.java`.
 - Created full-stack integration test `ObservabilityIT.java` against Testcontainers PostgreSQL verifying `/actuator/health`, `/actuator/prometheus`, custom metrics, and HikariCP connection metrics.
 - Added ADR-020 (*Structured Logging, Prometheus Metrics & OpenTelemetry Observability Architecture*) to `docs/adr/`.
+
+---
+
+## [0.7.0] - 2026-08-28
 
 ### Added - Phase 7C (RestClient, Declarative HTTP Interface Client & External UPI Validation)
 - Added `spring-retry` dependency to `pom.xml` for declarative retry management.
