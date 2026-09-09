@@ -15,12 +15,11 @@ import com.payflow.entity.TransactionStatus;
 class TransferCompletedEventTest {
 
 	@Test
-	@DisplayName("Should be annotated with @Externalized routing to payflow.transfers partitioned by senderUpi")
-	void shouldHaveExternalizedAnnotationWithCorrectRouting() {
+	@DisplayName("Should be marked with @Externalized for Spring Modulith event externalization")
+	void shouldHaveExternalizedAnnotation() {
 		Externalized externalized = TransferCompletedEvent.class.getAnnotation(Externalized.class);
 
 		assertThat(externalized).isNotNull();
-		assertThat(externalized.value()).isEqualTo("payflow.transfers::#{senderUpi()}");
 	}
 
 	@Test

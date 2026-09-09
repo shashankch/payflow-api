@@ -79,7 +79,7 @@ Enterprise reliability and distributed coordination:
 
 ## Phase 9 — Event Streaming & Messaging ✅
 Decoupled event-driven architecture:
-- **9A — Kafka via Spring Modulith Event Externalization**: Transparently bridge domain events from the transactional outbox registry to partitioned Apache Kafka topics with exactly-once producer semantics. Non-production environments continue seamless in-process event dispatching.
+- **9A — Kafka via Spring Modulith Event Externalization**: Transparently bridge domain events from the transactional outbox registry to partitioned Apache Kafka topics with producer retry idempotence and guaranteed at-least-once outbox delivery. Non-production environments continue seamless in-process event dispatching.
 
 ---
 

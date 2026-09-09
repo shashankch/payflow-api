@@ -76,6 +76,8 @@ payflow:
     lease-time: 10s
   kafka:
     transfers-topic: payflow.transfers
+    topic-partitions: 3
+    topic-replicas: 1
 
 resilience4j:
   circuitbreaker:

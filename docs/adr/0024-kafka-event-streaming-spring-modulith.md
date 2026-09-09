@@ -13,7 +13,8 @@ To scale out independent downstream microservices and data pipelines, these doma
 1. **Dual-Write Vulnerability**: If application code writes to PostgreSQL and directly calls `KafkaTemplate.send()` within `@Transactional`, network partitions or broker latency can lead to uncommitted database changes broadcasting phantom messages, or committed transactions failing to publish events.
 2. **Domain Service Code Pollution**: Injecting messaging infrastructure (`KafkaTemplate`, topic names, serializers) into core financial services (`TransactionService`) violates single responsibility and clean architecture principles.
 3. **Partition Ordering Violations**: Without deterministic message partitioning, transactions from the same account could be distributed across different Kafka partitions, breaking chronological ordering and ledger auditability for downstream consumers.
-4. **Local Developer Friction**: Forcing every developer and CI unit test run to maintain an active Kafka broker drastically slows down feedback loops and increases onboarding complexity.
+4. **End-to-End Delivery Semantics**: An outbox-to-Kafka publisher cannot provide end-to-end exactly-once semantics without distributed 2PC or consumer-side deduplication. A node crash occurring after Kafka acknowledges a write but before the local outbox row is updated in PostgreSQL results in event re-transmission upon restart. The system must guarantee at-least-once delivery while enabling consumer deduplication.
+5. **Local Developer Friction**: Forcing every developer and CI unit test run to maintain an active Kafka broker drastically slows down feedback loops and increases onboarding complexity.
 
 ## Considered Options
 1. **Direct Kafka Publishing (`KafkaTemplate` in Service Layer)**:
@@ -28,19 +29,20 @@ To scale out independent downstream microservices and data pipelines, these doma
 4. **Spring Modulith Event Externalization with Fail-Safe Local Fallback (Chosen)**:
    - Uses `spring-modulith-events-kafka` to automatically bridge events from the existing transactional outbox registry to Kafka topics upon successful database transaction commit.
    - Domain services remain 100% agnostic of Kafka, continuing to publish domain events via Spring's standard `ApplicationEventPublisher`.
-   - Event records are annotated with `@Externalized("payflow.transfers::#{senderUpi()}")`, routing to topic `payflow.transfers` with the sender's UPI ID as the partition message key.
-   - Producer configured with `acks=all` and `enable.idempotence=true` for exactly-once producer semantics.
-   - Profile-conditional: Enabled in `prod` and `kafka` profiles, while disabled in `local`, `test`, and `prod-light` (`spring.modulith.events.externalization.enabled=false`), allowing non-prod environments to execute lightweight in-process event listeners without a Kafka broker.
+   - Event records are annotated with `@Externalized`, and routing is configured programmatically via `EventExternalizationConfiguration`, dynamically binding to `${payflow.kafka.transfers-topic}` and partitioning by sender UPI (`it.senderUpi()`).
+   - Producer configured with `acks=all` and `enable.idempotence=true` for producer-side retry deduplication within producer sessions.
+   - End-to-end pipeline guarantees **at-least-once delivery**; downstream consumers achieve effective exactly-once processing by keying on the event's immutable `referenceId`.
+   - Profile-conditional: Enabled in `prod` and `kafka` profiles (via dedicated `application-kafka.yml`), while disabled in `local`, `test`, and `prod-light` (`spring.modulith.events.externalization.enabled: false`), allowing non-prod environments to execute lightweight in-process event listeners without a Kafka broker.
 
 ## Decision Outcome
 Chosen Option: **Spring Modulith Event Externalization (Option 4)**
 
 ### Architectural Design & Mechanics
 
-#### 1. Domain Event Externalization
+#### 1. Domain Event & Dynamic Topic Routing
 In `TransferCompletedEvent.java`:
 ```java
-@Externalized("payflow.transfers::#{senderUpi()}")
+@Externalized
 public record TransferCompletedEvent(
     UUID referenceId,
     String senderUpi,
@@ -52,8 +54,20 @@ public record TransferCompletedEvent(
     Instant timestamp
 ) {}
 ```
-- **Target Topic**: `payflow.transfers`
-- **Partition Key**: `senderUpi` (evaluated dynamically via SpEL `#{senderUpi()}`). This guarantees that all transfer events initiated by a given user are written to the exact same Kafka partition, preserving chronological ordering.
+
+In `KafkaConfig.java`:
+```java
+@Bean
+public EventExternalizationConfiguration eventExternalizationConfiguration(
+        @Value("${payflow.kafka.transfers-topic:payflow.transfers}") String topicName) {
+    return EventExternalizationConfiguration.externalizing()
+            .select(EventExternalizationConfiguration.annotatedAsExternalized())
+            .route(TransferCompletedEvent.class, it -> RoutingTarget.forTarget(topicName).andKey(it.senderUpi()))
+            .build();
+}
+```
+- **Unified Topic Resolution**: Both the `NewTopic` bean and the event externalizer resolve `${payflow.kafka.transfers-topic}`, ensuring topic creation and routing targets are always synchronized.
+- **Partition Key**: `senderUpi`. Guarantees that all transfer events initiated by a given user are written to the exact same Kafka partition, preserving strict chronological ordering.
 
 #### 2. Transactional Outbox Flow
 ```
@@ -70,18 +84,23 @@ Client Request (POST /api/v1/transactions)
          └── In-process @ApplicationModuleListener executes asynchronously
 ```
 
-#### 3. Infrastructure & Resilience Guarantees
+#### 3. Infrastructure, Replication & Delivery Guarantees
 - **Topic Configuration (`KafkaConfig.java`)**:
   - `@Profile({"prod", "kafka"})`
-  - Topic: `payflow.transfers`, 3 partitions, 1 replica (in single-broker / dev topologies).
-- **Producer Configuration (`application-prod.yml`)**:
+  - Partitions: Configurable via `payflow.kafka.topic-partitions` (default 3).
+  - Replication Factor: Configurable via `payflow.kafka.topic-replicas`. Defaults to `3` in `application-prod.yml` (`${PAYFLOW_KAFKA_REPLICAS:3}`) for production multi-broker resilience, and `1` in `application-kafka.yml` for single-broker dev/test environments.
+- **Producer Configuration (`application-prod.yml` and `application-kafka.yml`)**:
   - `acks = all`: Producer requires acknowledgement from all in-sync replicas before marking send successful.
-  - `enable.idempotence = true`: Prevents duplicate messages on network retries.
+  - `enable.idempotence = true`: Eliminates duplicate writes resulting from network retries within an active producer session.
   - `key-serializer`: `StringSerializer` (UPI handle).
   - `value-serializer`: `JsonSerializer` (Jackson-serialized event payload).
-- **Graceful Fallback**:
+- **At-Least-Once Delivery Semantics**:
+  - The outbox handoff to Kafka guarantees at-least-once delivery. If the process crashes after Kafka acknowledges the record but before Spring Modulith updates `event_publication.completion_date`, the outstanding event is republish-eligible upon restart.
+  - Downstream consumers must be idempotent and deduplicate incoming events using `referenceId`.
+- **Fail-Safe Local Fallback**:
   - `application.yml` disables externalization by default (`spring.modulith.events.externalization.enabled: false`).
-  - Developers can run the full application locally with zero Docker/Kafka dependencies; events are delivered in-process via `TransferEventListener`.
+  - Activating `--spring.profiles.active=kafka` activates `application-kafka.yml`, which enables externalization (`enabled: true`) and configures Kafka endpoints.
+  - Local developers running with default profile enjoy sub-second startup with zero Kafka dependencies; events are delivered in-process via `TransferEventListener`.
 
 ## Consequences
 
@@ -89,8 +108,9 @@ Client Request (POST /api/v1/transactions)
 * **Zero Dual-Write Hazard**: Messages are only published to Kafka if and only if the underlying database transaction successfully commits.
 * **Domain Purity**: Not a single line of Kafka-specific code exists within `TransactionService` or domain entities.
 * **Deterministic In-Order Consumption**: Partitioning by sender UPI guarantees that all debit events for an account maintain strict timeline integrity.
-* **Developer Experience**: Zero setup friction for local developers; full Kafka streaming available on demand or in production.
+* **Accurate Delivery Model**: Explicitly documents at-least-once outbox delivery with producer retry deduplication.
+* **Production HA Compatibility**: Configurable replication factor ensures topics created in multi-broker production clusters satisfy high availability requirements.
 
 ### Trade-offs & Mitigations
-* **At-Least-Once Broker Delivery**: While producer idempotence guarantees single-write to Kafka, consumer failures can cause message replays. *Mitigation*: Downstream consumers must track message `referenceId` for deduplication.
+* **At-Least-Once Duplicate Handling**: If a crash occurs prior to updating the outbox table, republishing can produce duplicates across process restarts. *Mitigation*: Downstream consumer services must maintain an idempotent inbox table keying on `referenceId`.
 * **Outbox Storage Growth**: High transfer volumes increase rows in `event_publication`. *Mitigation*: Spring Modulith's automated completion cleaner periodically purges completed events.
