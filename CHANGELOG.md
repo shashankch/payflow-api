@@ -9,8 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned - Phase 9A (Kafka Event Streaming via Spring Modulith)
-- Apache Kafka event streaming for Spring Modulith transactional outbox domain events.
+### Added - Phase 9A (Kafka Event Streaming via Spring Modulith Event Externalization)
+- Added `spring-modulith-events-kafka`, `spring-kafka`, `spring-kafka-test`, and Testcontainers `kafka` dependencies to `pom.xml`.
+- Annotated domain event `TransferCompletedEvent` with `@Externalized("payflow.transfers::#{senderUpi()}")` routing events to `payflow.transfers` topic partitioned by `senderUpi` for strict chronological in-order delivery per account.
+- Created `KafkaConfig.java` (`@Profile({"prod", "kafka"})`) registering `payflowTransfersTopic` with 3 partitions and 1 replica.
+- Configured resilient Kafka producer properties in `application-prod.yml` with `acks: all`, `enable.idempotence: true`, `StringSerializer` key serializer, and `JsonSerializer` value serializer.
+- Configured Spring Modulith externalization toggle (`spring.modulith.events.externalization.enabled: false` in `application.yml` default, `true` in `application-prod.yml`), enabling seamless zero-broker in-process execution in `local`, `test`, and `prod-light` profiles.
+- Created unit tests `KafkaConfigTest.java` (verifying conditional bean wiring via `ApplicationContextRunner`) and `TransferCompletedEventTest.java` (verifying annotation and accessors).
+- Created full-stack integration test `KafkaOutboxIT.java` against Testcontainers Kafka (KRaft mode) verifying transfer execution, outbox persistence, and externalized record consumption.
+- Added ADR-024 (*Kafka Event Streaming via Spring Modulith Event Externalization*) to `docs/adr/`.
+
+### Planned - Phase 10A (Gen-AI Spend Categorization & Financial Insights)
+- Spring AI integration providing automated expenditure classification and contextual budgeting tips with structured JSON output, guarded by circuit breakers and heuristic fallback.
 
 ---
 

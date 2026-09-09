@@ -408,11 +408,19 @@ modules.verify();
 
 ### Evolutionary Architecture Path
 
-| Stage | Profile | Event Handling | Kafka Required? |
-| :--- | :--- | :--- | :--- |
-| **Phase 6B** | `local` / `test` | In-process `@ApplicationModuleListener` | No |
-| **Phase 9A** | `prod` | Auto-externalized to Kafka via `spring-modulith-events-kafka` | Yes |
-| **Phase 10B** | `prod-light` | In-process (no Kafka, single-server deployment) | No |
+| Stage | Profile | Event Handling | Kafka Required? | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **Phase 6B** | `local` / `test` | In-process `@ApplicationModuleListener` | No | ✅ Complete |
+| **Phase 9A** | `prod` / `kafka` | Auto-externalized to Kafka (`payflow.transfers`, key: `senderUpi`) via `spring-modulith-events-kafka` | Yes | ✅ Complete |
+| **Phase 10B** | `prod-light` | In-process (no Kafka, single-server deployment) | No | ⬜ Planned |
+
+### Kafka Event Externalization Topology (Phase 9A)
+
+When running under the `prod` profile (or the `kafka` test profile), Spring Modulith automatically binds the transactional outbox registry to Apache Kafka via `@Externalized("payflow.transfers::#{senderUpi()}")`:
+1. **Topic**: `payflow.transfers` (3 partitions, 1 replica).
+2. **Partitioning Key**: `senderUpi` (e.g. `aarav@payflow`), ensuring all transfer events originating from the same sender arrive strictly in order at the same partition for consumer groups.
+3. **Producer Semantics**: `acks=all` with `enable.idempotence=true`, guaranteeing exactly-once producer delivery and zero duplicate records during transient network retries.
+4. **Zero Domain Intrusion**: Domain service code (`TransactionService.sendMoney()`) requires zero messaging imports; Spring Modulith intercepts published domain events post-commit and routes them to Kafka.
 
 This design ensures that domain service code (`TransactionService.sendMoney()`) **never changes** regardless of whether events are consumed in-process or streamed to Kafka. The Spring Modulith framework handles the routing transparently based on active Spring profiles.
 

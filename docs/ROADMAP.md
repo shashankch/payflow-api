@@ -77,13 +77,13 @@ Enterprise reliability and distributed coordination:
 
 ---
 
-## Phase 9 — Event Streaming & Messaging ⬜ (Next Up)
+## Phase 9 — Event Streaming & Messaging ✅
 Decoupled event-driven architecture:
 - **9A — Kafka via Spring Modulith Event Externalization**: Transparently bridge domain events from the transactional outbox registry to partitioned Apache Kafka topics with exactly-once producer semantics. Non-production environments continue seamless in-process event dispatching.
 
 ---
 
-## Phase 10 — Financial Intelligence & Performance Optimization ⬜
+## Phase 10 — Financial Intelligence & Performance Optimization ⬜ (Next Up)
 Intelligent automation and runtime scalability:
 - **10A — Gen-AI Spend Categorization & Financial Insights**: Spring AI integration providing automated expenditure classification and contextual budgeting tips with structured JSON output, guarded by circuit breakers and heuristic fallback.
 - **10B — Virtual Threads & Resource Tuning**: Enable Java 25 Virtual Threads for high-concurrency throughput, introduce a lightweight single-instance production profile (`prod-light` for 1 GiB RAM), and optimize HikariCP connection pooling and JVM memory bounds.
