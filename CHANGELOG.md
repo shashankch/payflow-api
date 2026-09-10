@@ -9,8 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned - Phase 9A (Kafka Event Streaming via Spring Modulith)
-- Apache Kafka event streaming for Spring Modulith transactional outbox domain events.
+### Added - Phase 9A (Kafka Event Streaming via Spring Modulith Event Externalization)
+- Added `spring-modulith-events-kafka`, `spring-kafka`, `spring-kafka-test`, and Testcontainers `kafka` dependencies to `pom.xml`.
+- Marked domain event `TransferCompletedEvent` with `@Externalized` and configured programmatic dynamic routing via `EventExternalizationConfiguration` in `KafkaConfig.java`, routing to `${payflow.kafka.transfers-topic}` partitioned by `senderUpi` for strict chronological delivery per account.
+- Created `KafkaConfig.java` (`@Profile({"prod", "kafka"})`) registering `NewTopic` bean with configurable partitions and replication factor (`PAYFLOW_KAFKA_REPLICAS:3` in production for high availability, 1 in dev/test).
+- Created dedicated `application-kafka.yml` enabling Spring Modulith externalization (`enabled: true`) and configuring Kafka endpoints for the `kafka` profile.
+- Configured resilient Kafka producer properties in `application-prod.yml` and `application-kafka.yml` with `acks: all`, `enable.idempotence: true` (producer retry deduplication), and at-least-once end-to-end delivery via the transactional outbox.
+- Configured default profile isolation (`spring.modulith.events.externalization.enabled: false` in `application.yml`), enabling zero-broker in-process execution in `local`, `test`, and `prod-light` profiles.
+- Created unit tests `KafkaConfigTest.java` (verifying conditional bean wiring, custom topic resolution, and replication factors) and `TransferCompletedEventTest.java` (verifying annotation and accessors).
+- Created full-stack integration test `KafkaOutboxIT.java` against Testcontainers Kafka (KRaft mode) verifying transfer execution, outbox persistence, and externalized record consumption.
+- Added ADR-024 (*Kafka Event Streaming via Spring Modulith Event Externalization*) to `docs/adr/`.
+
+### Planned - Phase 10A (Gen-AI Spend Categorization & Financial Insights)
+- Spring AI integration providing automated expenditure classification and contextual budgeting tips with structured JSON output, guarded by circuit breakers and heuristic fallback.
 
 ---
 

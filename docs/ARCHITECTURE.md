@@ -408,11 +408,22 @@ modules.verify();
 
 ### Evolutionary Architecture Path
 
-| Stage | Profile | Event Handling | Kafka Required? |
-| :--- | :--- | :--- | :--- |
-| **Phase 6B** | `local` / `test` | In-process `@ApplicationModuleListener` | No |
-| **Phase 9A** | `prod` | Auto-externalized to Kafka via `spring-modulith-events-kafka` | Yes |
-| **Phase 10B** | `prod-light` | In-process (no Kafka, single-server deployment) | No |
+| Stage | Profile | Event Handling | Kafka Required? | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **Phase 6B** | `local` / `test` | In-process `@ApplicationModuleListener` | No | ✅ Complete |
+| **Phase 9A** | `prod` / `kafka` | Auto-externalized to Kafka (`payflow.transfers`, key: `senderUpi`) via `spring-modulith-events-kafka` | Yes | ✅ Complete |
+| **Phase 10B** | `prod-light` | In-process (no Kafka, single-server deployment) | No | ⬜ Planned |
+
+### Kafka Event Externalization Topology (Phase 9A)
+
+When running under the `prod` profile (or the `kafka` test/dev profile via `application-kafka.yml`), Spring Modulith automatically binds the transactional outbox registry to Apache Kafka:
+1. **Topic & Replication**: Created via `NewTopic` using property `${payflow.kafka.transfers-topic:payflow.transfers}` with 3 partitions. Replication factor is configurable via `${payflow.kafka.topic-replicas}` (defaults to `3` in `application-prod.yml` for multi-broker cluster durability, and `1` in `application-kafka.yml` for single-broker dev/test containers).
+2. **Dynamic Programmatic Routing**: Configured via `EventExternalizationConfiguration`, dynamically binding `@Externalized` `TransferCompletedEvent` to the exact same topic property, ensuring topic creation and event externalization never diverge.
+3. **Partitioning Key**: `senderUpi` (e.g. `aarav@payflow`), ensuring all transfer events originating from the same sender arrive strictly in order at the same partition for consumer groups.
+4. **Delivery Guarantees (At-Least-Once Outbox Handshake)**:
+   - **Producer Retry Idempotence**: `acks=all` with `enable.idempotence=true` deduplicates in-flight network retries within an active producer session.
+   - **At-Least-Once End-to-End Delivery**: The transactional outbox pattern guarantees that committed transactions are reliably delivered to Kafka. However, if a process terminates after Kafka acknowledges receipt but before Spring Modulith updates `event_publication.completion_date` in PostgreSQL, the record remains pending and will be republished upon restart. Downstream consumer services must enforce idempotency by deduplicating against the unique transaction `referenceId`.
+5. **Zero Domain Intrusion**: Core domain services (`TransactionService.sendMoney()`) require zero messaging dependencies; Spring Modulith intercepts published domain events post-commit and routes them to Kafka.
 
 This design ensures that domain service code (`TransactionService.sendMoney()`) **never changes** regardless of whether events are consumed in-process or streamed to Kafka. The Spring Modulith framework handles the routing transparently based on active Spring profiles.
 

@@ -1,0 +1,25 @@
+# Configuration for standalone or development Kafka profile
+spring:
+  config:
+    activate:
+      on-profile: kafka
+
+  modulith:
+    events:
+      externalization:
+        enabled: true
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+payflow:
+  kafka:
+    transfers-topic: ${PAYFLOW_KAFKA_TRANSFERS_TOPIC:payflow.transfers}
+    topic-partitions: ${PAYFLOW_KAFKA_PARTITIONS:3}
+    topic-replicas: ${PAYFLOW_KAFKA_REPLICAS:1}

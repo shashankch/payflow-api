@@ -9,6 +9,8 @@ spring:
   modulith:
     events:
       republish-outstanding-events-on-restart: true
+      externalization:
+        enabled: false
 
 management:
   endpoints:
@@ -72,6 +74,10 @@ payflow:
   lock:
     wait-time: 2s
     lease-time: 10s
+  kafka:
+    transfers-topic: payflow.transfers
+    topic-partitions: 3
+    topic-replicas: 1
 
 resilience4j:
   circuitbreaker:
