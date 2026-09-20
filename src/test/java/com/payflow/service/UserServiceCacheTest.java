@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -135,7 +136,7 @@ class UserServiceCacheTest {
 	@DisplayName("Should cache getUserLedger result on subsequent invocations")
 	void shouldCacheGetUserLedger() {
 		Pageable pageable = PageRequest.of(0, 10);
-		Page<BalanceLedgerEntry> emptyPage = new PageImpl<>(java.util.List.of());
+		Page<BalanceLedgerEntry> emptyPage = new PageImpl<>(List.of());
 
 		when(userRepository.findByReferenceId(sampleReferenceId)).thenReturn(Optional.of(sampleUser));
 		when(balanceLedgerRepository.findByUserReferenceIdOrderByCreatedAtDesc(sampleReferenceId, pageable))

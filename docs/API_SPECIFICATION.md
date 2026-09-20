@@ -32,9 +32,9 @@ Payflow API auto-generates live, interactive OpenAPI 3.0 documentation using **S
 
 ---
 
-## Global Error Response Model (RFC 7807)
+## Global Error Response Model (RFC 9457 / RFC 7807)
 
-When an API error occurs (validation error, resource not found, conflict, etc.), the service returns a standardized error payload in compliance with RFC 7807 (Problem Details for HTTP APIs):
+When an API error occurs (validation error, resource not found, conflict, etc.), the service returns a standardized error payload in compliance with RFC 9457 (which obsoletes RFC 7807 for Problem Details for HTTP APIs):
 
 ```json
 {
@@ -126,12 +126,12 @@ Headers: `Location: /api/v1/users/a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d`
 
 ---
 
-### 2. List Users (Paginated)
-Retrieves a paginated list of registered users.
+### 2. List Users (Paginated, Admin Only)
+Retrieves a paginated list of registered users. Requires administrative privileges (`ROLE_ADMIN`).
 
 - **HTTP Method**: `GET`
 - **Path**: `/api/v1/users`
-- **Authentication**: None
+- **Authentication**: `Authorization: Bearer <token>` (Requires `ROLE_ADMIN`)
 - **Query Parameters**:
   - `page`: Integer, optional. Page index (0-based, `@Min(0)`). Default: `0`.
   - `size`: Integer, optional. Page size (`@Min(1) @Max(100)`). Default: `10`.
@@ -159,6 +159,11 @@ Retrieves a paginated list of registered users.
   "last": true
 }
 ```
+
+#### Error Responses
+- `401 Unauthorized`: Missing, expired, or invalid JWT token.
+- `403 Forbidden`: Caller lacks administrative role privileges (`ForbiddenOperationException`, type: `https://api.payflow.com/errors/forbidden-operation`).
+- `422 Unprocessable Entity`: Query parameter validation failure (e.g. `size < 1` or `size > 100`).
 
 ---
 
@@ -246,14 +251,45 @@ Retrieves paginated double-entry balance ledger audit entries for a user by UUID
 
 ---
 
-### 6. Create Money Transfer
+### 6. Filter Users by Minimum Balance (Admin Only)
+Retrieves a list of users whose balance exceeds the specified minimum threshold. Requires administrative privileges (`ROLE_ADMIN`).
+
+- **HTTP Method**: `GET`
+- **Path**: `/api/v1/users/balance/{amount}`
+- **Authentication**: `Authorization: Bearer <token>` (Requires `ROLE_ADMIN`)
+- **Path Variables**:
+  - `amount`: BigDecimal, required. Minimum balance threshold denominated in INR (₹).
+
+#### Response Example (`200 OK`)
+```json
+[
+  {
+    "referenceId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+    "name": "Aarav Sharma",
+    "upiId": "aarav@payflow",
+    "phoneNumber": "9876543210",
+    "balance": 1000.0000,
+    "createdAt": "2026-08-01T16:00:00Z",
+    "updatedAt": "2026-08-01T16:00:00Z"
+  }
+]
+```
+
+#### Error Responses
+- `400 Bad Request`: Parameter type mismatch (e.g. non-numeric amount string).
+- `401 Unauthorized`: Missing, expired, or invalid JWT token.
+- `403 Forbidden`: Caller lacks administrative role privileges (`ForbiddenOperationException`, type: `https://api.payflow.com/errors/forbidden-operation`).
+
+---
+
+### 7. Create Money Transfer
 Executes a peer-to-peer fund transfer request with guaranteed exactly-once idempotency and sender verification.
 
 - **HTTP Method**: `POST`
 - **Path**: `/api/v1/transactions`
 - **Authentication**: `Authorization: Bearer <token>` (Authenticated JWT principal must match `senderUpiId`)
 - **Headers**:
-  - `Idempotency-Key`: String / UUID, **required**. Prevents duplicate debits and replays cached responses on retry.
+  - `Idempotency-Key`: String / UUID, **required**. Must be 1-255 characters matching `^[A-Za-z0-9_.:-]+$`. Prevents duplicate debits and replays cached responses on retry.
 - **Request Body DTO (`TransferMoneyRequest`)**:
   - `senderUpiId`: String, required (`@NotBlank`), max 100 chars (`@Size(max = 100)`), valid UPI format (`@Pattern(...)`).
   - `receiverUpiId`: String, required (`@NotBlank`), max 100 chars (`@Size(max = 100)`), valid UPI format (`@Pattern(...)`).
@@ -302,7 +338,7 @@ Headers: `Location: /api/v1/transactions/550e8400-e29b-41d4-a716-446655440000`
 
 ---
 
-### 7. Retrieve Transaction by Reference ID
+### 8. Retrieve Transaction by Reference ID
 Fetches details of a single transaction by its unique UUID reference ID.
 
 - **HTTP Method**: `GET`
@@ -326,7 +362,7 @@ Fetches details of a single transaction by its unique UUID reference ID.
 
 ---
 
-### 8. List Transactions for a User (Paginated)
+### 9. List Transactions for a User (Paginated)
 Retrieves a paginated list of all transactions where the specified UPI ID is either the sender or receiver.
 
 - **HTTP Method**: `GET`
@@ -365,7 +401,7 @@ Retrieves a paginated list of all transactions where the specified UPI ID is eit
 
 ---
 
-## 7. Observability & Telemetry Endpoints (Actuator)
+## Observability & Telemetry Endpoints (Actuator)
 
 Payflow API exposes standard Spring Boot Actuator endpoints for container health probes, Resilience4j status, and Prometheus metrics collection:
 
@@ -380,7 +416,7 @@ Payflow API exposes standard Spring Boot Actuator endpoints for container health
 
 ---
 
-### 8. Planned Endpoints — Gen-AI Spend Insights (Phase 10A)
+### Planned Endpoints — Gen-AI Spend Insights (Phase 10A)
 
 #### Generate Spend Insights for Transaction
 Analyzes transaction metadata, user note, and recipient handle using Spring AI structured prompt engineering to classify the expenditure into personal finance categories and generate actionable budget insights.
@@ -404,7 +440,7 @@ Analyzes transaction metadata, user note, and recipient handle using Spring AI s
   "transactionReferenceId": "11410662-b080-4416-b739-77fcd753097b",
   "category": "FOOD_AND_DINING",
   "confidenceScore": 0.94,
-  "insight": "High food & dining expenditure detected. Consider setting a weekly dining budget.",
+  "insight": "You've spent ₹150.00 on food. Dining out accounts for 35% of your discretionary spending this month.",
   "source": "LLM"
 }
 ```
@@ -414,23 +450,19 @@ Analyzes transaction metadata, user note, and recipient handle using Spring AI s
 
 ---
 
-## Centralized Error Handling & RFC 7807 ProblemDetail
+## Error Handling & RFC 7807 / RFC 9457 ProblemDetail Payloads
 
-All API errors return standardized RFC 7807 `application/problem+json` response bodies enriched with timestamp and `requestId` (`X-Request-Id` correlation tracking header):
+All error responses adhere to the standard RFC 7807 and RFC 9457 `application/problem+json` format:
 
-### Validation Failure (`422 Unprocessable Entity`)
 ```json
 {
-  "type": "https://api.payflow.com/errors/validation-error",
-  "title": "Validation Failure",
+  "type": "https://api.payflow.com/errors/insufficient-balance",
+  "title": "Insufficient Balance",
   "status": 422,
-  "detail": "Validation failed for request parameters",
-  "instance": "/api/v1/users",
-  "timestamp": "2026-08-03T16:25:00Z",
-  "requestId": "a6b8c9d0-1234-5678-9abc-def012345678",
-  "errors": {
-    "phoneNumber": "Phone number must be exactly 10 digits"
-  }
+  "detail": "Insufficient balance. Available: 100.0000, Required: 250.0000",
+  "instance": "/api/v1/transactions",
+  "timestamp": "2026-08-01T16:00:00Z",
+  "requestId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
 }
 ```
 
@@ -469,12 +501,12 @@ All API errors return standardized RFC 7807 `application/problem+json` response 
 | :--- | :--- | :--- |
 | **200** | `OK` | Standard successful read or lookup. |
 | **201** | `Created` | Successfully registered a user or created a transaction. |
-| **400** | `Bad Request` | Illegal business arguments (e.g. self-transfer attempt). |
+| **400** | `Bad Request` | Illegal business arguments (e.g. self-transfer attempt), parameter type mismatch (`MethodArgumentTypeMismatchException`), or malformed/oversized `Idempotency-Key` header. |
 | **401** | `Unauthorized` | Missing, expired, or invalid JWT authentication token. |
-| **403** | `Forbidden` | Authenticated principal is not authorized for the requested resource (sender impersonation, cross-user ledger/transaction access). |
+| **403** | `Forbidden` | Authenticated principal is not authorized for the requested resource (sender impersonation, cross-user ledger/transaction access, or non-admin access to bulk user directory / balance queries). |
 | **404** | `Not Found` | User or transaction lookup returned no matching records (`UserNotFoundException`). |
 | **409** | `Conflict` | Resource conflict (e.g. duplicate UPI ID registration, in-flight idempotency conflict, or constraint violation). |
-| **422** | `Unprocessable Entity` | Jakarta validation constraint violation or insufficient account balance (`InsufficientBalanceException`). |
+| **422** | `Unprocessable Entity` | Jakarta validation constraint violation, handler method parameter validation failure (`HandlerMethodValidationException`), or insufficient account balance (`InsufficientBalanceException`). |
 | **429** | `Too Many Requests` | Dynamic per-user rate limit exceeded (RFC 6585 with `Retry-After: 1` header). |
 | **500** | `Internal Error` | Unexpected server error (sanitized, stack traces suppressed). |
 | **503** | `Service Unavailable` | Downstream service circuit breaker is OPEN (`CallNotPermittedException`). |

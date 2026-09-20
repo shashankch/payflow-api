@@ -24,7 +24,7 @@ Foundation setup adhering to modern Java standards:
 Enterprise domain modeling and API isolation:
 - **Rich Domain Model**: Financial precision via `BigDecimal` denominated in Indian Rupees (INR, ₹), Jakarta validation constraints, JPA foreign key integrity, and domain state invariants.
 - **DTO Isolation & Versioning**: URI-based `/api/v1` API versioning, input validation, capped pagination, and compile-time MapStruct mapping.
-- **Error Handling Framework**: Centralized RFC 7807 `ProblemDetail` error responses with correlation IDs (`X-Request-Id`).
+- **Error Handling Framework**: Centralized RFC 9457 (obsoleting RFC 7807) `ProblemDetail` error responses with correlation IDs (`X-Request-Id`).
 - **Opaque Resource References**: Non-enumerable UUID reference IDs insulating internal database primary keys from public exposure.
 - **API Documentation**: Automated OpenAPI 3.0 specification and interactive Swagger UI playground.
 
@@ -77,9 +77,10 @@ Enterprise reliability and distributed coordination:
 
 ---
 
-## Phase 9 — Event Streaming & Messaging ✅
-Decoupled event-driven architecture:
+## Phase 9 — Event Streaming, Outbox Lifecycle & Production Hardening ✅
+Decoupled event-driven architecture and enterprise production hardening:
 - **9A — Kafka via Spring Modulith Event Externalization**: Transparently bridge domain events from the transactional outbox registry to partitioned Apache Kafka topics with producer retry idempotence and guaranteed at-least-once outbox delivery. Non-production environments continue seamless in-process event dispatching.
+- **9B — Production Hardening & Architecture Audit Remediation**: Enterprise hardening addressing security controls (fail-fast JWT secret validation, BOLA mitigation, anti-clickjacking), targeted cache invalidation, automated transactional outbox retention cleanup, and integration test execution gates.
 
 ---
 

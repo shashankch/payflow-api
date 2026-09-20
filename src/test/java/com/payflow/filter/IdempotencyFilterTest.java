@@ -1,6 +1,7 @@
 package com.payflow.filter;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.lenient;
@@ -9,6 +10,9 @@ import static org.mockito.Mockito.verify;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -25,10 +29,10 @@ import tools.jackson.databind.ObjectMapper;
 import com.payflow.entity.IdempotencyRecord;
 import com.payflow.entity.IdempotencyStatus;
 import com.payflow.repository.IdempotencyRepository;
-
-import jakarta.servlet.ServletException;
-
 import com.payflow.service.DistributedLockService;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
 
 @ExtendWith(MockitoExtension.class)
 class IdempotencyFilterTest {
@@ -65,6 +69,38 @@ class IdempotencyFilterTest {
 	}
 
 	@Test
+	@DisplayName("Should reject mutation request with 400 Bad Request when Idempotency-Key exceeds 255 characters")
+	void shouldRejectRequest_whenIdempotencyKeyTooLong() throws ServletException, IOException {
+		MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/transactions");
+		request.addHeader(IdempotencyFilter.IDEMPOTENCY_KEY_HEADER, "a".repeat(256));
+		request.setContent("{\"amount\":100}".getBytes(StandardCharsets.UTF_8));
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		MockFilterChain filterChain = new MockFilterChain();
+
+		idempotencyFilter.doFilter(request, response, filterChain);
+
+		assertThat(response.getStatus()).isEqualTo(400);
+		assertThat(response.getContentAsString()).contains("Invalid Key");
+		verify(idempotencyRepository, never()).save(any());
+	}
+
+	@Test
+	@DisplayName("Should reject mutation request with 400 Bad Request when Idempotency-Key contains invalid characters")
+	void shouldRejectRequest_whenIdempotencyKeyHasInvalidCharacters() throws ServletException, IOException {
+		MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/transactions");
+		request.addHeader(IdempotencyFilter.IDEMPOTENCY_KEY_HEADER, "invalid key with spaces; DROP TABLE;");
+		request.setContent("{\"amount\":100}".getBytes(StandardCharsets.UTF_8));
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		MockFilterChain filterChain = new MockFilterChain();
+
+		idempotencyFilter.doFilter(request, response, filterChain);
+
+		assertThat(response.getStatus()).isEqualTo(400);
+		assertThat(response.getContentAsString()).contains("Invalid Key");
+		verify(idempotencyRepository, never()).save(any());
+	}
+
+	@Test
 	@DisplayName("Should replay cached response without executing filter chain when key exists with status SUCCESS")
 	void shouldReplayCachedResponse_whenKeyExistsWithSuccess() throws ServletException, IOException {
 		String payload = "{\"senderUpiId\":\"a@payflow\",\"receiverUpiId\":\"b@payflow\",\"amount\":100}";
@@ -78,13 +114,13 @@ class IdempotencyFilterTest {
 
 		// Compute expected hash
 		byte[] requestBytes = payload.getBytes(StandardCharsets.UTF_8);
-		java.security.MessageDigest digest;
+		MessageDigest digest;
 		try {
-			digest = java.security.MessageDigest.getInstance("SHA-256");
-		} catch (java.security.NoSuchAlgorithmException e) {
+			digest = MessageDigest.getInstance("SHA-256");
+		} catch (NoSuchAlgorithmException e) {
 			throw new RuntimeException(e);
 		}
-		String hash = java.util.HexFormat.of().formatHex(digest.digest(requestBytes));
+		String hash = HexFormat.of().formatHex(digest.digest(requestBytes));
 
 		IdempotencyRecord cachedRecord = IdempotencyRecord.builder().idempotencyKey(key).requestHash(hash)
 				.status(IdempotencyStatus.SUCCESS).responseCode(201)
@@ -113,13 +149,13 @@ class IdempotencyFilterTest {
 		MockFilterChain filterChain = new MockFilterChain();
 
 		byte[] requestBytes = payload.getBytes(StandardCharsets.UTF_8);
-		java.security.MessageDigest digest;
+		MessageDigest digest;
 		try {
-			digest = java.security.MessageDigest.getInstance("SHA-256");
-		} catch (java.security.NoSuchAlgorithmException e) {
+			digest = MessageDigest.getInstance("SHA-256");
+		} catch (NoSuchAlgorithmException e) {
 			throw new RuntimeException(e);
 		}
-		String hash = java.util.HexFormat.of().formatHex(digest.digest(requestBytes));
+		String hash = HexFormat.of().formatHex(digest.digest(requestBytes));
 
 		IdempotencyRecord inFlightRecord = IdempotencyRecord.builder().idempotencyKey(key).requestHash(hash)
 				.status(IdempotencyStatus.PROCESSING).build();
@@ -188,11 +224,11 @@ class IdempotencyFilterTest {
 		request.setContent(payload.getBytes(StandardCharsets.UTF_8));
 		MockHttpServletResponse response = new MockHttpServletResponse();
 
-		jakarta.servlet.FilterChain throwingChain = (req, res) -> {
+		FilterChain throwingChain = (req, res) -> {
 			throw new RuntimeException("Simulated filter failure");
 		};
 
-		org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () -> {
+		assertThrows(RuntimeException.class, () -> {
 			idempotencyFilter.doFilter(request, response, throwingChain);
 		});
 

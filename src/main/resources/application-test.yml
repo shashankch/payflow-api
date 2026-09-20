@@ -20,3 +20,26 @@ spring:
 payflow:
   upi-validation:
     enabled: false
+
+management:
+  health:
+    redis:
+      enabled: false
+
+resilience4j:
+  ratelimiter:
+    configs:
+      default:
+        limitForPeriod: 5
+        limitRefreshPeriod: 5s
+        timeoutDuration: 0
+      transferLimiter:
+        limitForPeriod: 5
+        limitRefreshPeriod: 5s
+        timeoutDuration: 0
+    instances:
+      transferLimiter:
+        baseConfig: transferLimiter
+        limitForPeriod: 5
+        limitRefreshPeriod: 5s
+        timeoutDuration: 0

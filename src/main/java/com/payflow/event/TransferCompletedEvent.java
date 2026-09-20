@@ -8,7 +8,7 @@ import org.springframework.modulith.events.Externalized;
 
 import com.payflow.entity.TransactionStatus;
 
-@Externalized
+@Externalized("payflow.transfers::#{senderUpi()}")
 public record TransferCompletedEvent(UUID referenceId, String senderUpi, String receiverUpi, BigDecimal amount,
 		TransactionStatus status, BigDecimal senderAfter, BigDecimal receiverAfter, Instant timestamp) {
 }

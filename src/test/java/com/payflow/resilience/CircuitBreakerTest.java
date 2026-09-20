@@ -2,6 +2,7 @@ package com.payflow.resilience;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -47,13 +48,11 @@ class CircuitBreakerTest {
 		assertThat(circuitBreaker.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
 
 		// Record 5 calls with >50% failure (3 failures, 2 successes)
-		circuitBreaker.onError(0, java.util.concurrent.TimeUnit.MILLISECONDS,
-				new RestClientException("Connection refused"));
-		circuitBreaker.onError(0, java.util.concurrent.TimeUnit.MILLISECONDS,
-				new RestClientException("Connection timeout"));
-		circuitBreaker.onError(0, java.util.concurrent.TimeUnit.MILLISECONDS, new IOException("Network reset"));
-		circuitBreaker.onSuccess(0, java.util.concurrent.TimeUnit.MILLISECONDS);
-		circuitBreaker.onSuccess(0, java.util.concurrent.TimeUnit.MILLISECONDS);
+		circuitBreaker.onError(0, TimeUnit.MILLISECONDS, new RestClientException("Connection refused"));
+		circuitBreaker.onError(0, TimeUnit.MILLISECONDS, new RestClientException("Connection timeout"));
+		circuitBreaker.onError(0, TimeUnit.MILLISECONDS, new IOException("Network reset"));
+		circuitBreaker.onSuccess(0, TimeUnit.MILLISECONDS);
+		circuitBreaker.onSuccess(0, TimeUnit.MILLISECONDS);
 
 		// 3/5 = 60% failures >= 50% threshold -> trips to OPEN
 		assertThat(circuitBreaker.getState()).isEqualTo(CircuitBreaker.State.OPEN);
@@ -89,8 +88,8 @@ class CircuitBreakerTest {
 		circuitBreaker.transitionToHalfOpenState();
 		assertThat(circuitBreaker.getState()).isEqualTo(CircuitBreaker.State.HALF_OPEN);
 
-		circuitBreaker.onSuccess(0, java.util.concurrent.TimeUnit.MILLISECONDS);
-		circuitBreaker.onSuccess(0, java.util.concurrent.TimeUnit.MILLISECONDS);
+		circuitBreaker.onSuccess(0, TimeUnit.MILLISECONDS);
+		circuitBreaker.onSuccess(0, TimeUnit.MILLISECONDS);
 
 		assertThat(circuitBreaker.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
 	}
@@ -102,8 +101,7 @@ class CircuitBreakerTest {
 
 		// Record 5 InvalidUpiException (422 business validation errors)
 		for (int i = 0; i < 5; i++) {
-			circuitBreaker.onError(0, java.util.concurrent.TimeUnit.MILLISECONDS,
-					new InvalidUpiException("Invalid UPI: test@upi"));
+			circuitBreaker.onError(0, TimeUnit.MILLISECONDS, new InvalidUpiException("Invalid UPI: test@upi"));
 		}
 
 		// State should remain CLOSED because InvalidUpiException is ignored

@@ -5,7 +5,7 @@
 > - **Author**: Payflow Engineering (shashakchandel@gmail.com)
 > - **Status**: Approved / Living Design Document
 > - **Created Date**: 2026-08-01
-> - **Last Updated**: 2026-09-08
+> - **Last Updated**: 2026-09-20
 > - **Authoritative Location**: [ARCHITECTURE.md](ARCHITECTURE.md)
 > - **Related Documents**: [API Specification](API_SPECIFICATION.md) | [Security Policy](../SECURITY.md) | [Architecture Decisions (ADRs)](adr/README.md) | [Phased Roadmap](ROADMAP.md) | [Engineering Conventions](CONVENTIONS.md)
 
@@ -93,7 +93,7 @@ graph TD
     Idempotency -- "Check / Save State" --> PostgresDB
     ModulithLog -- "Atomic write in same TX" --> PostgresDB
     
-    Service -- "Cache-Aside / Token Bucket" --> Redis[("Redis Cache / Rate Limiter / Distributed Lock")]
+    Service -- "Cache-Aside / Distributed Lock" --> Redis[("Redis Cache & Distributed Lock (Redisson)")]
 
     %% Kafka bridge (Phase 9A)
     ModulithLog -- "spring-modulith-events-kafka" --> Kafka["Apache Kafka Broker (KRaft Mode)"]
@@ -113,7 +113,7 @@ The system enforces strict execution profiles to maximize scalability and transi
 * **`test`**: Active during JUnit verification. It disables local startup profiles and utilizes **Testcontainers** to orchestrate isolated Postgres and Kafka instances per test run.
 * **`prod`**: Production-grade profile. Schema updates are strictly applied via **Flyway**. External databases (PostgreSQL), memory stores (Redis), and event streaming instances (Kafka) are resolved via Twelve-Factor environment variables.
 * **`prod-light` (AWS Free Tier Optimized)**: A memory-restricted deployment profile designed to run on a single constrained AWS virtual server (1 GiB RAM):
-  - **Pluggable Redis**: Caching falls back to local in-memory providers (`Caffeine` or `ConcurrentHashMap`), and rate limiting operates in-memory (using Bucket4j local configurations).
+  - **Pluggable Redis**: Caching falls back to local in-memory provider (`Caffeine`), distributed locking falls back to in-process `NoOpDistributedLockService`, and rate limiting operates via local dynamic Resilience4j registries.
   - **Pluggable Kafka**: Drops the Kafka broker dependency. Transaction events are processed internally via Spring `ApplicationEventPublisher` (in-memory queues) or deferred purely inside the Outbox database logs, bypassing JVM broker overhead.
 
 ---
@@ -568,15 +568,11 @@ To support smart financial features, the project includes an **AI spend assistan
 
 System stability under load is enforced using **Resilience4j** configurations:
 
-* **Rate Limiting**: Enforced at the controller layer via a Redis-backed Token Bucket algorithm. Limits mutations to prevent denial-of-service attempts.
-* **Connection & Read Timeouts**: Explicit timeouts configured on the HTTP clients and database connections to prevent thread pool depletion.
-* **Retries & Backoff**: Outbound requests (e.g. to third-party banking processors) are wrapped in Resilience4j Retry policies using **exponential backoff with random jitter** to prevent thundering herd requests on recovering downstream hosts.
-* **Virtual Threads Integration (Project Loom)**:
-  Java 25 virtual threads are enabled to handle high request-response volumes:
-  ```properties
-  spring.threads.virtual.enabled=true
-  ```
-  Since virtual threads do not block OS kernel threads, throughput scales efficiently. However, to prevent database pool exhaustion, HikariCP's maximum pool size must be explicitly configured and aligned with Postgres threshold capabilities (e.g., `maximum-pool-size=20`).
+* **Rate Limiting**: Enforced at the service layer (`TransactionService.sendMoney()`) via a dynamic per-user Resilience4j RateLimiter aspect (`@PerUserRateLimiter(name = "transferLimiter")`). Limits mutations to 10 req/s per authenticated user (with RFC 6585 `Retry-After: 1`) to prevent denial-of-service attempts, backed by automated background eviction of inactive partitions.
+* **Connection & Read Timeouts**: Explicit timeouts configured on the HTTP clients (`UpiValidationClient`) and database connections to prevent thread pool depletion.
+* **Retries & Backoff**: Outbound requests (e.g. to third-party banking processors) are wrapped in Spring Retry & Resilience4j Circuit Breaker policies using **exponential backoff with random jitter** to prevent thundering herd requests on recovering downstream hosts.
+* **Virtual Threads Integration (Project Loom — Phase 10B)**:
+  Java 25 virtual threads are scheduled for activation in Phase 10B (`spring.threads.virtual.enabled=true`). Since virtual threads do not block OS kernel threads, throughput scales efficiently. To prevent database pool exhaustion, HikariCP's maximum pool size is explicitly bounded (e.g., `maximum-pool-size=20`, `leak-detection-threshold=30000ms`).
 
 ---
 
@@ -733,8 +729,8 @@ Cache policies are externalized in `application.yml` and tuned based on data vol
 
 | Cache Name | Cached Methods | Key Scheme | TTL | Eviction Triggers |
 | :--- | :--- | :--- | :--- | :--- |
-| `users` | `getUserById()`, `getUserByReferenceId()`, `findByUpiId()`, `getUserByUpiId()` | `#id`, `#referenceId`, `#upiId` (single method arg) | **10 minutes** (`600s`) | Purged on `UserService.registerUser()` and `TransactionService.sendMoney()` |
-| `user_ledgers` | `getUserLedger()` | `#userReferenceId + '_' + #pageable.pageNumber` | **1 minute** (`60s`) | Purged on `TransactionService.sendMoney()` |
+| `users` | `getUserById()`, `getUserByReferenceId()`, `findByUpiId()`, `getUserByUpiId()` | `#id`, `#referenceId`, `#upiId` (single method arg) | **10 minutes** (`600s`) | Targeted eviction on `sendMoney()` (sender & receiver keys only) and `registerUser()` |
+| `user_ledgers` | `getUserLedger()` | `#userReferenceId + '_' + #pageable.pageNumber` | **1 minute** (`60s`) | Targeted eviction on `sendMoney()` (sender & receiver keys only) |
 
 ### D. Serialization & Entity Hardening
 1. **Modern JSON Serialization (`RedisSerializer.json()`)**:
@@ -746,6 +742,16 @@ Cache policies are externalized in `application.yml` and tuned based on data vol
    - `User` and `BalanceLedgerEntry` implement `java.io.Serializable` (`serialVersionUID = 1L`).
    - `BalanceLedgerEntry` is decorated with `@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})` to prevent Jackson serialization failures on uninitialized Hibernate bytecode proxies.
    - Lazy JPA relationships (`user`, `transaction`) in `BalanceLedgerEntry` are annotated with `@JsonIgnore` to eliminate circular reference graphs during JSON marshaling.
+
+### E. Targeted Cache Invalidation Mechanics (Phase 9B)
+Prior to Phase 9B, `TransactionService.sendMoney()` utilized blanket cache invalidation (`@CacheEvict(value = {"users", "user_ledgers"}, allEntries = true)`). In production, this created a **Cache Stampede (Thundering Herd)** vulnerability, purging all cached active sessions across the entire application whenever any two users completed a transfer.
+
+In Phase 9B, Payflow API replaced blanket eviction with programmatic **Targeted Eviction** (`evictTargetedCaches`):
+1. **Scope Bounded**: Only the transaction's `sender` and `receiver` keys are invalidated.
+2. **Multi-Key Invalidation**: Selectively evicts each participant's primary lookup keys:
+   - `users` cache: `upiId`, `referenceId`, and internal `userId`.
+   - `user_ledgers` cache: `referenceId` and common initial page keys (`refId + '_0'`).
+3. **Preserved Working Set**: All cached user records and ledger entries for unrelated customers (e.g. `charlie@payflow`) remain in Redis/Caffeine memory, preserving high cache hit ratios under high transfer concurrency.
 
 ---
 
@@ -897,7 +903,7 @@ The system attack surface has been systematically modeled against the **STRIDE**
 - **Stateless Bearer Tokens**: Authenticated via HMAC-SHA256 (`HS256`) signed JSON Web Tokens (JJWT 0.13.0).
 - **Token Claims**: Contains `sub` (UPI handle), `referenceId` (UUID), `roles` (`ROLE_USER`), `iat` (issued at), and `exp` (expiration).
 - **Token Expiration**: Strict 1-hour validity window (`3,600,000 ms`) to minimize exposure window if a client token is intercepted.
-- **Key Management**: Production deployments inject a 256-bit cryptographically secure secret via environment variable (`PAYFLOW_JWT_SECRET`). Hardcoded fallback secrets are strictly prohibited in production profiles.
+- **Key Management**: Production deployments inject a 256-bit cryptographically secure secret via environment variable (`PAYFLOW_SECURITY_JWT_SECRET`). `JwtTokenProvider` validates on application startup that the secret is at least 32 characters (256 bits) and is not the default fallback, failing fast with `IllegalStateException` if violated in the `prod` profile.
 
 #### 2. Endpoint Security Matrix
 
@@ -905,6 +911,8 @@ The system attack surface has been systematically modeled against the **STRIDE**
 | :--- | :--- | :--- | :--- | :--- |
 | `/api/v1/auth/login` | `POST` | Public | No | Issues stateless JWT bearer token |
 | `/api/v1/users` | `POST` | Public | No | Onboards user with external UPI validation |
+| `/api/v1/users` | `GET` | Admin-Only | Yes (`ROLE_ADMIN`) | Retrieves paginated user directory |
+| `/api/v1/users/balance/{amount}` | `GET` | Admin-Only | Yes (`ROLE_ADMIN`) | Queries users matching minimum balance threshold |
 | `/api/v1/users/{id}` | `GET` | Principal-Bound | Yes (`Bearer JWT`) | Retrieves user profile (own profile only) |
 | `/api/v1/users/upi/{upiId}` | `GET` | Principal-Bound | Yes (`Bearer JWT`) | Retrieves user profile by UPI (own profile only) |
 | `/api/v1/users/{id}/ledger` | `GET` | Principal-Bound | Yes (`Bearer JWT`) | Retrieves user balance ledger entries (own records only) |
@@ -916,6 +924,10 @@ The system attack surface has been systematically modeled against the **STRIDE**
 | `/actuator/prometheus` | `GET` | Public / Scraping | No | Prometheus telemetry scraping endpoint |
 | `/actuator/metrics/**` | `GET` | Public / Scraping | No | Micrometer metric inspection |
 | `/swagger-ui/**`, `/v3/api-docs/**` | `GET` | Public | No | OpenAPI 3.0 interactive documentation |
+
+#### 3. Transport, Browser & Framing Security
+- **Anti-Clickjacking**: Spring Security enforces `frameOptions().sameOrigin()`, ensuring that console, admin, or API documentation frames cannot be embedded in malicious cross-origin iframes.
+- **CORS Hardening**: Cross-Origin Resource Sharing is configured via `payflow.security.cors.allowed-origins`. Credential sharing (`allowCredentials`) is automatically disabled if wildcard origins (`*`) are detected, preventing credential leakage.
 
 ### D. Financial State Protection & Concurrency Security
 
@@ -956,9 +968,9 @@ sequenceDiagram
 ### E. Input Validation, Durable Idempotency & Cryptographic Protection
 
 #### 1. Durable Idempotency & Payload Tampering Prevention
-1. **Header Requirement**: Mutation endpoints require an `Idempotency-Key` HTTP header.
+1. **Header Requirement & Boundary Validation**: Mutation endpoints require an `Idempotency-Key` HTTP header. Keys must be 1-255 characters conforming to `^[A-Za-z0-9_.:-]+$`, rejecting malformed or oversized keys immediately with `400 Bad Request` before database or lock acquisition.
 2. **SHA-256 Request Payload Digest**: The raw HTTP request payload bytes are hashed using SHA-256 (`MessageDigest.getInstance("SHA-256")`).
-3. **Tampering Detection**: If a client re-submits an existing `Idempotency-Key` with a different payload (e.g., changed amount or recipient), the engine detects a checksum mismatch and rejects the request with `422 Unprocessable Entity`.
+3. **Tampering Detection**: If a client re-submits an existing `Idempotency-Key` with a different payload (e.g., changed amount or recipient), the engine detects a checksum mismatch and rejects the request with `400 Bad Request` (`Key Reuse`).
 4. **Distributed Coordination & Crash Lease Recovery**: In multi-node production deployments, Redisson distributed locks (`payflow:lock:idemp:{key}`) coordinate across pods. In-flight requests lock the key for 2 minutes (`leaseExpiresAt`). If an application node crashes during execution, subsequent retries automatically reclaim the orphaned lease without waiting for the 24-hour purge job.
 5. **Cached Response Replay**: Successfully executed transfers replay the cached `201 Created` HTTP response without executing duplicate balance mutations.
 
@@ -967,8 +979,15 @@ sequenceDiagram
   - `@NotBlank`, `@Size(min = 3, max = 50)`
   - `@Pattern(regexp = "^[a-zA-Z0-9._-]+@[a-zA-Z0-9]+$")` (UPI ID syntax enforcement)
   - `@DecimalMin(value = "0.01")`, `@Digits(integer = 15, fraction = 4)`
+- **Spring 6.1+ / 7 Method Validation**: Query and path parameters (`@Min`, `@Max`, `@PathVariable`) are validated by the MVC framework, with `HandlerMethodValidationException` and `MethodArgumentTypeMismatchException` mapped to RFC 9457 `ProblemDetail` (422 and 400).
 - **SQL Injection Prevention**: All queries utilize Spring Data JPA parameter binding or explicit JPQL named parameters. Raw string concatenation in SQL queries is prohibited.
 - **Cross-Site Scripting (XSS)**: All responses return `application/json` or `application/problem+json`; HTML rendering is disabled in API controllers.
+
+#### 3. Transactional Outbox Lifecycle & Retention Maintenance (Phase 9B)
+- **Automated Retention Purge**: Domain events published through Spring Modulith are recorded in the `event_publication` table.
+- **Scheduled Maintenance**: `OutboxCleanupService` runs daily at 02:00 AM UTC (`0 0 2 * * *`) via Spring's `@Scheduled` annotation.
+- **Spring Modulith 2.0 API**: Calls `CompletedEventPublications.deletePublicationsOlderThan(Duration.ofDays(7))` to cleanly delete completed event records that have aged beyond the 7-day retention period (`payflow.outbox.retention-days`).
+- **Fault-Tolerant Execution**: The cleanup service defensively checks for bean presence, catches transient exceptions gracefully, and operates inside a dedicated transaction boundary.
 
 ### F. Resilience, Fault Tolerance & DoS Mitigation
 
@@ -1035,6 +1054,7 @@ Documenting rejected alternatives and evaluating the penalty ("cost of getting i
 - **`RES-007`: Framework 7 @Retryable + Resilience4j Complementary Use** — Resolved in architecture review. Use spring-core native `@Retryable` for basic outbound HTTP retry; use Resilience4j for advanced patterns (per-user rate limiting, circuit breakers) not yet in spring-core.
 - **`RES-008`: Profile-Conditional Cache-Aside (Redis in Prod, Caffeine in Dev/Test)** — Resolved in Phase 8C. Decoupled local development from external Redis while ensuring multi-pod cluster state consistency with JSON value serialization.
 - **`RES-009`: Redisson Distributed Locking for Multi-Instance Idempotency Coordination** — Resolved in Phase 8D. Integrated Redisson 4.7.0 distributed locking (`payflow:lock:idemp:{key}`) with fail-safe lease time (10s) and bounded wait time (2s) in `prod`, paired with `NoOpDistributedLockService` fallback in `!prod` (local/test).
+- **`RES-010`: Principal Engineer Architecture Audit Remediation & Modern Hardening** — Resolved in Phase 9B. Remediated BOLA on user enumeration endpoints (`ROLE_ADMIN`), enforced production JWT secret entropy verification, eliminated cache stampedes via targeted cache eviction, bound integration tests via `maven-failsafe-plugin`, and automated outbox publication retention via `OutboxCleanupService`.
 
 ### Open Questions & Future Evaluation
 - **`OPEN-001`: Transfer Amount Cap Configuration** — Default cap set to ₹1,00,000 (`100,000.00`). Evaluating whether per-user dynamic velocity caps should be stored in Redis.

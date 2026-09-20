@@ -17,7 +17,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -26,8 +25,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.DockerClientFactory;
 import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.utility.DockerImageName;
 
@@ -39,14 +37,28 @@ import com.payflow.dto.response.UserResponse;
 import com.payflow.entity.TransactionStatus;
 import com.payflow.filter.IdempotencyFilter;
 
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+
 @ActiveProfiles({"test", "kafka"})
 @TestPropertySource(properties = {"spring.modulith.events.externalization.enabled=true"})
-@Testcontainers(disabledWithoutDocker = true)
 class KafkaOutboxIT extends AbstractIntegrationTest {
 
-	@Container
-	@ServiceConnection
-	static final KafkaContainer KAFKA_CONTAINER = new KafkaContainer(DockerImageName.parse("apache/kafka:3.8.0"));
+	protected static final KafkaContainer KAFKA_CONTAINER = new KafkaContainer(
+			DockerImageName.parse("apache/kafka:3.8.0"));
+
+	static {
+		if (DockerClientFactory.instance().isDockerAvailable()) {
+			KAFKA_CONTAINER.start();
+		}
+	}
+
+	@DynamicPropertySource
+	static void kafkaProperties(DynamicPropertyRegistry registry) {
+		registry.add("spring.kafka.bootstrap-servers",
+				() -> KAFKA_CONTAINER.isRunning() ? KAFKA_CONTAINER.getBootstrapServers() : "");
+		registry.add("spring.modulith.events.externalization.enabled", () -> "true");
+	}
 
 	@Autowired
 	private TestRestTemplate restTemplate;
@@ -85,6 +97,7 @@ class KafkaOutboxIT extends AbstractIntegrationTest {
 
 		try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps)) {
 			consumer.subscribe(Collections.singletonList("payflow.transfers"));
+			consumer.poll(Duration.ofMillis(200));
 
 			// 3. Execute Transfer with auth headers and idempotency key
 			TransferMoneyRequest txReq = new TransferMoneyRequest();
@@ -107,7 +120,7 @@ class KafkaOutboxIT extends AbstractIntegrationTest {
 
 			// 4. Poll Kafka for the externalized event
 			ConsumerRecord<String, String> matchedRecord = null;
-			long deadline = System.currentTimeMillis() + 15000;
+			long deadline = System.currentTimeMillis() + 30000;
 			while (System.currentTimeMillis() < deadline && matchedRecord == null) {
 				ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
 				for (ConsumerRecord<String, String> record : records) {
@@ -125,8 +138,6 @@ class KafkaOutboxIT extends AbstractIntegrationTest {
 					.isEqualTo(senderUpi);
 			assertThat(matchedRecord.value()).contains("COMPLETED").contains(senderUpi).contains(receiverUpi);
 
-			// 5. Verify transactional outbox event_publication registry also recorded the
-			// event
 			Integer eventCount = jdbcTemplate.queryForObject(
 					"SELECT COUNT(*) FROM event_publication WHERE serialized_event LIKE ?", Integer.class,
 					"%" + txReferenceId.toString() + "%");

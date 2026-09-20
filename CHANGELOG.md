@@ -20,6 +20,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Created full-stack integration test `KafkaOutboxIT.java` against Testcontainers Kafka (KRaft mode) verifying transfer execution, outbox persistence, and externalized record consumption.
 - Added ADR-024 (*Kafka Event Streaming via Spring Modulith Event Externalization*) to `docs/adr/`.
 
+### Added / Hardened - Phase 9B (Production Hardening & Architecture Audit Remediation)
+- **Security Hardening (SEC-01, SEC-02, SEC-03, SEC-04)**:
+  - Added startup validation in `JwtTokenProvider.java` requiring external `PAYFLOW_SECURITY_JWT_SECRET` of >= 256 bits (32 chars) when running in `prod` profile, failing fast on default or weak keys.
+  - Enforced `ROLE_ADMIN` check in `UserController.java` for `GET /api/v1/users` and `GET /api/v1/users/balance/{amount}`, preventing unauthorized balance enumeration and BOLA vulnerabilities.
+  - Hardened CORS configuration in `SecurityConfig.java` to disallow credentials when wildcard origin (`*`) is present.
+  - Configured clickjacking defense via `frameOptions().sameOrigin()` in `SecurityConfig.java`.
+- **Architecture & Resilience (ARCH-02, ARCH-03, ARCH-04)**:
+  - Handled Spring 6.1+ / Spring 7 `HandlerMethodValidationException`, `ConstraintViolationException`, and `MethodArgumentTypeMismatchException` in `GlobalExceptionHandler.java` returning RFC 9457 `ProblemDetail` responses.
+  - Enforced boundary validation for `Idempotency-Key` header in `IdempotencyFilter.java` (max 255 chars, pattern `^[A-Za-z0-9_.:-]+$`).
+  - Implemented scheduled `OutboxCleanupService.java` leveraging Spring Modulith 2.0 `CompletedEventPublications.deletePublicationsOlderThan(Duration)` to purge completed outbox events older than 7 days.
+  - Enhanced Flyway migration `V6__create_event_publication_registry.sql` with `event_publication_archive` table and indexes, and aligned `User.phoneNumber` length (10 chars) and `Transaction` join column nullability (`nullable = false`) to satisfy Hibernate schema validation on PostgreSQL.
+- **Performance & Scalability (PERF-01)**:
+  - Replaced global cache invalidation (`allEntries = true`) in `TransactionService.java` with targeted cache eviction, invalidating only affected sender and receiver keys (`upi`, `refId`, `id`, and user ledgers).
+- **Quality, Verification & Build Lifecycle (TEST-01, TEST-02, TEST-03)**:
+  - Added `maven-failsafe-plugin` 3.5.6 bound to `integration-test` and `verify` goals in `pom.xml`, separating unit tests (`*Test.java`) from integration tests (`*IT.java`).
+  - Added DataJpaTest repository slice tests `TransactionRepositoryTest.java` and `IdempotencyRepositoryTest.java`.
+  - Added unit test coverage for `OutboxCleanupServiceTest`, `IdempotencyFilterTest`, `UserControllerTest`, and `JwtTokenProviderTest`.
+- **Documentation & Configuration Consistency (DOC-01, DOC-02)**:
+  - Synchronized `docs/ARCHITECTURE.md` (Resilience4j vs Bucket4j, Virtual Threads scheduling for Phase 10B, Redisson lock topology).
+  - Aligned `docker-compose.yml` to use `SPRING_PROFILES_ACTIVE: local`.
+  - Updated `docs/CONVENTIONS.md` testing standards for Surefire and Failsafe phases.
+  - Added ADR-025 (*Production Hardening and Architecture Audit Remediation*) to `docs/adr/`.
+- **Integration Testing & Container Pipeline Stabilization**:
+  - Implemented Testcontainers Singleton Container pattern in `AbstractIntegrationTest`, eliminating premature container stops across test classes.
+  - Added `spring-boot-restclient` and `@AutoConfigureTestRestTemplate` for Spring Boot 4.1 test client autowiring.
+  - Resolved Kafka event externalization routing, static singleton container startup, and consumer assignment warmup in `KafkaOutboxIT.java` and `KafkaConfig.java`.
+  - Configured `ByteArraySerializer` in `application-kafka.yml` ensuring raw serialized event bytes on Kafka topics for Spring Modulith externalization.
+  - Bound `TaggedRateLimiterMetrics` and `TaggedCircuitBreakerMetrics` as `MeterBinder` beans in `Resilience4jConfig.java` to export resilience metrics to Micrometer and Prometheus.
+  - Configured Resilience4j `configs` templates in `application.yml` / `application-test.yml` and dynamic instance config fallback in `UserRateLimiterService.java`.
+  - Normalized phone number generation in `ConcurrentTransferIT` and aligned BOLA authorization headers in `TransferLifecycleIT`.
+  - Aligned `ResilienceIT` transaction status assertion with `TransactionStatus` enum and corrected SpEL key expression in `@Externalized("payflow.transfers::#{senderUpi()}")`.
+
 ### Planned - Phase 10A (Gen-AI Spend Categorization & Financial Insights)
 - Spring AI integration providing automated expenditure classification and contextual budgeting tips with structured JSON output, guarded by circuit breakers and heuristic fallback.
 

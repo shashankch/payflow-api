@@ -10,7 +10,9 @@ import javax.crypto.SecretKey;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 import io.jsonwebtoken.Claims;
@@ -22,15 +24,31 @@ import io.jsonwebtoken.security.Keys;
 public class JwtTokenProvider {
 
 	private static final Logger LOG = LoggerFactory.getLogger(JwtTokenProvider.class);
-	private static final String DEFAULT_SECRET = "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970";
+	public static final String DEFAULT_SECRET = "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970";
 
 	private final SecretKey secretKey;
 	private final long expirationMs;
 
-	public JwtTokenProvider(@Value("${payflow.security.jwt.secret:" + DEFAULT_SECRET + "}") String secret,
-			@Value("${payflow.security.jwt.expiration-ms:3600000}") long expirationMs) {
+	@Autowired
+	public JwtTokenProvider( //
+			@Value("${payflow.security.jwt.secret:" + DEFAULT_SECRET + "}") String secret,
+			@Value("${payflow.security.jwt.expiration-ms:3600000}") long expirationMs, //
+			Environment environment) {
+		if (environment != null && environment.matchesProfiles("prod")) {
+			boolean isWeakSecret = secret == null || secret.isBlank() || DEFAULT_SECRET.equals(secret)
+					|| secret.length() < 32;
+			if (isWeakSecret) {
+				String msg = "Production environment requires external PAYFLOW_SECURITY_JWT_SECRET "
+						+ "of >= 256 bits. Default secret is prohibited.";
+				throw new IllegalStateException(msg);
+			}
+		}
 		this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
 		this.expirationMs = expirationMs;
+	}
+
+	public JwtTokenProvider(String secret, long expirationMs) {
+		this(secret, expirationMs, null);
 	}
 
 	public String generateToken(String upiId, UUID referenceId) {

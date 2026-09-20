@@ -6,7 +6,9 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -14,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.payflow.config.CacheConfig;
 import com.payflow.config.MetricsConfig;
 import com.payflow.dto.request.TransferMoneyRequest;
 import com.payflow.entity.BalanceLedgerEntry;
@@ -45,20 +48,29 @@ public class TransactionService {
 	private final BalanceLedgerRepository balanceLedgerRepository;
 	private final ApplicationEventPublisher eventPublisher;
 	private final MetricsConfig metricsConfig;
+	private final CacheManager cacheManager;
 
+	@Autowired
 	public TransactionService(TransactionRepository transactionRepository, UserRepository userRepository,
 			BalanceLedgerRepository balanceLedgerRepository, ApplicationEventPublisher eventPublisher,
-			MetricsConfig metricsConfig) {
+			MetricsConfig metricsConfig, @Autowired(required = false) CacheManager cacheManager) {
 		this.transactionRepository = transactionRepository;
 		this.userRepository = userRepository;
 		this.balanceLedgerRepository = balanceLedgerRepository;
 		this.eventPublisher = eventPublisher;
 		this.metricsConfig = metricsConfig;
+		this.cacheManager = cacheManager;
+	}
+
+	public TransactionService(TransactionRepository transactionRepository, UserRepository userRepository,
+			BalanceLedgerRepository balanceLedgerRepository, ApplicationEventPublisher eventPublisher, //
+			MetricsConfig metricsConfig) {
+		this(transactionRepository, userRepository, balanceLedgerRepository, //
+				eventPublisher, metricsConfig, null);
 	}
 
 	@PerUserRateLimiter(name = "transferLimiter")
 	@Observed(name = "payflow.transfers.send", contextualName = "send-money-transfer")
-	@CacheEvict(value = {"users", "user_ledgers"}, allEntries = true)
 	@Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class, timeout = 5)
 	public Transaction sendMoney(TransferMoneyRequest request) {
 		long startTime = System.currentTimeMillis();
@@ -148,6 +160,8 @@ public class TransactionService {
 		LOG.info("Transfer completed: txId={}, amount={}", savedTransaction.getReferenceId(),
 				savedTransaction.getAmount());
 
+		evictTargetedCaches(sender, receiver);
+
 		return savedTransaction;
 	}
 
@@ -176,5 +190,51 @@ public class TransactionService {
 		}
 
 		return transactionRepository.findBySenderUpiIdOrReceiverUpiId(upiId, upiId, pageable);
+	}
+
+	private void evictTargetedCaches(User sender, User receiver) {
+		if (cacheManager == null) {
+			return;
+		}
+		Cache usersCache = cacheManager.getCache(CacheConfig.CACHE_USERS);
+		if (usersCache != null) {
+			evictUserEntries(usersCache, sender);
+			evictUserEntries(usersCache, receiver);
+		}
+		Cache ledgersCache = cacheManager.getCache(CacheConfig.CACHE_USER_LEDGERS);
+		if (ledgersCache != null) {
+			evictLedgerEntries(ledgersCache, sender);
+			evictLedgerEntries(ledgersCache, receiver);
+		}
+	}
+
+	private void evictUserEntries(Cache usersCache, User user) {
+		if (user == null) {
+			return;
+		}
+		if (user.getUpiId() != null) {
+			usersCache.evict("upi:" + user.getUpiId());
+		}
+		if (user.getReferenceId() != null) {
+			usersCache.evict("ref:" + user.getReferenceId());
+		}
+		if (user.getUserId() != null) {
+			usersCache.evict("id:" + user.getUserId());
+		}
+	}
+
+	private void evictLedgerEntries(Cache ledgersCache, User user) {
+		if (user == null) {
+			return;
+		}
+		String prefix = user.getUpiId() != null ? user.getUpiId().split("@")[0] : "";
+		for (int page = 0; page < 10; page++) {
+			if (user.getReferenceId() != null) {
+				ledgersCache.evict(user.getReferenceId() + "_" + page);
+			}
+			if (!prefix.isEmpty()) {
+				ledgersCache.evict(prefix + "_ledger_" + page);
+			}
+		}
 	}
 }

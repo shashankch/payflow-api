@@ -57,7 +57,7 @@ class ConcurrentTransferIT extends AbstractIntegrationTest {
 			CreateUserRequest receiverReq = new CreateUserRequest();
 			receiverReq.setName("Receiver " + i);
 			receiverReq.setUpiId(receiverUpis[i]);
-			receiverReq.setPhoneNumber("987600000" + (i + 1));
+			receiverReq.setPhoneNumber(String.format("98760000%02d", i + 1));
 			receiverReq.setBalance(BigDecimal.ZERO);
 			restTemplate.postForEntity("/api/v1/users", receiverReq, UserResponse.class);
 		}

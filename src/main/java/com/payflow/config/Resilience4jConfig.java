@@ -12,6 +12,10 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import com.payflow.security.SecurityUtils;
 
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.micrometer.tagged.TaggedCircuitBreakerMetrics;
+import io.github.resilience4j.micrometer.tagged.TaggedRateLimiterMetrics;
+import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 
 /**
@@ -53,5 +57,15 @@ public class Resilience4jConfig {
 			LOG.debug("No client IP found; using 'anonymous' rate limit partition");
 			return "anonymous";
 		};
+	}
+
+	@Bean
+	public TaggedRateLimiterMetrics taggedRateLimiterMetrics(RateLimiterRegistry rateLimiterRegistry) {
+		return TaggedRateLimiterMetrics.ofRateLimiterRegistry(rateLimiterRegistry);
+	}
+
+	@Bean
+	public TaggedCircuitBreakerMetrics taggedCircuitBreakerMetrics(CircuitBreakerRegistry circuitBreakerRegistry) {
+		return TaggedCircuitBreakerMetrics.ofCircuitBreakerRegistry(circuitBreakerRegistry);
 	}
 }

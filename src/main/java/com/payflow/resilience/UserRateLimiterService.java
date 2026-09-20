@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import io.github.resilience4j.core.ConfigurationNotFoundException;
 import io.github.resilience4j.ratelimiter.RateLimiter;
 import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
 
@@ -47,7 +48,12 @@ public class UserRateLimiterService {
 		lastAccessTimestampMap.put(dynamicName, Instant.now().toEpochMilli());
 		try {
 			return rateLimiterRegistry.rateLimiter(dynamicName, baseConfigName);
-		} catch (io.github.resilience4j.core.ConfigurationNotFoundException ex) {
+		} catch (ConfigurationNotFoundException ex) {
+			RateLimiter baseInstance = rateLimiterRegistry.find(baseConfigName).orElse(null);
+			if (baseInstance != null) {
+				return rateLimiterRegistry.rateLimiter(dynamicName, //
+						baseInstance.getRateLimiterConfig());
+			}
 			return rateLimiterRegistry.rateLimiter(dynamicName);
 		}
 	}

@@ -6,6 +6,9 @@ spring:
     name: payflow-api
   profiles:
     active: local
+  autoconfigure:
+    exclude:
+      - io.github.resilience4j.springboot3.verifier.autoconfigure.SpringBoot3VerifierAutoConfiguration
   modulith:
     events:
       republish-outstanding-events-on-restart: true
@@ -97,12 +100,19 @@ resilience4j:
         ignoreExceptions:
           - com.payflow.exception.InvalidUpiException
   ratelimiter:
-    instances:
-      transferLimiter:
-        registerHealthIndicator: true
+    configs:
+      default:
         limitForPeriod: 10
         limitRefreshPeriod: 1s
         timeoutDuration: 0
+      transferLimiter:
+        limitForPeriod: 10
+        limitRefreshPeriod: 1s
+        timeoutDuration: 0
+    instances:
+      transferLimiter:
+        baseConfig: transferLimiter
+        registerHealthIndicator: true
   timelimiter:
     instances:
       upiValidation:

@@ -22,6 +22,7 @@ import com.payflow.entity.TransactionStatus;
 import com.payflow.entity.TransactionType;
 import com.payflow.mapper.TransactionMapper;
 import com.payflow.repository.IdempotencyRepository;
+import com.payflow.security.JwtAccessDeniedHandler;
 import com.payflow.security.JwtAuthenticationEntryPoint;
 import com.payflow.security.JwtAuthenticationFilter;
 import com.payflow.security.JwtTokenProvider;
@@ -65,7 +66,7 @@ class TransactionControllerTest {
 	private JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
 
 	@MockitoBean
-	private com.payflow.security.JwtAccessDeniedHandler jwtAccessDeniedHandler;
+	private JwtAccessDeniedHandler jwtAccessDeniedHandler;
 
 	@BeforeEach
 	void setUpMapperMock() {

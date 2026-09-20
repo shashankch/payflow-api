@@ -41,7 +41,7 @@ public class User implements Serializable {
 	@Column(precision = 19, scale = 4, nullable = false)
 	private BigDecimal balance;
 
-	@Column(nullable = false, length = 15)
+	@Column(nullable = false, length = 10)
 	private String phoneNumber;
 
 	@Version

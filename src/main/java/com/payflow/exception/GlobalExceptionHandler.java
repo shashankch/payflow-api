@@ -21,6 +21,9 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import jakarta.validation.ConstraintViolationException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -116,6 +119,59 @@ public class GlobalExceptionHandler {
 			fieldErrors.put(error.getField(), error.getDefaultMessage());
 		}
 		problem.setProperty("errors", fieldErrors);
+		enrichProblemDetail(problem);
+		return problem;
+	}
+
+	@ExceptionHandler(HandlerMethodValidationException.class)
+	public ProblemDetail handleHandlerMethodValidationException(HandlerMethodValidationException ex) {
+		LOG.warn("Handler method validation failed: {}", ex.getMessage());
+		ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY,
+				"Validation failed for request parameters");
+		problem.setType(URI.create("https://api.payflow.com/errors/validation-error"));
+		problem.setTitle("Validation Failure");
+
+		Map<String, String> paramErrors = new HashMap<>();
+		for (var result : ex.getParameterValidationResults()) {
+			String paramName = result.getMethodParameter().getParameterName();
+			String fieldName = paramName != null ? paramName : "parameter";
+			for (var resolvableError : result.getResolvableErrors()) {
+				paramErrors.put(fieldName, resolvableError.getDefaultMessage());
+			}
+		}
+		if (!paramErrors.isEmpty()) {
+			problem.setProperty("errors", paramErrors);
+		}
+		enrichProblemDetail(problem);
+		return problem;
+	}
+
+	@ExceptionHandler(ConstraintViolationException.class)
+	public ProblemDetail handleConstraintViolationException(ConstraintViolationException ex) {
+		LOG.warn("Constraint violation: {}", ex.getMessage());
+		ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY,
+				"Validation constraint violated");
+		problem.setType(URI.create("https://api.payflow.com/errors/validation-error"));
+		problem.setTitle("Validation Failure");
+
+		Map<String, String> violations = new HashMap<>();
+		for (var violation : ex.getConstraintViolations()) {
+			var propPath = violation.getPropertyPath();
+			String path = propPath != null ? propPath.toString() : "parameter";
+			violations.put(path, violation.getMessage());
+		}
+		problem.setProperty("errors", violations);
+		enrichProblemDetail(problem);
+		return problem;
+	}
+
+	@ExceptionHandler(MethodArgumentTypeMismatchException.class)
+	public ProblemDetail handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException ex) {
+		LOG.warn("Parameter type mismatch for {}: {}", ex.getName(), ex.getMessage());
+		ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
+				String.format("Invalid value '%s' for parameter '%s'", ex.getValue(), ex.getName()));
+		problem.setType(URI.create("https://api.payflow.com/errors/type-mismatch"));
+		problem.setTitle("Parameter Type Mismatch");
 		enrichProblemDetail(problem);
 		return problem;
 	}

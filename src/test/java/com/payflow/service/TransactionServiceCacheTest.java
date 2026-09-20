@@ -88,9 +88,16 @@ class TransactionServiceCacheTest {
 
 		usersCache.put("upi:alice@payflow", sender);
 		usersCache.put("upi:bob@payflow", receiver);
+
+		User charlie = User.builder().userId(3L).referenceId(UUID.randomUUID()).name("Charlie").upiId("charlie@payflow")
+				.phoneNumber("9876543212").balance(new BigDecimal("750.00")).build();
+		usersCache.put("upi:charlie@payflow", charlie);
+
 		ledgersCache.put("alice_ledger_0", "dummyData");
 
 		assertThat(usersCache.get("upi:alice@payflow")).isNotNull();
+		assertThat(usersCache.get("upi:bob@payflow")).isNotNull();
+		assertThat(usersCache.get("upi:charlie@payflow")).isNotNull();
 		assertThat(ledgersCache.get("alice_ledger_0")).isNotNull();
 
 		when(userRepository.findByUpiIdWithLock("alice@payflow")).thenReturn(Optional.of(sender));
@@ -114,5 +121,6 @@ class TransactionServiceCacheTest {
 		assertThat(usersCache.get("upi:alice@payflow")).isNull();
 		assertThat(usersCache.get("upi:bob@payflow")).isNull();
 		assertThat(ledgersCache.get("alice_ledger_0")).isNull();
+		assertThat(usersCache.get("upi:charlie@payflow")).isNotNull();
 	}
 }
