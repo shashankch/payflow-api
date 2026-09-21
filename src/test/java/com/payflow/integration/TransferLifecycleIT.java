@@ -107,8 +107,9 @@ class TransferLifecycleIT extends AbstractIntegrationTest {
 		assertThat(updatedAlice.getBody().balance()).isEqualByComparingTo("700.0000");
 
 		// 5. Verify Bob's updated balance (₹800.00) via REST API
+		HttpHeaders bobHeaders = authHeaders("bob.life@payflow");
 		ResponseEntity<UserResponse> updatedBob = restTemplate.exchange("/api/v1/users/" + bobRefId, HttpMethod.GET,
-				new HttpEntity<>(headers), UserResponse.class);
+				new HttpEntity<>(bobHeaders), UserResponse.class);
 		assertThat(updatedBob.getStatusCode()).isEqualTo(HttpStatus.OK);
 		assertThat(updatedBob.getBody()).isNotNull();
 		assertThat(updatedBob.getBody().balance()).isEqualByComparingTo("800.0000");
@@ -130,7 +131,7 @@ class TransferLifecycleIT extends AbstractIntegrationTest {
 
 		// 7. Verify Bob's Balance Ledger audit logs (CREDIT ₹300.00)
 		ResponseEntity<PagedResponse<LedgerEntryResponse>> bobLedgerRes = restTemplate.exchange(
-				"/api/v1/users/" + bobRefId + "/ledger", HttpMethod.GET, new HttpEntity<>(headers),
+				"/api/v1/users/" + bobRefId + "/ledger", HttpMethod.GET, new HttpEntity<>(bobHeaders),
 				new ParameterizedTypeReference<PagedResponse<LedgerEntryResponse>>() {
 				});
 		assertThat(bobLedgerRes.getStatusCode()).isEqualTo(HttpStatus.OK);

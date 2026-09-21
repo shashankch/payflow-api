@@ -16,6 +16,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -29,6 +30,7 @@ import com.payflow.entity.User;
 import com.payflow.mapper.LedgerMapper;
 import com.payflow.mapper.UserMapper;
 import com.payflow.repository.IdempotencyRepository;
+import com.payflow.security.JwtAccessDeniedHandler;
 import com.payflow.security.JwtAuthenticationEntryPoint;
 import com.payflow.security.JwtAuthenticationFilter;
 import com.payflow.security.JwtTokenProvider;
@@ -75,7 +77,7 @@ class UserControllerTest {
 	private JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
 
 	@MockitoBean
-	private com.payflow.security.JwtAccessDeniedHandler jwtAccessDeniedHandler;
+	private JwtAccessDeniedHandler jwtAccessDeniedHandler;
 
 	@BeforeEach
 	void setUpMappers() {
@@ -180,5 +182,43 @@ class UserControllerTest {
 				.andExpect(jsonPath("$.content[0].ledgerId").value(10))
 				.andExpect(jsonPath("$.content[0].entryType").value("DEBIT"))
 				.andExpect(jsonPath("$.content[0].amount").value(100.00));
+	}
+
+	@Test
+	@DisplayName("GET /api/v1/users should return 403 Forbidden when user lacks ROLE_ADMIN")
+	void shouldReturnForbidden_whenNonAdminListsUsers() throws Exception {
+		mockMvc.perform(get("/api/v1/users")).andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.title").value("Forbidden Operation"));
+	}
+
+	@Test
+	@WithMockUser(roles = "ADMIN")
+	@DisplayName("GET /api/v1/users should return 200 OK when user has ROLE_ADMIN")
+	void shouldReturnUsers_whenAdminListsUsers() throws Exception {
+		User user = User.builder().userId(1L).referenceId(UUID.randomUUID()).name("Alice").upiId("alice@payflow")
+				.balance(new BigDecimal("500.00")).phoneNumber("9876543210").build();
+		given(userService.getAllUsers(any(Pageable.class))).willReturn(new PageImpl<>(List.of(user)));
+
+		mockMvc.perform(get("/api/v1/users")).andExpect(status().isOk())
+				.andExpect(jsonPath("$.content[0].name").value("Alice"));
+	}
+
+	@Test
+	@DisplayName("GET /api/v1/users/balance/{amount} should return 403 Forbidden when user lacks ROLE_ADMIN")
+	void shouldReturnForbidden_whenNonAdminFiltersUsersByBalance() throws Exception {
+		mockMvc.perform(get("/api/v1/users/balance/100.00")).andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.title").value("Forbidden Operation"));
+	}
+
+	@Test
+	@WithMockUser(roles = "ADMIN")
+	@DisplayName("GET /api/v1/users/balance/{amount} should return 200 OK when user has ROLE_ADMIN")
+	void shouldReturnUsers_whenAdminFiltersUsersByBalance() throws Exception {
+		User user = User.builder().userId(1L).referenceId(UUID.randomUUID()).name("Alice").upiId("alice@payflow")
+				.balance(new BigDecimal("500.00")).phoneNumber("9876543210").build();
+		given(userService.getUsersWithBalanceAbove(any(BigDecimal.class))).willReturn(List.of(user));
+
+		mockMvc.perform(get("/api/v1/users/balance/100.00")).andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].name").value("Alice"));
 	}
 }

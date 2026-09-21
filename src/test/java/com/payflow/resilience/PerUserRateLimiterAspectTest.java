@@ -1,5 +1,7 @@
 package com.payflow.resilience;
 
+import java.time.Duration;
+
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,7 +39,7 @@ class PerUserRateLimiterAspectTest {
 	@BeforeEach
 	void setUp() {
 		RateLimiterConfig config = RateLimiterConfig.custom().limitForPeriod(1)
-				.limitRefreshPeriod(java.time.Duration.ofSeconds(10)).timeoutDuration(java.time.Duration.ZERO).build();
+				.limitRefreshPeriod(Duration.ofSeconds(10)).timeoutDuration(Duration.ZERO).build();
 		registry = RateLimiterRegistry.of(config);
 		registry.addConfiguration("transferLimiter", config);
 		userRateLimiterService = new UserRateLimiterService(registry);

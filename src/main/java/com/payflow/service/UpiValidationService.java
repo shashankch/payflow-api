@@ -37,7 +37,15 @@ public class UpiValidationService {
 			return;
 		}
 
-		UpiVerificationResponse response = executeValidationWithRetry(upiId);
+		UpiVerificationResponse response;
+		try {
+			response = executeValidationWithRetry(upiId);
+		} catch (Exception ex) {
+			LOG.warn("External validation failed for {}: {}. Proceeding with fallback.", //
+					upiId, ex.getMessage());
+			response = recoverFromValidationFailure(ex, upiId);
+		}
+
 		if (response != null && !response.valid()) {
 			LOG.warn("External UPI validation failed for UPI ID: {}", upiId);
 			throw new InvalidUpiException("UPI ID is invalid or rejected by external provider: " + upiId);

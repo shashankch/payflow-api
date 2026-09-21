@@ -16,7 +16,7 @@ spring:
       properties:
         enable.idempotence: true
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      value-serializer: org.apache.kafka.common.serialization.ByteArraySerializer
 
 payflow:
   kafka:

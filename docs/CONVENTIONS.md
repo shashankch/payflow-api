@@ -7,7 +7,7 @@ This document outlines the coding standards, repository conventions, Git workflo
 ## 1. Code Style & Formatting
 
 - **Java Version**: Java 25.
-- **Formatter**: Google Java Format, enforced via the `spotless-maven-plugin`.
+- **Formatter**: Eclipse Formatter, enforced via the `spotless-maven-plugin`.
 - **Linter**: Checkstyle, enforced via `maven-checkstyle-plugin`.
 - **Indentation**: 4 spaces for Java, 2 spaces for YAML/JSON, 4 spaces for XML.
 - **Imports**: Group imports logically; avoid wildcard imports (`import java.util.*`) except in test files where approved.
@@ -24,7 +24,7 @@ This document outlines the coding standards, repository conventions, Git workflo
 - **DTO Separation**: Database entities (`@Entity`) must never be exposed directly via REST controllers. Use DTOs for request input and Java `record`s for API response models.
 - **Immutability**: Prefer immutable data structures. Response DTOs should use Java `record`s where possible.
 - **Financial Arithmetic & Currency**: All monetary amounts are strictly denominated in Indian Rupees (**INR**, symbol: **₹**). Never use `double` or `float` for monetary calculations. Always use `BigDecimal` with explicit scale (`precision = 19, scale = 4`) and `RoundingMode.HALF_EVEN` (banker's rounding).
-- **Error Responses**: All API errors must return standardized RFC 7807 `ProblemDetail` payloads via `@RestControllerAdvice`.
+- **Error Responses**: All API errors must return standardized RFC 9457 (obsoleting RFC 7807) `ProblemDetail` payloads via `@RestControllerAdvice`.
 - **Logging**: Never use `System.out.println()`. Use SLF4J loggers named `LOG` (`private static final Logger LOG = LoggerFactory.getLogger(...)`) with structured MDC enrichment (`LOG.info()`, `LOG.warn()`, `LOG.error()`).
 
 ---
@@ -46,15 +46,17 @@ This document outlines the coding standards, repository conventions, Git workflo
 
 ## 4. Testing Conventions
 
-- **Unit Tests**:
+- **Unit & Slice Tests**:
   - Located in `src/test/java/...`.
   - Class naming: `[ClassName]Test.java` (e.g., `TransactionServiceTest.java`).
-  - Use Mockito for dependencies and MockMVC for controller slice tests (`@WebMvcTest`).
-  - Must run quickly without requiring Docker or external services.
+  - Executed by `maven-surefire-plugin` via `mvn test`.
+  - Use Mockito for mock dependencies, MockMVC for controller slice tests (`@WebMvcTest`), and `@DataJpaTest` for repository slices.
+  - Must execute quickly in-memory (<10s total suite) without requiring Docker or external network dependencies.
 - **Integration Tests**:
   - Located in `src/test/java/.../integration/`.
-  - Class naming: `[Feature]IT.java` or `[ClassName]IntegrationTest.java`.
-  - Use Testcontainers to spin up real PostgreSQL/Kafka containers.
+  - Class naming: `[Feature]IT.java` (e.g., `TransferLifecycleIT.java`, `KafkaOutboxIT.java`).
+  - Executed by `maven-failsafe-plugin` during `mvn verify` (`integration-test` and `verify` phases).
+  - Use Testcontainers to spin up real PostgreSQL and Kafka KRaft container instances.
 - **Test Method Naming**: Use descriptive names reflecting intent:
   - `should[ExpectedBehavior]_when[StateUnderTest]()`
   - Example: `shouldRejectTransfer_whenSenderHasInsufficientBalance()`

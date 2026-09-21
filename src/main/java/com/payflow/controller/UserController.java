@@ -71,11 +71,16 @@ public class UserController {
 
 	@GetMapping
 	@Operation(summary = "Get paginated users", description = "Retrieves a paginated list of "
-			+ "registered users sorted by specified attribute")
+			+ "registered users sorted by specified attribute (Requires ROLE_ADMIN)")
 	@ApiResponse(responseCode = "200", description = "Paginated users list retrieved successfully")
+	@ApiResponse(responseCode = "403", description = "Access forbidden to non-admin callers")
 	public ResponseEntity<PagedResponse<UserResponse>> getUsers(@RequestParam(defaultValue = "0") @Min(0) int page,
 			@RequestParam(defaultValue = "10") @Min(1) @Max(100) int size,
 			@RequestParam(defaultValue = "userId") String sortBy) {
+		if (!SecurityUtils.hasRole("ADMIN")) {
+			throw new ForbiddenOperationException(
+					"Access forbidden: Administrator privileges required to list all users");
+		}
 		Pageable pageable = PageRequest.of(page, size, Sort.by(sortBy).ascending());
 		Page<UserResponse> userPage = userService.getAllUsers(pageable).map(userMapper::toResponse);
 		return ResponseEntity.ok(PagedResponse.fromPage(userPage));
@@ -119,9 +124,14 @@ public class UserController {
 
 	@GetMapping("/balance/{amount}")
 	@Operation(summary = "Get users by balance threshold", description = "Fetches users whose balance "
-			+ "exceeds minimum threshold")
+			+ "exceeds minimum threshold (Requires ROLE_ADMIN)")
 	@ApiResponse(responseCode = "200", description = "Matching users list returned")
+	@ApiResponse(responseCode = "403", description = "Access forbidden to non-admin callers")
 	public ResponseEntity<List<UserResponse>> getUsersWithBalanceAbove(@PathVariable BigDecimal amount) {
+		if (!SecurityUtils.hasRole("ADMIN")) {
+			throw new ForbiddenOperationException(
+					"Access forbidden: Administrator privileges required to query user balances");
+		}
 		List<User> entityList = userService.getUsersWithBalanceAbove(amount);
 		List<UserResponse> users = entityList.stream().map(userMapper::toResponse).toList();
 		return ResponseEntity.ok(users);

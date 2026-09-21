@@ -9,9 +9,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.annotation.web.configurers.AuthorizeHttpRequestsConfigurer;
-import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -40,13 +38,13 @@ public class SecurityConfig {
 
 	@Bean
 	public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-		http.csrf(AbstractHttpConfigurer::disable);
+		http.csrf(csrf -> csrf.disable());
 		http.cors(cors -> cors.configurationSource(corsConfigurationSource()));
 		http.sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 		http.exceptionHandling(e -> e.authenticationEntryPoint(jwtAuthenticationEntryPoint)
 				.accessDeniedHandler(jwtAccessDeniedHandler));
-		http.authorizeHttpRequests(this::configureAuth);
-		http.headers(h -> h.frameOptions(HeadersConfigurer.FrameOptionsConfig::disable));
+		http.authorizeHttpRequests(auth -> configureAuth(auth));
+		http.headers(h -> h.frameOptions(f -> f.sameOrigin()));
 		http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
 		return http.build();
@@ -67,13 +65,14 @@ public class SecurityConfig {
 		CorsConfiguration configuration = new CorsConfiguration();
 		if ("*".equals(allowedOrigins)) {
 			configuration.addAllowedOriginPattern("*");
+			configuration.setAllowCredentials(false);
 		} else {
 			configuration.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
+			configuration.setAllowCredentials(true);
 		}
 		String[] methods = {"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"};
 		configuration.setAllowedMethods(Arrays.asList(methods));
 		configuration.setAllowedHeaders(List.of("*"));
-		configuration.setAllowCredentials(true);
 
 		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
 		source.registerCorsConfiguration("/**", configuration);

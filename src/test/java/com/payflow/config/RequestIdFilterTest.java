@@ -14,6 +14,8 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
 import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
 
 class RequestIdFilterTest {
 
@@ -46,8 +48,7 @@ class RequestIdFilterTest {
 
 		MockFilterChain filterChain = new MockFilterChain() {
 			@Override
-			public void doFilter(jakarta.servlet.ServletRequest req, jakarta.servlet.ServletResponse res)
-					throws IOException, ServletException {
+			public void doFilter(ServletRequest req, ServletResponse res) throws IOException, ServletException {
 				assertEquals(customId, MDC.get(RequestIdFilter.MDC_KEY));
 				super.doFilter(req, res);
 			}

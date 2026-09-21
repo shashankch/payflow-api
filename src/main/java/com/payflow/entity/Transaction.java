@@ -31,11 +31,11 @@ public class Transaction {
 	private UUID referenceId;
 
 	@ManyToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "sender_id")
+	@JoinColumn(name = "sender_id", nullable = false)
 	private User sender;
 
 	@ManyToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "receiver_id")
+	@JoinColumn(name = "receiver_id", nullable = false)
 	private User receiver;
 
 	@Column(nullable = false, length = 100)

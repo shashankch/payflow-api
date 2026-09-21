@@ -20,6 +20,7 @@ import com.payflow.dto.request.TransferMoneyRequest;
 import com.payflow.dto.response.AuthResponse;
 import com.payflow.dto.response.TransactionResponse;
 import com.payflow.dto.response.UserResponse;
+import com.payflow.entity.TransactionStatus;
 import com.payflow.filter.IdempotencyFilter;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -114,7 +115,7 @@ class ResilienceIT extends AbstractIntegrationTest {
 
 		assertThat(bobResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 		assertThat(bobResponse.getBody()).isNotNull();
-		assertThat(bobResponse.getBody().status()).isEqualTo("COMPLETED");
+		assertThat(bobResponse.getBody().status()).isEqualTo(TransactionStatus.COMPLETED);
 
 		// 6. Verify /actuator/prometheus exports Resilience4j metrics
 		ResponseEntity<String> prometheusRes = restTemplate.getForEntity("/actuator/prometheus", String.class);

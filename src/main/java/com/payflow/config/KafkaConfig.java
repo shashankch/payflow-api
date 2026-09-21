@@ -15,28 +15,22 @@ import com.payflow.event.TransferCompletedEvent;
 @Profile({"prod", "kafka"})
 public class KafkaConfig {
 
-	@Value("${payflow.kafka.transfers-topic:payflow.transfers}")
-	private String transfersTopic;
-
-	@Value("${payflow.kafka.topic-partitions:3}")
-	private int topicPartitions;
-
-	@Value("${payflow.kafka.topic-replicas:1}")
-	private short topicReplicas;
-
 	@Bean
-	public NewTopic payflowTransfersTopic() {
-		return TopicBuilder.name(transfersTopic).partitions(topicPartitions).replicas(topicReplicas).build();
+	public NewTopic payflowTransfersTopic(@Value("${payflow.kafka.transfers-topic:payflow.transfers}") String topic,
+			@Value("${payflow.kafka.topic-partitions:3}") int partitions,
+			@Value("${payflow.kafka.topic-replicas:1}") short replicas) {
+		return TopicBuilder.name(topic).partitions(partitions).replicas(replicas).build();
 	}
 
 	@Bean
-	public EventExternalizationConfiguration eventExternalizationConfiguration() {
+	public EventExternalizationConfiguration eventExternalizationConfiguration(
+			@Value("${payflow.kafka.transfers-topic:payflow.transfers}") String topic) {
 		return EventExternalizationConfiguration.externalizing()
 				.select(EventExternalizationConfiguration.annotatedAsExternalized())
-				.route(TransferCompletedEvent.class, this::routeTransferEvent).build();
+				.route(TransferCompletedEvent.class, it -> routeTransfer(it, topic)).build();
 	}
 
-	private RoutingTarget routeTransferEvent(TransferCompletedEvent event) {
-		return RoutingTarget.forTarget(transfersTopic).andKey(event.senderUpi());
+	private RoutingTarget routeTransfer(TransferCompletedEvent it, String topic) {
+		return RoutingTarget.forTarget(topic).andKey(it.senderUpi());
 	}
 }

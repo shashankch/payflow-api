@@ -1,12 +1,16 @@
 package com.payflow.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.env.Environment;
 
 class JwtTokenProviderTest {
 
@@ -52,5 +56,36 @@ class JwtTokenProviderTest {
 		String token = expiredProvider.generateToken("bob@payflow", UUID.randomUUID());
 
 		assertThat(jwtTokenProvider.validateToken(token)).isFalse();
+	}
+
+	@Test
+	@DisplayName("Should reject default secret when running under prod profile")
+	void shouldRejectDefaultSecretInProd() {
+		Environment env = mock(Environment.class);
+		when(env.matchesProfiles("prod")).thenReturn(true);
+
+		assertThatThrownBy(() -> new JwtTokenProvider(JwtTokenProvider.DEFAULT_SECRET, EXPIRATION_MS, env))
+				.isInstanceOf(IllegalStateException.class).hasMessageContaining("Default secret is prohibited");
+	}
+
+	@Test
+	@DisplayName("Should reject short secret (< 32 chars) when running under prod profile")
+	void shouldRejectShortSecretInProd() {
+		Environment env = mock(Environment.class);
+		when(env.matchesProfiles("prod")).thenReturn(true);
+
+		assertThatThrownBy(() -> new JwtTokenProvider("short-secret-under-32-chars", EXPIRATION_MS, env))
+				.isInstanceOf(IllegalStateException.class).hasMessageContaining("256 bits");
+	}
+
+	@Test
+	@DisplayName("Should accept strong custom secret when running under prod profile")
+	void shouldAcceptStrongSecretInProd() {
+		Environment env = mock(Environment.class);
+		when(env.matchesProfiles("prod")).thenReturn(true);
+
+		String strongSecret = "custom-production-jwt-secret-key-that-is-very-long-and-secure-123456";
+		JwtTokenProvider provider = new JwtTokenProvider(strongSecret, EXPIRATION_MS, env);
+		assertThat(provider).isNotNull();
 	}
 }

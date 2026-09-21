@@ -3,6 +3,7 @@ package com.payflow.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
@@ -129,8 +130,8 @@ class IdempotencyIT extends AbstractIntegrationTest {
 		jdbcTemplate.update(
 				"INSERT INTO idempotency_registry (idempotency_key, request_hash, status, created_at, updated_at) "
 						+ "VALUES (?, ?, ?, ?, ?)",
-				expiredKey, "dummy_hash_12345", IdempotencyStatus.SUCCESS.name(), java.sql.Timestamp.from(expiredTime),
-				java.sql.Timestamp.from(expiredTime));
+				expiredKey, "dummy_hash_12345", IdempotencyStatus.SUCCESS.name(), Timestamp.from(expiredTime),
+				Timestamp.from(expiredTime));
 
 		assertThat(idempotencyRepository.existsById(expiredKey)).isTrue();
 

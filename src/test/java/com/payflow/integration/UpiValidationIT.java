@@ -61,7 +61,7 @@ class UpiValidationIT extends AbstractIntegrationTest {
 
 		ResponseEntity<String> response = restTemplate.postForEntity("/api/v1/users", request, String.class);
 
-		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+		assertThat(response.getStatusCode().value()).isEqualTo(422);
 		assertThat(response.getBody()).contains("invalid-upi-id");
 		verify(upiValidationClient).verify(upiId);
 	}

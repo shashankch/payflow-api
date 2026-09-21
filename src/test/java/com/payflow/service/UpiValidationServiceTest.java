@@ -17,6 +17,9 @@ import com.payflow.client.UpiValidationClient;
 import com.payflow.client.UpiVerificationResponse;
 import com.payflow.exception.InvalidUpiException;
 
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+
 @ExtendWith(MockitoExtension.class)
 class UpiValidationServiceTest {
 
@@ -90,9 +93,8 @@ class UpiValidationServiceTest {
 	@DisplayName("Should recover gracefully when CircuitBreaker fallback is invoked")
 	void shouldRecoverGracefully_whenCircuitBreakerFallbackInvoked() {
 		UpiValidationService service = new UpiValidationService(upiValidationClient, true);
-		Throwable cause = io.github.resilience4j.circuitbreaker.CallNotPermittedException
-				.createCallNotPermittedException(
-						io.github.resilience4j.circuitbreaker.CircuitBreaker.ofDefaults("upiValidation"));
+		Throwable cause = CallNotPermittedException
+				.createCallNotPermittedException(CircuitBreaker.ofDefaults("upiValidation"));
 
 		UpiVerificationResponse fallback = service.recoverFromValidationFailure("alice@payflow", cause);
 

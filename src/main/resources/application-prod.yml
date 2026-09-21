@@ -52,9 +52,14 @@ spring:
         # Producer retry deduplication within producer session; outbox guarantees at-least-once end-to-end delivery
         enable.idempotence: true
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      value-serializer: org.apache.kafka.common.serialization.ByteArraySerializer
 
 payflow:
+  security:
+    jwt:
+      secret: ${PAYFLOW_SECURITY_JWT_SECRET}
+    cors:
+      allowed-origins: ${PAYFLOW_CORS_ALLOWED_ORIGINS:https://payflow.com,https://app.payflow.com}
   kafka:
     transfers-topic: ${PAYFLOW_KAFKA_TRANSFERS_TOPIC:payflow.transfers}
     topic-partitions: ${PAYFLOW_KAFKA_PARTITIONS:3}

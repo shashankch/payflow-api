@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,6 +44,8 @@ import jakarta.servlet.http.HttpServletResponse;
 public class IdempotencyFilter extends OncePerRequestFilter {
 
 	public static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
+	private static final int MAX_KEY_LENGTH = 255;
+	private static final Pattern IDEMPOTENCY_KEY_PATTERN = Pattern.compile("^[A-Za-z0-9_.:-]+$");
 	private static final Duration IN_FLIGHT_TIMEOUT = Duration.ofMinutes(2);
 	private static final Duration LOCK_WAIT_TIME = Duration.ofSeconds(2);
 	private static final Duration LOCK_LEASE_TIME = Duration.ofSeconds(10);
@@ -79,6 +82,14 @@ public class IdempotencyFilter extends OncePerRequestFilter {
 			LOG.warn("Rejected request missing Idempotency-Key: path={}", uri);
 			String msg = "Idempotency-Key header is mandatory.";
 			sendError(res, HttpStatus.BAD_REQUEST, "Missing Key", msg, uri);
+			return;
+		}
+
+		if (key.length() > MAX_KEY_LENGTH || !IDEMPOTENCY_KEY_PATTERN.matcher(key).matches()) {
+			LOG.warn("Rejected request with invalid Idempotency-Key format/length: path={}, length={}", uri,
+					key.length());
+			String msg = "Idempotency-Key must be 1-255 alphanumeric characters (including _ . : -).";
+			sendError(res, HttpStatus.BAD_REQUEST, "Invalid Key", msg, uri);
 			return;
 		}
 
