@@ -20,9 +20,11 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.payflow.dto.request.TransferMoneyRequest;
 import com.payflow.dto.response.PagedResponse;
+import com.payflow.dto.response.SpendInsightResponse;
 import com.payflow.dto.response.TransactionResponse;
 import com.payflow.entity.Transaction;
 import com.payflow.mapper.TransactionMapper;
+import com.payflow.service.SpendInsightsService;
 import com.payflow.service.TransactionService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -40,10 +42,13 @@ public class TransactionController {
 
 	private final TransactionService transactionService;
 	private final TransactionMapper transactionMapper;
+	private final SpendInsightsService spendInsightsService;
 
-	public TransactionController(TransactionService transactionService, TransactionMapper transactionMapper) {
+	public TransactionController(TransactionService transactionService, TransactionMapper transactionMapper,
+			SpendInsightsService spendInsightsService) {
 		this.transactionService = transactionService;
 		this.transactionMapper = transactionMapper;
+		this.spendInsightsService = spendInsightsService;
 	}
 
 	@PostMapping
@@ -82,5 +87,17 @@ public class TransactionController {
 		Page<TransactionResponse> txPage = transactionService.getUserTransactions(upiId, pageable)
 				.map(transactionMapper::toResponse);
 		return ResponseEntity.ok(PagedResponse.fromPage(txPage));
+	}
+
+	@PostMapping("/{id}/insights")
+	@Operation(summary = "Generate Gen-AI spend insights", description = "Classifies a transaction into a "
+			+ "financial spend category and returns contextual, actionable budgeting advice")
+	@ApiResponse(responseCode = "200", description = "Spend insights successfully generated")
+	@ApiResponse(responseCode = "403", description = "Access forbidden to non-participant")
+	@ApiResponse(responseCode = "404", description = "Transaction not found")
+	@ApiResponse(responseCode = "503", description = "Gen-AI spend insights feature is currently disabled")
+	public ResponseEntity<SpendInsightResponse> getSpendInsights(@PathVariable UUID id) {
+		SpendInsightResponse response = spendInsightsService.generateSpendInsights(id);
+		return ResponseEntity.ok(response);
 	}
 }

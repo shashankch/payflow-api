@@ -412,7 +412,7 @@ modules.verify();
 | :--- | :--- | :--- | :--- | :--- |
 | **Phase 6B** | `local` / `test` | In-process `@ApplicationModuleListener` | No | ✅ Complete |
 | **Phase 9A** | `prod` / `kafka` | Auto-externalized to Kafka (`payflow.transfers`, key: `senderUpi`) via `spring-modulith-events-kafka` | Yes | ✅ Complete |
-| **Phase 10B** | `prod-light` | In-process (no Kafka, single-server deployment) | No | ⬜ Planned |
+| **Phase 10B** | `prod-light` | In-process (no Kafka, Caffeine caching, bounded Hikari pool) | No | ✅ Complete |
 
 ### Kafka Event Externalization Topology (Phase 9A)
 
@@ -572,7 +572,9 @@ System stability under load is enforced using **Resilience4j** configurations:
 * **Connection & Read Timeouts**: Explicit timeouts configured on the HTTP clients (`UpiValidationClient`) and database connections to prevent thread pool depletion.
 * **Retries & Backoff**: Outbound requests (e.g. to third-party banking processors) are wrapped in Spring Retry & Resilience4j Circuit Breaker policies using **exponential backoff with random jitter** to prevent thundering herd requests on recovering downstream hosts.
 * **Virtual Threads Integration (Project Loom — Phase 10B)**:
-  Java 25 virtual threads are scheduled for activation in Phase 10B (`spring.threads.virtual.enabled=true`). Since virtual threads do not block OS kernel threads, throughput scales efficiently. To prevent database pool exhaustion, HikariCP's maximum pool size is explicitly bounded (e.g., `maximum-pool-size=20`, `leak-detection-threshold=30000ms`).
+  Java 25 virtual threads are enabled globally (`spring.threads.virtual.enabled=true`). Since virtual threads do not block OS kernel threads during blocking I/O (database transactions, external HTTP REST calls, Redis operations), the application services thousands of concurrent requests with minimal memory overhead (~1 KB per virtual thread vs ~1 MB per platform thread). To prevent relational database connection starvation, HikariCP's maximum pool size is explicitly bounded (`maximum-pool-size=20`, `idle-timeout=300000ms`, `max-lifetime=1800000ms` in `prod`, and `maximum-pool-size=5` in `prod-light`).
+* **Gen-AI Fault Tolerance & Heuristic Fallback (Phase 10A)**:
+  The Gen-AI Spend Insights engine (`LlmInsightClient`) is protected by a dedicated Resilience4j Circuit Breaker (`aiCircuitBreaker`) and time limiter. When downstream LLM inference encounters timeouts, rate limits, or connectivity failures, the circuit breaker instantly diverts execution to `ruleBasedFallback(Transaction, Throwable)`. This heuristic fallback evaluates recipient handle metadata across 8 expenditure categories, ensuring 100% endpoint uptime and zero disruption to the payment system.
 
 ---
 
@@ -1039,6 +1041,8 @@ Documenting rejected alternatives and evaluating the penalty ("cost of getting i
 | **Event Publishing** | Spring Modulith Event Publication Registry | Hand-rolled outbox table + `SKIP LOCKED` polling | **Medium**: Custom outbox code requires boilerplate polling dispatcher, manual completion tracking, and retry logic. | Spring Modulith provides framework-managed event persistence, completion callbacks, and transparent Kafka bridging. |
 | **API Identification** | Opaque `UUID referenceId` | Exposed `Long userId` | **Medium**: Attackers enumerate total user count and scrape user data via `/api/v1/users/1`, `/2`, `/3`. | Auto-increment IDs leak business metrics and expose predictable resource endpoints. |
 | **DTO Serialization** | MapStruct (Compile-time) | Reflection (e.g. `BeanUtils.copyProperties`) | **Medium**: Runtime reflection errors, zero compile-time safety, poor performance under high TPS. | MapStruct generates clean, zero-reflection Java bytecode during Maven build with strict type checking. |
+| **Gen-AI Categorization** | Spring AI `ChatClient` + Resilience4j Fallback | Ad-hoc REST Client to LLM | **High**: External LLM downtime or timeouts cascade and break API availability. | Spring AI provides structured record extraction, provider neutrality, and instant sub-second heuristic fallback. |
+| **Concurrency Model** | Java 25 Virtual Threads + Bounded HikariCP | Platform Threads with Large Pools | **Medium**: Thread context switching and 1MB stack memory exhaust resources under concurrent blocking I/O. | Virtual threads offer massive concurrency with ~1KB memory overhead while bounded pools prevent DB saturation. |
 
 ---
 
@@ -1055,6 +1059,8 @@ Documenting rejected alternatives and evaluating the penalty ("cost of getting i
 - **`RES-008`: Profile-Conditional Cache-Aside (Redis in Prod, Caffeine in Dev/Test)** — Resolved in Phase 8C. Decoupled local development from external Redis while ensuring multi-pod cluster state consistency with JSON value serialization.
 - **`RES-009`: Redisson Distributed Locking for Multi-Instance Idempotency Coordination** — Resolved in Phase 8D. Integrated Redisson 4.7.0 distributed locking (`payflow:lock:idemp:{key}`) with fail-safe lease time (10s) and bounded wait time (2s) in `prod`, paired with `NoOpDistributedLockService` fallback in `!prod` (local/test).
 - **`RES-010`: Principal Engineer Architecture Audit Remediation & Modern Hardening** — Resolved in Phase 9B. Remediated BOLA on user enumeration endpoints (`ROLE_ADMIN`), enforced production JWT secret entropy verification, eliminated cache stampedes via targeted cache eviction, bound integration tests via `maven-failsafe-plugin`, and automated outbox publication retention via `OutboxCleanupService`.
+- **`RES-011`: Gen-AI Spend Categorization with Spring AI and Circuit Breaker Fallback** — Resolved in Phase 10A (ADR-026). Integrated Spring AI 2.0.1 fluent `ChatClient` with structured record conversion, protected by Resilience4j `aiCircuitBreaker` and 8-category rule-based heuristic fallback.
+- **`RES-012`: Java 25 Virtual Threads and Bounded HikariCP Connection Pool Optimization** — Resolved in Phase 10B (ADR-027). Enabled `spring.threads.virtual.enabled: true` globally on Java 25, bounded HikariCP pools, and introduced low-memory `prod-light` profile with local Caffeine caching and synchronous Modulith events.
 
 ### Open Questions & Future Evaluation
 - **`OPEN-001`: Transfer Amount Cap Configuration** — Default cap set to ₹1,00,000 (`100,000.00`). Evaluating whether per-user dynamic velocity caps should be stored in Redis.
