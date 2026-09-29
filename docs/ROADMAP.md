@@ -84,14 +84,14 @@ Decoupled event-driven architecture and enterprise production hardening:
 
 ---
 
-## Phase 10 — Financial Intelligence & Performance Optimization ⬜ (Next Up)
+## Phase 10 — Financial Intelligence & Performance Optimization ✅
 Intelligent automation and runtime scalability:
-- **10A — Gen-AI Spend Categorization & Financial Insights**: Spring AI integration providing automated expenditure classification and contextual budgeting tips with structured JSON output, guarded by circuit breakers and heuristic fallback.
-- **10B — Virtual Threads & Resource Tuning**: Enable Java 25 Virtual Threads for high-concurrency throughput, introduce a lightweight single-instance production profile (`prod-light` for 1 GiB RAM), and optimize HikariCP connection pooling and JVM memory bounds.
+- **10A — Gen-AI Spend Categorization & Financial Insights**: Spring AI 2.0.1 integration providing automated expenditure classification and contextual budgeting tips with structured JSON output, guarded by Resilience4j circuit breakers and deterministic keyword heuristic fallback.
+- **10B — Virtual Threads & Resource Tuning**: Enabled Java 25 Virtual Threads for high-concurrency throughput, introduced a lightweight single-instance production profile (`prod-light` for 1 GiB RAM), and optimized HikariCP connection pooling and JVM memory bounds.
 
 ---
 
-## Phase 11 — Containerization, Kubernetes & Production Infrastructure ⬜
+## Phase 11 — Containerization, Kubernetes & Production Infrastructure ⬜ (Next Up)
 Cloud-native packaging and deployment:
 - **11A — Multi-Stage Containerization & Local Orchestration**: Secure multi-stage Docker build with non-root runtime, paired with full-stack Docker Compose orchestrating PostgreSQL, Redis, Kafka, Ollama (offline local AI), Prometheus, and Grafana.
 - **11B — Cloud-Native Kubernetes Deployment**: Production Kubernetes manifests (Deployments, Services, ConfigMaps, Secrets, HPA) configured with HTTP health probes, graceful shutdown, and container resource limits.

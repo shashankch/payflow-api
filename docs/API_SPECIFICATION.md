@@ -26,7 +26,7 @@ This document details the REST API endpoints, request/response models, input val
 
 ## Interactive OpenAPI & Swagger Documentation
 
-Payflow API auto-generates live, interactive OpenAPI 3.0 documentation using **Springdoc OpenAPI 3.0.3**:
+Payflow API auto-generates live, interactive OpenAPI 3.0 documentation using **Springdoc OpenAPI 3.1.1**:
 - **Swagger UI (Interactive Playground)**: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
 - **OpenAPI 3.0 JSON Specification**: [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs)
 
@@ -399,6 +399,45 @@ Retrieves a paginated list of all transactions where the specified UPI ID is eit
 }
 ```
 
+### 10. Generate Spend Insights for Transaction
+Analyzes transaction metadata and recipient UPI handle using Spring AI structured prompt engineering to classify the expenditure into personal finance categories and generate actionable budget insights.
+
+- **HTTP Method**: `POST`
+- **Path**: `/api/v1/transactions/{id}/insights`
+- **Authentication**: Principal-Bound (`Bearer JWT` — caller must be transaction sender or receiver)
+- **Feature Toggle**: Controlled by `payflow.ai.enabled: true` (returns `503 Service Unavailable` with `Feature Disabled` ProblemDetail when disabled)
+- **Path Parameters**:
+  - `id`: UUID (Transaction Reference ID)
+- **Response Model (`SpendInsightResponse`)**:
+  - `transactionReferenceId`: UUID
+  - `category`: String (`FOOD_AND_DINING`, `SHOPPING`, `TRANSPORTATION`, `UTILITIES`, `ENTERTAINMENT`, `HEALTHCARE`, `INVESTMENTS`, `TRANSFER`)
+  - `amount`: BigDecimal (Transaction amount)
+  - `summary`: String (Contextual transaction summary)
+  - `budgetingTip`: String (Actionable budgeting advice)
+  - `confidenceScore`: Double (0.0 to 1.0)
+  - `source`: String (`AI_MODEL` or `RULE_BASED_FALLBACK`)
+
+#### Response Example (`200 OK`)
+```json
+{
+  "transactionReferenceId": "550e8400-e29b-41d4-a716-446655440000",
+  "category": "FOOD_AND_DINING",
+  "amount": 450.00,
+  "summary": "Dining or grocery expenditure with swiggy@upi.",
+  "budgetingTip": "Set a dedicated dining out ceiling to optimize discretionary spending.",
+  "confidenceScore": 0.94,
+  "source": "AI_MODEL"
+}
+```
+
+#### Fault-Tolerant Behavior
+- Downstream LLM timeouts, rate limits, or outages trip Resilience4j `aiCircuitBreaker`, automatically executing `ruleBasedFallback` with deterministic keyword heuristic categorization (`source: "RULE_BASED_FALLBACK"`), guaranteeing zero API downtime for end users.
+
+#### Error Responses
+- `403 Forbidden`: Authenticated user is neither the sender nor receiver of this transaction.
+- `404 Not Found`: Transaction reference ID does not exist.
+- `503 Service Unavailable`: Gen-AI Spend Insights feature is disabled (`payflow.ai.enabled: false`).
+
 ---
 
 ## Observability & Telemetry Endpoints (Actuator)
@@ -413,40 +452,6 @@ Payflow API exposes standard Spring Boot Actuator endpoints for container health
 | `/actuator/info` | `GET` | No | Application build and version information. |
 | `/actuator/prometheus` | `GET` | No | Prometheus format scrape output including `payflow_transfers_*`, `hikaricp_connections`, `resilience4j_circuitbreaker_*`, and `resilience4j_ratelimiter_*`. |
 | `/actuator/metrics` | `GET` | No | JSON catalog of available Micrometer metric names. |
-
----
-
-### Planned Endpoints — Gen-AI Spend Insights (Phase 10A)
-
-#### Generate Spend Insights for Transaction
-Analyzes transaction metadata, user note, and recipient handle using Spring AI structured prompt engineering to classify the expenditure into personal finance categories and generate actionable budget insights.
-
-- **HTTP Method**: `POST`
-- **Path**: `/api/v1/transactions/{id}/insights`
-- **Authentication**: Principal-Bound (`Bearer JWT` — caller must be transaction sender or receiver)
-- **Feature Toggle**: Controlled by `payflow.ai.enabled: true` (returns `503 Service Unavailable` with explanatory ProblemDetail when disabled)
-- **Path Parameters**:
-  - `id`: Long (or transaction reference ID)
-- **Response Model (`SpendInsightResponse`)**:
-  - `transactionReferenceId`: UUID
-  - `category`: String (e.g., `FOOD_AND_DINING`, `UTILITIES`, `ENTERTAINMENT`, `INVESTMENTS`, `PEER_TRANSFER`)
-  - `confidenceScore`: Double (0.0 to 1.0)
-  - `insight`: String (contextual budgeting advice)
-  - `source`: String (`LLM` or `HEURISTIC_FALLBACK`)
-
-##### Response Example (`200 OK`)
-```json
-{
-  "transactionReferenceId": "11410662-b080-4416-b739-77fcd753097b",
-  "category": "FOOD_AND_DINING",
-  "confidenceScore": 0.94,
-  "insight": "You've spent ₹150.00 on food. Dining out accounts for 35% of your discretionary spending this month.",
-  "source": "LLM"
-}
-```
-
-##### Fault-Tolerant Behavior:
-- External LLM timeouts (10s) or outages trip Resilience4j `aiCircuitBreaker`, automatically executing `fallbackInsights()` with deterministic regex rule-based categorization (`source: "HEURISTIC_FALLBACK"`), ensuring zero API downtime for end users.
 
 ---
 

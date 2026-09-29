@@ -7,7 +7,7 @@
 [![CI Build](https://img.shields.io/badge/CI-Passing-brightgreen?logo=githubactions&logoColor=white&style=flat-square)](https://github.com/shashankch/payflow-api/actions/workflows/ci.yml)
 [![Java 25](https://img.shields.io/badge/Java-25-ED8B00?logo=openjdk&logoColor=white&style=flat-square)](https://dev.java/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.0-6DB33F?logo=springboot&logoColor=white&style=flat-square)](https://spring.io/projects/spring-boot)
-[![Tests](https://img.shields.io/badge/Tests-150%20Passing-brightgreen?logo=junit5&logoColor=white&style=flat-square)](https://junit.org/junit5/)
+[![Tests](https://img.shields.io/badge/Tests-165%20Passing-brightgreen?logo=junit5&logoColor=white&style=flat-square)](https://junit.org/junit5/)
 [![Architecture](https://img.shields.io/badge/Architecture-Modular%20Monolith-6366f1?style=flat-square)](docs/ARCHITECTURE.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 
@@ -31,6 +31,8 @@
 | **⚡ Transactional Outbox** | Spring Modulith Event Publication Registry atomically persisting domain events (`TransferCompletedEvent`) within the database transaction, bridging to Apache Kafka without dual-write inconsistency, with automated background retention cleanup (`OutboxCleanupService`). |
 | **🔐 Zero-Trust Security** | Stateless HMAC-SHA256 JWT tokens with fail-fast production secret validation, strict principal-bound sender verification, role-based access control (`ROLE_ADMIN` on user enumeration), clickjacking defense (`sameOrigin`), and RFC 9457 (obsoleting RFC 7807) ProblemDetail error responses. |
 | **📊 Enterprise Observability** | Native Elastic Common Schema (ECS) JSON structured logging, MDC trace correlation (`requestId`, `traceId`, `spanId`), Prometheus metrics, and profile-conditional Redis distributed caching with targeted cache eviction and Caffeine local fallback. |
+| **🤖 Gen-AI Spend Insights** | Spring AI 2.0.1 integration providing automated expenditure classification and contextual budgeting tips with structured JSON output, guarded by Resilience4j circuit breakers and deterministic keyword heuristic fallback. |
+| **🚀 Virtual Threads & Concurrency** | Java 25 Project Loom Virtual Threads enabled globally (`spring.threads.virtual.enabled: true`), with bounded HikariCP connection pool configurations and a low-memory `prod-light` profile designed for <= 1 GiB single-node production environments. |
 
 👉 **Architectural Deep-Dives**: Detailed design documents are available in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/adr/](docs/adr/), [SECURITY.md](SECURITY.md), and [CHANGELOG.md](CHANGELOG.md).
 
@@ -89,7 +91,7 @@ graph TD
 | 🗓️ **[Phased Roadmap](docs/ROADMAP.md)** | Full 12-phase technical expansion blueprint |
 | 🌐 **[API Specification](docs/API_SPECIFICATION.md)** | Complete REST endpoint contracts, schemas, RFC 9457 / RFC 7807 payloads |
 | 📋 **[Engineering Conventions](docs/CONVENTIONS.md)** | Java 25 standards, Spotless/Checkstyle rules, testing guidelines |
-| 📜 **[Architecture Decisions (ADRs)](docs/adr/)** | Master index of modular architectural decision records (ADR-001 through ADR-025) |
+| 📜 **[Architecture Decisions (ADRs)](docs/adr/)** | Master index of modular architectural decision records (ADR-001 through ADR-027) |
 | 📝 **[Changelog](CHANGELOG.md)** | Version-by-version implementation notes |
 
 ---

@@ -34,7 +34,9 @@ public class JwtTokenProvider {
 			@Value("${payflow.security.jwt.secret:" + DEFAULT_SECRET + "}") String secret,
 			@Value("${payflow.security.jwt.expiration-ms:3600000}") long expirationMs, //
 			Environment environment) {
-		if (environment != null && environment.matchesProfiles("prod")) {
+		boolean isProd = environment != null
+				&& (environment.matchesProfiles("prod") || environment.matchesProfiles("prod-light"));
+		if (isProd) {
 			boolean isWeakSecret = secret == null || secret.isBlank() || DEFAULT_SECRET.equals(secret)
 					|| secret.length() < 32;
 			if (isWeakSecret) {

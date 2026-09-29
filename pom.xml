@@ -18,18 +18,19 @@
     <properties>
         <java.version>25</java.version>
         <maven-compiler-plugin.version>3.14.1</maven-compiler-plugin.version>
-        <spotless.version>2.44.2</spotless.version>
+        <spotless.version>3.10.3</spotless.version>
         <checkstyle.plugin.version>3.6.0</checkstyle.plugin.version>
-        <versions.plugin.version>2.18.0</versions.plugin.version>
+        <versions.plugin.version>2.22.0</versions.plugin.version>
         <mapstruct.version>1.6.3</mapstruct.version>
-        <springdoc.version>3.0.3</springdoc.version>
-        <testcontainers.version>1.20.5</testcontainers.version>
-        <spring-modulith.version>2.0.0</spring-modulith.version>
+        <springdoc.version>3.1.1</springdoc.version>
+        <testcontainers.version>1.21.4</testcontainers.version>
+        <spring-modulith.version>2.1.1</spring-modulith.version>
         <jjwt.version>0.13.0</jjwt.version>
         <spring-retry.version>2.0.13</spring-retry.version>
         <resilience4j.version>2.4.0</resilience4j.version>
-        <caffeine.version>3.2.0</caffeine.version>
+        <caffeine.version>3.3.0</caffeine.version>
         <redisson.version>4.7.0</redisson.version>
+        <spring-ai.version>2.0.1</spring-ai.version>
     </properties>
 
     <dependencyManagement>
@@ -45,6 +46,13 @@
                 <groupId>org.springframework.modulith</groupId>
                 <artifactId>spring-modulith-bom</artifactId>
                 <version>${spring-modulith.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>${spring-ai.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -189,6 +197,11 @@
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-openai</artifactId>
         </dependency>
 
         <dependency>

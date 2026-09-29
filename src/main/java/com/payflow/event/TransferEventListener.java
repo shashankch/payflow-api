@@ -2,10 +2,12 @@ package com.payflow.event;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Profile;
 import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.stereotype.Component;
 
 @Component
+@Profile({"local", "test", "prod-light"})
 public class TransferEventListener {
 
 	private static final Logger LOG = LoggerFactory.getLogger(TransferEventListener.class);

@@ -35,6 +35,8 @@ Each record documents the business and technical context, options evaluated, rat
 | [0023](0023-redis-distributed-locking-redisson.md) | [Redis Distributed Locking with Redisson and Fail-Safe Local Fallback](0023-redis-distributed-locking-redisson.md) | 2026-09-07 | **Accepted** | Phase 8D |
 | [0024](0024-kafka-event-streaming-spring-modulith.md) | [Kafka Event Streaming via Spring Modulith Event Externalization](0024-kafka-event-streaming-spring-modulith.md) | 2026-09-10 | **Accepted** | Phase 9A |
 | [0025](0025-production-hardening-and-architecture-audit-remediation.md) | [Production Hardening, Targeted Cache Invalidation, and Enterprise Security Controls](0025-production-hardening-and-architecture-audit-remediation.md) | 2026-09-20 | **Accepted** | Phase 9B |
+| [0026](0026-gen-ai-spend-categorization-spring-ai.md) | [Gen-AI Spend Categorization with Spring AI and Circuit Breaker Fallback](0026-gen-ai-spend-categorization-spring-ai.md) | 2026-09-28 | **Accepted** | Phase 10A |
+| [0027](0027-virtual-threads-and-bounded-connection-pool.md) | [Java 25 Virtual Threads and Bounded HikariCP Connection Pool Optimization](0027-virtual-threads-and-bounded-connection-pool.md) | 2026-09-28 | **Accepted** | Phase 10B |
 
 ---
 
@@ -42,8 +44,6 @@ Each record documents the business and technical context, options evaluated, rat
 
 | ADR # | Title | Target Phase | Status |
 | :--- | :--- | :--- | :--- |
-| `0026` | Gen-AI Spend Categorization with Spring AI and Circuit Breaker Fallback | Phase 10A | Planned |
-| `0027` | Java 25 Virtual Threads and Bounded HikariCP Connection Pool Optimization | Phase 10B | Planned |
 | `0028` | Multi-Stage Containerization and Full-Stack Local Orchestration with Docker Compose | Phase 11A | Planned |
 | `0029` | Cloud-Native Kubernetes Deployment Topology and Horizontal Pod Autoscaling | Phase 11B | Planned |
 | `0030` | Automated CI/CD Quality Gates, Coverage Thresholds, and Bytecode Analysis | Phase 11C | Planned |

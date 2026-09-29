@@ -96,6 +96,17 @@ public class GlobalExceptionHandler {
 		return problem;
 	}
 
+	@ExceptionHandler(FeatureDisabledException.class)
+	public ProblemDetail handleFeatureDisabled(FeatureDisabledException ex) {
+		LOG.warn("Feature disabled access attempt: {}", ex.getMessage());
+		HttpStatus status = HttpStatus.SERVICE_UNAVAILABLE;
+		ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, ex.getMessage());
+		problem.setType(URI.create("https://api.payflow.com/errors/feature-disabled"));
+		problem.setTitle("Feature Disabled");
+		enrichProblemDetail(problem);
+		return problem;
+	}
+
 	@ExceptionHandler(InvalidUpiException.class)
 	public ProblemDetail handleInvalidUpi(InvalidUpiException ex) {
 		LOG.warn("Invalid UPI: {}", ex.getMessage());

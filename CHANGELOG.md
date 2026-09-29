@@ -52,8 +52,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Normalized phone number generation in `ConcurrentTransferIT` and aligned BOLA authorization headers in `TransferLifecycleIT`.
   - Aligned `ResilienceIT` transaction status assertion with `TransactionStatus` enum and corrected SpEL key expression in `@Externalized("payflow.transfers::#{senderUpi()}")`.
 
-### Planned - Phase 10A (Gen-AI Spend Categorization & Financial Insights)
-- Spring AI integration providing automated expenditure classification and contextual budgeting tips with structured JSON output, guarded by circuit breakers and heuristic fallback.
+### Added - Phase 10A (Gen-AI Spend Categorization & Financial Insights)
+- Integrated Spring AI 2.0.1 GA (`spring-ai-starter-model-openai`) via BOM dependency management in `pom.xml`.
+- Created immutable Java 25 record `SpendInsightResponse` with OpenAPI schemas and Jackson serialization for category, amount, summary, budgetingTip, confidenceScore, and source.
+- Implemented `AiConfig.java` providing a `@ConditionalOnBean(ChatClient.Builder.class)` `ChatClient` bean.
+- Implemented `LlmInsightClient.java` utilizing Spring AI fluent `ChatClient` entity extraction, guarded by Resilience4j `@CircuitBreaker(name = "aiCircuitBreaker", fallbackMethod = "ruleBasedFallback")` and 8-category deterministic keyword heuristic fallback.
+- Implemented `SpendInsightsService` and `SpendInsightsServiceImpl` with principal transaction verification and `payflow.ai.enabled` feature flag enforcement.
+- Created `FeatureDisabledException` with centralized RFC 9457 HTTP 503 `ProblemDetail` handler in `GlobalExceptionHandler`.
+- Added endpoint `POST /api/v1/transactions/{id}/insights` to `TransactionController` with multi-party principal authorization.
+- Added comprehensive unit tests in `SpendInsightsServiceTest.java` and `TransactionControllerTest.java`.
+- Documented ADR-026 (*Gen-AI Spend Categorization with Spring AI and Circuit Breaker Fallback*).
+
+### Added - Phase 10B (Virtual Threads & Resource Optimization)
+- Enabled Java 25 Project Loom Virtual Threads globally (`spring.threads.virtual.enabled: true` in `application.yml`).
+- Tuned HikariCP connection pool parameters (`idle-timeout: 300000ms`, `max-lifetime: 1800000ms`, `connection-timeout: 30000ms`) in `application-prod.yml` to prevent database connection saturation.
+- Introduced lightweight single-node production profile `application-prod-light.yml` designed for <= 1 GiB RAM deployments with local Caffeine caching, bounded HikariCP pool (max 5), and in-process Modulith event publication.
+- Extended strict production JWT secret entropy verification in `JwtTokenProvider` to cover the `prod-light` profile.
+- Restricted `TransferEventListener` execution to `@Profile({"local", "test", "prod-light"})` ensuring zero duplicate processing when Kafka externalization is active.
+- Documented ADR-027 (*Java 25 Virtual Threads and Bounded HikariCP Connection Pool Optimization*).
 
 ---
 

@@ -6,9 +6,26 @@ spring:
     name: payflow-api
   profiles:
     active: local
+  threads:
+    virtual:
+      enabled: true
+  ai:
+    openai:
+      api-key: ${PAYFLOW_AI_OPENAI_API_KEY:mock-key-for-local-testing}
+      base-url: ${PAYFLOW_AI_OPENAI_BASE_URL:https://api.openai.com}
+      chat:
+        options:
+          model: ${PAYFLOW_AI_OPENAI_MODEL:gpt-4o-mini}
+          temperature: 0.2
   autoconfigure:
     exclude:
       - io.github.resilience4j.springboot3.verifier.autoconfigure.SpringBoot3VerifierAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiImageAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration
   modulith:
     events:
       republish-outstanding-events-on-restart: true
@@ -81,6 +98,8 @@ payflow:
     transfers-topic: payflow.transfers
     topic-partitions: 3
     topic-replicas: 1
+  ai:
+    enabled: ${PAYFLOW_AI_ENABLED:false}
 
 resilience4j:
   circuitbreaker:
@@ -99,6 +118,24 @@ resilience4j:
           - java.io.IOException
         ignoreExceptions:
           - com.payflow.exception.InvalidUpiException
+      aiCircuitBreaker:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50.0
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        recordExceptions:
+          - org.springframework.web.client.RestClientException
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+          - java.lang.Exception
+        ignoreExceptions:
+          - com.payflow.exception.FeatureDisabledException
+          - com.payflow.exception.TransactionNotFoundException
+          - com.payflow.exception.ForbiddenOperationException
   ratelimiter:
     configs:
       default:
@@ -121,3 +158,6 @@ resilience4j:
       transferLimiter:
         timeoutDuration: 5s
         cancelRunningFuture: false
+      aiCircuitBreaker:
+        timeoutDuration: 10s
+        cancelRunningFuture: true

@@ -16,16 +16,21 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import tools.jackson.databind.ObjectMapper;
 import com.payflow.dto.request.TransferMoneyRequest;
+import com.payflow.dto.response.SpendInsightResponse;
 import com.payflow.dto.response.TransactionResponse;
 import com.payflow.entity.Transaction;
 import com.payflow.entity.TransactionStatus;
 import com.payflow.entity.TransactionType;
+import com.payflow.exception.FeatureDisabledException;
+import com.payflow.exception.ForbiddenOperationException;
+import com.payflow.exception.TransactionNotFoundException;
 import com.payflow.mapper.TransactionMapper;
 import com.payflow.repository.IdempotencyRepository;
 import com.payflow.security.JwtAccessDeniedHandler;
 import com.payflow.security.JwtAuthenticationEntryPoint;
 import com.payflow.security.JwtAuthenticationFilter;
 import com.payflow.security.JwtTokenProvider;
+import com.payflow.service.SpendInsightsService;
 import com.payflow.service.TransactionService;
 
 import static org.hamcrest.Matchers.endsWith;
@@ -52,6 +57,9 @@ class TransactionControllerTest {
 
 	@MockitoBean
 	private TransactionMapper transactionMapper;
+
+	@MockitoBean
+	private SpendInsightsService spendInsightsService;
 
 	@MockitoBean
 	private IdempotencyRepository idempotencyRepository;
@@ -157,5 +165,63 @@ class TransactionControllerTest {
 		mockMvc.perform(get("/api/v1/transactions/" + refId)).andExpect(status().isOk())
 				.andExpect(jsonPath("$.referenceId").value(refId.toString()))
 				.andExpect(jsonPath("$.amount").value(75.00));
+	}
+
+	@Test
+	@DisplayName("POST /api/v1/transactions/{id}/insights should return 200 and insights when successful")
+	void shouldReturn200_whenSpendInsightsGeneratedSuccessfully() throws Exception {
+		UUID refId = UUID.randomUUID();
+		SpendInsightResponse response = new SpendInsightResponse( //
+				refId, //
+				"FOOD_AND_DINING", //
+				new BigDecimal("150.00"), //
+				"Dining expenditure at cafe.", //
+				"Set a weekly dining out limit.", //
+				0.95, //
+				"AI_MODEL");
+
+		given(spendInsightsService.generateSpendInsights(refId)).willReturn(response);
+
+		mockMvc.perform(post("/api/v1/transactions/" + refId + "/insights")) //
+				.andExpect(status().isOk()) //
+				.andExpect(jsonPath("$.category").value("FOOD_AND_DINING")) //
+				.andExpect(jsonPath("$.source").value("AI_MODEL")) //
+				.andExpect(jsonPath("$.confidenceScore").value(0.95));
+	}
+
+	@Test
+	@DisplayName("POST /api/v1/transactions/{id}/insights should return 404 when transaction not found")
+	void shouldReturn404_whenTransactionNotFoundForInsights() throws Exception {
+		UUID refId = UUID.randomUUID();
+		given(spendInsightsService.generateSpendInsights(refId)) //
+				.willThrow(new TransactionNotFoundException("Transaction not found: " + refId));
+
+		mockMvc.perform(post("/api/v1/transactions/" + refId + "/insights")) //
+				.andExpect(status().isNotFound()) //
+				.andExpect(jsonPath("$.title").value("Transaction Not Found"));
+	}
+
+	@Test
+	@DisplayName("POST /api/v1/transactions/{id}/insights should return 403 when forbidden")
+	void shouldReturn403_whenForbiddenForInsights() throws Exception {
+		UUID refId = UUID.randomUUID();
+		given(spendInsightsService.generateSpendInsights(refId)) //
+				.willThrow(new ForbiddenOperationException("Not authorized"));
+
+		mockMvc.perform(post("/api/v1/transactions/" + refId + "/insights")) //
+				.andExpect(status().isForbidden()) //
+				.andExpect(jsonPath("$.title").value("Forbidden Operation"));
+	}
+
+	@Test
+	@DisplayName("POST /api/v1/transactions/{id}/insights should return 503 when AI feature is disabled")
+	void shouldReturn503_whenAiFeatureDisabledForInsights() throws Exception {
+		UUID refId = UUID.randomUUID();
+		given(spendInsightsService.generateSpendInsights(refId)) //
+				.willThrow(new FeatureDisabledException("Feature disabled"));
+
+		mockMvc.perform(post("/api/v1/transactions/" + refId + "/insights")) //
+				.andExpect(status().isServiceUnavailable()) //
+				.andExpect(jsonPath("$.title").value("Feature Disabled"));
 	}
 }
