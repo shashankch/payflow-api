@@ -31,6 +31,8 @@
         <caffeine.version>3.3.0</caffeine.version>
         <redisson.version>4.7.0</redisson.version>
         <spring-ai.version>2.0.1</spring-ai.version>
+        <spotbugs.plugin.version>4.10.4.1</spotbugs.plugin.version>
+        <jacoco.plugin.version>0.8.15</jacoco.plugin.version>
     </properties>
 
     <dependencyManagement>
@@ -383,7 +385,7 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <argLine>-Dnet.bytebuddy.experimental=true</argLine>
+                    <argLine>@{argLine} -Dnet.bytebuddy.experimental=true</argLine>
                 </configuration>
             </plugin>
 
@@ -391,7 +393,7 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>
                 <configuration>
-                    <argLine>-Dnet.bytebuddy.experimental=true</argLine>
+                    <argLine>@{argLine} -Dnet.bytebuddy.experimental=true</argLine>
                     <includes>
                         <include>**/*IT.java</include>
                     </includes>
@@ -412,6 +414,84 @@
                 <version>${versions.plugin.version}</version>
                 <configuration>
                     <generateBackupPoms>false</generateBackupPoms>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>com.github.spotbugs</groupId>
+                <artifactId>spotbugs-maven-plugin</artifactId>
+                <version>${spotbugs.plugin.version}</version>
+                <configuration>
+                    <effort>Max</effort>
+                    <threshold>Medium</threshold>
+                    <xmlOutput>true</xmlOutput>
+                    <failOnError>true</failOnError>
+                    <excludeFilterFile>spotbugs-exclude.xml</excludeFilterFile>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>spotbugs-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>jacoco-initialize</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>jacoco-report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>jacoco-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <rules>
+                        <rule>
+                            <element>BUNDLE</element>
+                            <limits>
+                                <limit>
+                                    <counter>LINE</counter>
+                                    <value>COVEREDRATIO</value>
+                                    <minimum>0.80</minimum>
+                                </limit>
+                                <limit>
+                                    <counter>BRANCH</counter>
+                                    <value>COVEREDRATIO</value>
+                                    <minimum>0.70</minimum>
+                                </limit>
+                            </limits>
+                        </rule>
+                    </rules>
+                    <excludes>
+                        <exclude>**/dto/**</exclude>
+                        <exclude>**/config/**</exclude>
+                        <exclude>**/entity/**</exclude>
+                        <exclude>**/security/SecurityConfig.class</exclude>
+                        <exclude>**/PayflowApiApplication.class</exclude>
+                        <exclude>**/mapper/*Impl.class</exclude>
+                        <exclude>org/springframework/boot/autoconfigure/**</exclude>
+                    </excludes>
                 </configuration>
             </plugin>
         </plugins>

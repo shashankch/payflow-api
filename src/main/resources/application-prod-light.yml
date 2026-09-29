@@ -2,6 +2,8 @@ server:
   shutdown: graceful
 
 spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
   config:
     activate:
       on-profile: prod-light

@@ -1,0 +1,118 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "title": "HTTP Request Rate (req/sec)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count[1m])) by (status)",
+          "legendFormat": "HTTP {{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "title": "HTTP Response Latency (p95 / p99)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket[1m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket[1m])) by (le))",
+          "legendFormat": "p99",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "id": 3,
+      "title": "JVM Memory - Heap Usage",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "jvm_memory_used_bytes{area=\"heap\"}",
+          "legendFormat": "Heap Used",
+          "refId": "A"
+        },
+        {
+          "expr": "jvm_memory_max_bytes{area=\"heap\"}",
+          "legendFormat": "Heap Max",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "id": 4,
+      "title": "HikariCP Connection Pool",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "hikaricp_connections_active",
+          "legendFormat": "Active Connections",
+          "refId": "A"
+        },
+        {
+          "expr": "hikaricp_connections_idle",
+          "legendFormat": "Idle Connections",
+          "refId": "B"
+        },
+        {
+          "expr": "hikaricp_connections_pending",
+          "legendFormat": "Pending Threads",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "id": 5,
+      "title": "JVM Live Threads",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "jvm_threads_live_threads",
+          "legendFormat": "Live Threads",
+          "refId": "A"
+        },
+        {
+          "expr": "jvm_threads_peak_threads",
+          "legendFormat": "Peak Threads",
+          "refId": "B"
+        }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["payflow", "springboot", "java25"],
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "title": "Payflow API - Production Telemetry",
+  "uid": "payflow-telemetry"
+}

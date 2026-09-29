@@ -9,7 +9,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added - Phase 9A (Kafka Event Streaming via Spring Modulith Event Externalization)
+### Added - Phase 11A (Multi-Stage Containerization & Full-Stack Docker Compose)
+- Created hardened multi-stage `Dockerfile`:
+  - Stage 1: Build stage utilizing OpenJDK 25 (`eclipse-temurin:25-jdk`) and Maven layer caching.
+  - Stage 2: Minimal runtime utilizing `eclipse-temurin:25-jre` executing under unprivileged non-root user `payflow:10001`.
+  - Configured native container `HEALTHCHECK` targeting Spring Boot Actuator readiness probe (`/actuator/health/readiness`).
+  - Tuned production container JVM flags: `-XX:+UseZGC -XX:+ZGenerational -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom`.
+- Created `.dockerignore` strictly filtering `target/`, git metadata, local scripts, and markdown documentation.
+- Created production-ready `docker-compose.yml` orchestrating PostgreSQL 17, Redis 7, Apache Kafka (KRaft), Ollama Gen-AI, Prometheus, and Grafana with volume persistence and healthcheck dependency ordering (`condition: service_healthy`).
+- Created telemetry infrastructure:
+  - `monitoring/prometheus/prometheus.yml` scraping `app:8080/actuator/prometheus`.
+  - `monitoring/grafana/provisioning/datasources/prometheus.yml` auto-provisioning Prometheus datasource.
+  - `monitoring/grafana/provisioning/dashboards/dashboard-provider.yml` registering dashboard providers.
+  - `monitoring/grafana/provisioning/dashboards/payflow.json` telemetry dashboard covering JVM memory, HTTP throughput/latency (p95/p99), HikariCP pool metrics, and virtual thread metrics.
+- Authored ADR-028 (*Multi-Stage Containerization and Full-Stack Docker Compose Orchestration*).
+
+### Added - Phase 11B (Cloud-Native Kubernetes Deployment Topology & Graceful Shutdown)
+- Created declarative Kubernetes manifest suite in `k8s/`:
+  - `k8s/configmap.yaml` and `k8s/secret.yaml` separating non-sensitive environment configuration from cryptographic credentials.
+  - `k8s/deployment.yaml` defining 2 replicas, zero-downtime `RollingUpdate` (`maxSurge: 1`, `maxUnavailable: 0`), non-root security context (`runAsUser: 10001`), CPU/memory requests and limits, Actuator liveness/readiness probes, and coordinated graceful shutdown pre-stop hook (`sleep 10`).
+  - `k8s/service.yaml` exposing internal `ClusterIP` on port 8080.
+  - `k8s/hpa.yaml` HorizontalPodAutoscaler scaling between 2 and 10 replicas based on 75% CPU and 80% memory utilization.
+  - `k8s/pdb.yaml` PodDisruptionBudget enforcing `minAvailable: 1` during node maintenance.
+- Configured coordinated graceful shutdown by adding `spring.lifecycle.timeout-per-shutdown-phase: 30s` alongside `server.shutdown: graceful` in `application-prod.yml` and `application-prod-light.yml`.
+- Authored ADR-029 (*Cloud-Native Kubernetes Deployment Topology and Horizontal Pod Autoscaling*).
+
+### Added - Phase 11C (CI/CD Pipeline Hardening & Automated Quality Gates)
+- Integrated `spotbugs-maven-plugin:4.10.4.1` with `spotbugs-exclude.xml` for Java 25 static bytecode auditing; achieved 0 bugs and 0 errors.
+- Refactored `JwtTokenProvider`, `Transaction`, `SecurityUtils`, and `RequestIdFilter` to resolve constructor leaks, serialization warnings, and HTTP header sanitization.
+- Integrated `jacoco-maven-plugin:0.8.15` enforcing minimum 80% line coverage and 70% branch coverage across core business and security packages; achieved **90% line coverage** and **73% branch coverage** across 191 unit tests with 0 missed classes.
+- Created comprehensive unit test suites: `JwtAccessDeniedHandlerTest`, `JwtAuthenticationEntryPointTest`, `JwtAuthenticationFilterTest`, `SecurityUtilsTest`, and `IdempotencyCleanupServiceTest`.
+- Hardened `.github/workflows/ci.yml` executing `mvn clean verify -B` with automated artifact upload for JaCoCo coverage reports and SpotBugs analysis (14-day retention).
+- Added code coverage badge to `README.md`.
+- Authored ADR-030 (*Automated CI/CD Quality Gates, JaCoCo Coverage Enforcement, and SpotBugs Static Analysis*).
 - Added `spring-modulith-events-kafka`, `spring-kafka`, `spring-kafka-test`, and Testcontainers `kafka` dependencies to `pom.xml`.
 - Marked domain event `TransferCompletedEvent` with `@Externalized` and configured programmatic dynamic routing via `EventExternalizationConfiguration` in `KafkaConfig.java`, routing to `${payflow.kafka.transfers-topic}` partitioned by `senderUpi` for strict chronological delivery per account.
 - Created `KafkaConfig.java` (`@Profile({"prod", "kafka"})`) registering `NewTopic` bean with configurable partitions and replication factor (`PAYFLOW_KAFKA_REPLICAS:3` in production for high availability, 1 in dev/test).

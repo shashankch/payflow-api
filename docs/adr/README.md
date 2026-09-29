@@ -37,6 +37,9 @@ Each record documents the business and technical context, options evaluated, rat
 | [0025](0025-production-hardening-and-architecture-audit-remediation.md) | [Production Hardening, Targeted Cache Invalidation, and Enterprise Security Controls](0025-production-hardening-and-architecture-audit-remediation.md) | 2026-09-20 | **Accepted** | Phase 9B |
 | [0026](0026-gen-ai-spend-categorization-spring-ai.md) | [Gen-AI Spend Categorization with Spring AI and Circuit Breaker Fallback](0026-gen-ai-spend-categorization-spring-ai.md) | 2026-09-28 | **Accepted** | Phase 10A |
 | [0027](0027-virtual-threads-and-bounded-connection-pool.md) | [Java 25 Virtual Threads and Bounded HikariCP Connection Pool Optimization](0027-virtual-threads-and-bounded-connection-pool.md) | 2026-09-28 | **Accepted** | Phase 10B |
+| [0028](0028-multi-stage-containerization-docker-compose.md) | [Multi-Stage Containerization and Full-Stack Docker Compose Orchestration](0028-multi-stage-containerization-docker-compose.md) | 2026-09-29 | **Accepted** | Phase 11A |
+| [0029](0029-kubernetes-deployment-topology-hpa.md) | [Cloud-Native Kubernetes Deployment Topology and Horizontal Pod Autoscaling](0029-kubernetes-deployment-topology-hpa.md) | 2026-09-29 | **Accepted** | Phase 11B |
+| [0030](0030-ci-cd-quality-gates-jacoco-spotbugs.md) | [Automated CI/CD Quality Gates, JaCoCo Coverage Enforcement, and SpotBugs Static Analysis](0030-ci-cd-quality-gates-jacoco-spotbugs.md) | 2026-09-29 | **Accepted** | Phase 11C |
 
 ---
 
@@ -44,9 +47,7 @@ Each record documents the business and technical context, options evaluated, rat
 
 | ADR # | Title | Target Phase | Status |
 | :--- | :--- | :--- | :--- |
-| `0028` | Multi-Stage Containerization and Full-Stack Local Orchestration with Docker Compose | Phase 11A | Planned |
-| `0029` | Cloud-Native Kubernetes Deployment Topology and Horizontal Pod Autoscaling | Phase 11B | Planned |
-| `0030` | Automated CI/CD Quality Gates, Coverage Thresholds, and Bytecode Analysis | Phase 11C | Planned |
+| `0031` | Distributed Chaos Engineering and Automated Fault Injection | Phase 12 | Planned |
 
 ---
 

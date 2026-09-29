@@ -221,4 +221,48 @@ class UserControllerTest {
 		mockMvc.perform(get("/api/v1/users/balance/100.00")).andExpect(status().isOk())
 				.andExpect(jsonPath("$[0].name").value("Alice"));
 	}
+
+	@Test
+	@DisplayName("GET /api/v1/users/upi/{upiId} should return user when found")
+	void shouldReturnUser_whenFoundByUpiId() throws Exception {
+		User user = User.builder().userId(3L).referenceId(UUID.randomUUID()).name("Charlie").upiId("charlie@payflow")
+				.balance(new BigDecimal("250.00")).phoneNumber("9876543212").build();
+		given(userService.findByUpiId("charlie@payflow")).willReturn(Optional.of(user));
+
+		mockMvc.perform(get("/api/v1/users/upi/charlie@payflow")).andExpect(status().isOk())
+				.andExpect(jsonPath("$.upiId").value("charlie@payflow"));
+	}
+
+	@Test
+	@DisplayName("GET /api/v1/users/upi/{upiId} should return 404 when user not found")
+	void shouldReturnNotFound_whenUserNotFoundByUpiId() throws Exception {
+		given(userService.findByUpiId("missing@payflow")).willReturn(Optional.empty());
+
+		mockMvc.perform(get("/api/v1/users/upi/missing@payflow")).andExpect(status().isNotFound());
+	}
+
+	@Test
+	@WithMockUser(username = "eve@payflow")
+	@DisplayName("GET /api/v1/users/upi/{upiId} should return 403 when user is different")
+	void shouldReturnForbidden_whenOtherUserQueriesUpi() throws Exception {
+		User user = User.builder().userId(3L).referenceId(UUID.randomUUID()).name("Charlie").upiId("charlie@payflow")
+				.balance(new BigDecimal("250.00")).phoneNumber("9876543212").build();
+		given(userService.findByUpiId("charlie@payflow")).willReturn(Optional.of(user));
+
+		mockMvc.perform(get("/api/v1/users/upi/charlie@payflow")).andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.title").value("Forbidden Operation"));
+	}
+
+	@Test
+	@WithMockUser(username = "eve@payflow")
+	@DisplayName("GET /api/v1/users/{id} should return 403 when user is different")
+	void shouldReturnForbidden_whenOtherUserQueriesById() throws Exception {
+		UUID refId = UUID.randomUUID();
+		User user = User.builder().userId(3L).referenceId(refId).name("Charlie").upiId("charlie@payflow")
+				.balance(new BigDecimal("250.00")).phoneNumber("9876543212").build();
+		given(userService.getUserByReferenceId(refId)).willReturn(Optional.of(user));
+
+		mockMvc.perform(get("/api/v1/users/" + refId)).andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.title").value("Forbidden Operation"));
+	}
 }

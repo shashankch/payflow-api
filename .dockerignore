@@ -1,0 +1,16 @@
+target/
+!.mvn/wrapper/maven-wrapper.jar
+.git/
+.github/
+.idea/
+*.iml
+.agents/
+internal/
+scratch/
+docs/
+k8s/
+monitoring/
+*.md
+.DS_Store
+Dockerfile*
+docker-compose*.yml

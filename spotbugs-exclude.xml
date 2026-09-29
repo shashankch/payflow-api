@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!-- Exclude MapStruct generated implementations -->
+    <Match>
+        <Class name="~.*\.mapper\..*Impl" />
+    </Match>
+
+    <!-- Exclude Spring Boot compatibility stubs -->
+    <Match>
+        <Package name="~org\.springframework\.boot\.autoconfigure\..*" />
+    </Match>
+
+    <!-- Suppress mutable object exposures on entities and DTOs where JPA / Jackson manages lifecycle -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2" />
+    </Match>
+
+    <!-- Suppress default encoding warnings in test mock assertions -->
+    <Match>
+        <Bug pattern="DM_DEFAULT_ENCODING" />
+    </Match>
+
+    <!-- RequestIdFilter explicitly validates and sanitizes incoming X-Request-Id before writing to response header -->
+    <Match>
+        <Class name="com.payflow.config.RequestIdFilter" />
+        <Bug pattern="HRS_REQUEST_PARAMETER_TO_HTTP_HEADER" />
+    </Match>
+</FindBugsFilter>

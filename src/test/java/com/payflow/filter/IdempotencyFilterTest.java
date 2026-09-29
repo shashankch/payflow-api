@@ -8,12 +8,17 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Optional;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletInputStream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -233,5 +238,142 @@ class IdempotencyFilterTest {
 		});
 
 		verify(distributedLockService).unlock("payflow:lock:idemp:" + key);
+	}
+
+	@Test
+	@DisplayName("Should skip filter for GET requests or non-transaction endpoints")
+	void shouldNotFilterForNonMutationRequests() {
+		MockHttpServletRequest getRequest = new MockHttpServletRequest("GET", "/api/v1/transactions");
+		assertThat(idempotencyFilter.shouldNotFilter(getRequest)).isTrue();
+
+		MockHttpServletRequest postNonTxRequest = new MockHttpServletRequest("POST", "/api/v1/auth/login");
+		assertThat(idempotencyFilter.shouldNotFilter(postNonTxRequest)).isTrue();
+
+		MockHttpServletRequest postTxRequest = new MockHttpServletRequest("POST", "/api/v1/transactions");
+		assertThat(idempotencyFilter.shouldNotFilter(postTxRequest)).isFalse();
+	}
+
+	@Test
+	@DisplayName("Should process new request successfully and record SUCCESS status")
+	void shouldProcessNewRequestSuccessfully() throws ServletException, IOException {
+		String payload = "{\"amount\":150}";
+		String key = "new-key-101";
+
+		MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/transactions");
+		request.addHeader(IdempotencyFilter.IDEMPOTENCY_KEY_HEADER, key);
+		request.setContent(payload.getBytes(StandardCharsets.UTF_8));
+		MockHttpServletResponse response = new MockHttpServletResponse();
+
+		FilterChain chain = (req, res) -> {
+			// Read the request body to verify CachedBodyHttpServletRequest
+			ServletInputStream is = req.getInputStream();
+			assertThat(is.isReady()).isTrue();
+			assertThat(is.read()).isNotEqualTo(-1);
+			BufferedReader reader = req.getReader();
+			assertThat(reader).isNotNull();
+
+			jakarta.servlet.http.HttpServletResponse httpRes = (jakarta.servlet.http.HttpServletResponse) res;
+			httpRes.setStatus(201);
+			httpRes.getWriter().write("{\"status\":\"CREATED\"}");
+		};
+
+		idempotencyFilter.doFilter(request, response, chain);
+
+		assertThat(response.getStatus()).isEqualTo(201);
+		assertThat(response.getContentAsString()).contains("CREATED");
+		verify(idempotencyRepository).saveAndFlush(any(IdempotencyRecord.class));
+		verify(idempotencyRepository).save(any(IdempotencyRecord.class));
+		verify(distributedLockService).unlock("payflow:lock:idemp:" + key);
+	}
+
+	@Test
+	@DisplayName("Should record FAILED status when downstream response status is 4xx or 5xx")
+	void shouldRecordFailedStatusWhenDownstreamFails() throws ServletException, IOException {
+		String payload = "{\"amount\":150}";
+		String key = "fail-key-202";
+
+		MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/transactions");
+		request.addHeader(IdempotencyFilter.IDEMPOTENCY_KEY_HEADER, key);
+		request.setContent(payload.getBytes(StandardCharsets.UTF_8));
+		MockHttpServletResponse response = new MockHttpServletResponse();
+
+		FilterChain chain = (req, res) -> {
+			jakarta.servlet.http.HttpServletResponse httpRes = (jakarta.servlet.http.HttpServletResponse) res;
+			httpRes.setStatus(400);
+			httpRes.getWriter().write("{\"error\":\"Bad Input\"}");
+		};
+
+		idempotencyFilter.doFilter(request, response, chain);
+
+		assertThat(response.getStatus()).isEqualTo(400);
+		verify(idempotencyRepository).save(any(IdempotencyRecord.class));
+		verify(distributedLockService).unlock("payflow:lock:idemp:" + key);
+	}
+
+	@Test
+	@DisplayName("Should return 409 Conflict on concurrent insert DataIntegrityViolationException")
+	void shouldReturnConflictOnConcurrentInsertRace() throws ServletException, IOException {
+		String payload = "{\"amount\":150}";
+		String key = "race-key-303";
+
+		MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/transactions");
+		request.addHeader(IdempotencyFilter.IDEMPOTENCY_KEY_HEADER, key);
+		request.setContent(payload.getBytes(StandardCharsets.UTF_8));
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		MockFilterChain filterChain = new MockFilterChain();
+
+		given(idempotencyRepository.saveAndFlush(any()))
+				.willThrow(new org.springframework.dao.DataIntegrityViolationException("Unique constraint violation"));
+
+		idempotencyFilter.doFilter(request, response, filterChain);
+
+		assertThat(response.getStatus()).isEqualTo(409);
+		assertThat(response.getContentAsString()).contains("Concurrent Conflict");
+		verify(distributedLockService).unlock("payflow:lock:idemp:" + key);
+	}
+
+	@Test
+	@DisplayName("Should allow re-execution when existing record has FAILED status and same hash")
+	void shouldAllowReExecutionWhenExistingStatusFailed() throws ServletException, IOException {
+		String payload = "{\"amount\":150}";
+		String key = "retry-failed-key-404";
+
+		MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/transactions");
+		request.addHeader(IdempotencyFilter.IDEMPOTENCY_KEY_HEADER, key);
+		request.setContent(payload.getBytes(StandardCharsets.UTF_8));
+		MockHttpServletResponse response = new MockHttpServletResponse();
+
+		byte[] requestBytes = payload.getBytes(StandardCharsets.UTF_8);
+		MessageDigest digest;
+		try {
+			digest = MessageDigest.getInstance("SHA-256");
+		} catch (NoSuchAlgorithmException e) {
+			throw new RuntimeException(e);
+		}
+		String hash = HexFormat.of().formatHex(digest.digest(requestBytes));
+
+		IdempotencyRecord failedRecord = IdempotencyRecord.builder().idempotencyKey(key).requestHash(hash)
+				.status(IdempotencyStatus.FAILED).build();
+
+		given(idempotencyRepository.findById(key)).willReturn(Optional.of(failedRecord));
+
+		FilterChain chain = (req, res) -> {
+			jakarta.servlet.http.HttpServletResponse httpRes = (jakarta.servlet.http.HttpServletResponse) res;
+			httpRes.setStatus(200);
+			httpRes.getWriter().write("{\"status\":\"SUCCESS\"}");
+		};
+
+		idempotencyFilter.doFilter(request, response, chain);
+
+		assertThat(response.getStatus()).isEqualTo(200);
+		verify(idempotencyRepository).saveAndFlush(any(IdempotencyRecord.class));
+		verify(idempotencyRepository).save(any(IdempotencyRecord.class));
+	}
+
+	@Test
+	@DisplayName("Should instantiate filter with null DistributedLockService and fall back to NoOp")
+	void shouldFallbackToNoOpLockServiceWhenNull() {
+		IdempotencyFilter fallbackFilter = new IdempotencyFilter(idempotencyRepository, objectMapper, null);
+		assertThat(fallbackFilter).isNotNull();
 	}
 }

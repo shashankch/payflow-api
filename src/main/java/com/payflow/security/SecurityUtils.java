@@ -25,6 +25,7 @@ public final class SecurityUtils {
 			return false;
 		}
 		String targetRole = role.startsWith("ROLE_") ? role : "ROLE_" + role;
-		return auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase(targetRole));
+		return auth.getAuthorities() != null && auth.getAuthorities().stream()
+				.anyMatch(a -> a != null && targetRole.equalsIgnoreCase(a.getAuthority()));
 	}
 }

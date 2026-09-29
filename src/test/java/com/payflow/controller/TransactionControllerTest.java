@@ -224,4 +224,19 @@ class TransactionControllerTest {
 				.andExpect(status().isServiceUnavailable()) //
 				.andExpect(jsonPath("$.title").value("Feature Disabled"));
 	}
+
+	@Test
+	@DisplayName("GET /api/v1/transactions/user/{upiId} should return 200 and paginated transactions")
+	void shouldReturnUserTransactions() throws Exception {
+		Transaction tx = Transaction.builder().transactionId(4L).referenceId(UUID.randomUUID())
+				.senderUpiId("alice@payflow").receiverUpiId("bob@payflow").amount(new BigDecimal("20.00"))
+				.status(TransactionStatus.COMPLETED).type(TransactionType.TRANSFER).createdAt(Instant.now()).build();
+
+		given(transactionService.getUserTransactions(any(), any()))
+				.willReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(tx)));
+
+		mockMvc.perform(get("/api/v1/transactions/user/alice@payflow")).andExpect(status().isOk())
+				.andExpect(jsonPath("$.content[0].senderUpiId").value("alice@payflow"))
+				.andExpect(jsonPath("$.content[0].amount").value(20.00));
+	}
 }
