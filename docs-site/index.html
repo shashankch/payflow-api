@@ -6,23 +6,203 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
   <meta name="description" content="Enterprise Transaction & Double-Entry Payment Ledger Engine">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
-  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css">
-  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify-themeable@0/dist/css/theme-simple-dark.css" media="(prefers-color-scheme: dark)">
-  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify-themeable@0/dist/css/theme-simple.css" media="(prefers-color-scheme: light)">
+  
+  <!-- Modern Clean Theme: docsify-themeable simple -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docsify-themeable@0/dist/css/theme-simple.css">
+  
   <style>
     :root {
+      /* Typography */
       --base-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      --theme-color: #3b82f6;
+      --base-font-size: 15px;
+      --base-line-height: 1.7;
+      
+      /* Brand Color Palette */
+      --theme-color: #2563eb;
+      --theme-color-dark: #1d4ed8;
+      
+      /* Sidebar */
+      --sidebar-width: 290px;
+      --sidebar-background: #f8fafc;
+      --sidebar-border-color: #e2e8f0;
+      --sidebar-border-width: 1px;
       --sidebar-name-font-weight: 700;
-      --sidebar-name-margin: 1.5rem 0 0.5rem;
+      --sidebar-name-color: #0f172a;
+      --sidebar-name-margin: 1.5rem 0 1rem;
+      --sidebar-nav-link-color: #475569;
+      --sidebar-nav-link-color--active: #2563eb;
+      --sidebar-nav-link-font-weight--active: 600;
+      
+      /* Content & Tables */
+      --content-max-width: 960px;
+      --table-cell-padding: 0.85rem 1.1rem;
+      --table-row-odd-background: #f8fafc;
+      --table-row-even-background: #ffffff;
+      --table-border-color: #e2e8f0;
+      --table-head-background: #f1f5f9;
+      
+      /* Code */
+      --code-font-family: "JetBrains Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --code-font-size: 0.88em;
+      --code-inline-background: #f1f5f9;
+      --code-inline-color: #0f172a;
+      --code-theme-background: #0f172a;
+      --code-theme-text: #f8fafc;
+      
+      /* Alerts & Blockquotes */
+      --blockquote-border-color: #3b82f6;
+      --blockquote-background: #eff6ff;
     }
-    .sidebar-nav > ul > li > a {
-      font-weight: 600;
+
+    /* Dark Mode (automatic system preference or toggle) */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --base-background-color: #0b0f19;
+        --base-color: #e2e8f0;
+        
+        --sidebar-background: #070a12;
+        --sidebar-border-color: #1e293b;
+        --sidebar-name-color: #f8fafc;
+        --sidebar-nav-link-color: #94a3b8;
+        --sidebar-nav-link-color--active: #38bdf8;
+        
+        --table-row-odd-background: #0f172a;
+        --table-row-even-background: #0b0f19;
+        --table-border-color: #1e293b;
+        --table-head-background: #1e293b;
+        --table-head-color: #f8fafc;
+        
+        --code-inline-background: #1e293b;
+        --code-inline-color: #38bdf8;
+        
+        --blockquote-background: #1e293b;
+        --blockquote-border-color: #38bdf8;
+      }
+    }
+
+    /* Custom Modern Polish */
+    body {
+      letter-spacing: -0.01em;
+    }
+
+    /* Table styling hardening */
+    table {
+      width: 100% !important;
+      border-collapse: collapse !important;
+      margin: 1.5rem 0 !important;
+      display: table !important;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--table-border-color) !important;
+    }
+
+    th {
+      background: var(--table-head-background) !important;
+      color: var(--base-color) !important;
+      font-weight: 600 !important;
+      text-align: left !important;
+      padding: 0.85rem 1.1rem !important;
+      border: 1px solid var(--table-border-color) !important;
+      font-size: 0.9em;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    td {
+      padding: 0.85rem 1.1rem !important;
+      border: 1px solid var(--table-border-color) !important;
+      color: var(--base-color) !important;
+      line-height: 1.6;
+    }
+
+    tr:nth-child(even) {
+      background: var(--table-row-even-background) !important;
+    }
+
+    tr:nth-child(odd) {
+      background: var(--table-row-odd-background) !important;
+    }
+
+    /* Top Badges Alignment */
+    p a img {
+      margin: 2px 3px;
+      vertical-align: middle;
+    }
+
+    /* Mermaid diagram container */
+    .mermaid {
+      display: flex;
+      justify-content: center;
+      background: transparent !important;
+      margin: 2rem 0;
+      overflow-x: auto;
+    }
+
+    /* Navbar styling */
+    .app-nav {
+      position: fixed;
+      top: 0;
+      right: 0;
+      padding: 1rem 2rem;
+      z-index: 100;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--sidebar-border-color);
+    }
+    @media (prefers-color-scheme: dark) {
+      .app-nav {
+        background: rgba(11, 15, 25, 0.85);
+      }
+    }
+    .app-nav ul {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+    .app-nav li {
+      list-style: none;
+      display: inline-block;
+    }
+    .app-nav a {
+      color: var(--base-color);
+      font-weight: 500;
+      font-size: 0.9rem;
+      text-decoration: none;
+      padding: 0.35rem 0.65rem;
+      border-radius: 6px;
+      transition: background 0.15s ease;
+    }
+    .app-nav a:hover {
+      background: rgba(37, 99, 235, 0.1);
+      color: var(--theme-color);
+    }
+
+    /* App Name Branding in Sidebar */
+    .app-name-link {
+      font-size: 1.25rem !important;
+      font-weight: 700 !important;
+      color: var(--theme-color) !important;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Sidebar Section Headers */
+    .sidebar-nav > ul > li > p {
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #94a3b8;
+      margin: 1.5rem 0 0.5rem;
     }
   </style>
 </head>
 <body>
-  <div id="app">Loading documentation...</div>
+  <div id="app">Loading Payflow API Documentation...</div>
+  
   <script>
     window.$docsify = {
       name: '₹ Payflow API',
@@ -46,15 +226,35 @@
       }
     };
   </script>
-  <!-- Docsify v4 -->
-  <script src="//cdn.jsdelivr.net/npm/docsify@4"></script>
-  <script src="//cdn.jsdelivr.net/npm/docsify/lib/plugins/search.min.js"></script>
-  <script src="//cdn.jsdelivr.net/npm/docsify-copy-code/dist/docsify-copy-code.min.js"></script>
+
+  <!-- Docsify Core v4 -->
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4/lib/docsify.min.js"></script>
+  
+  <!-- docsify-themeable Plugin -->
+  <script src="https://cdn.jsdelivr.net/npm/docsify-themeable@0/dist/js/docsify-themeable.min.js"></script>
+
+  <!-- Search Plugin -->
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4/lib/plugins/search.min.js"></script>
+  
+  <!-- Copy Code Plugin -->
+  <script src="https://cdn.jsdelivr.net/npm/docsify-copy-code@2/dist/docsify-copy-code.min.js"></script>
+
+  <!-- Mermaid.js + Docsify Mermaid Plugin -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-mermaid@2/dist/docsify-mermaid.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default',
+      securityLevel: 'loose'
+    });
+  </script>
+
   <!-- Prism Syntax Highlighting -->
-  <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-java.min.js"></script>
-  <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-sql.min.js"></script>
-  <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-yaml.min.js"></script>
-  <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-bash.min.js"></script>
-  <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-java.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-sql.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-json.min.js"></script>
 </body>
 </html>
