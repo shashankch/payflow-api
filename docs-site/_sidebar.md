@@ -20,5 +20,5 @@
   - [ADR-030: CI/CD Quality Gates](docs/adr/0030-ci-cd-quality-gates-jacoco-spotbugs.md)
 
 - **Code Quality & Telemetry**
-  - [📊 JaCoCo Coverage Report](/coverage/ ':target=_blank')
+  - [📊 JaCoCo Coverage Report](https://shashankch.github.io/payflow-api/coverage/ ':target=_blank')
   - [GitHub Actions CI](https://github.com/shashankch/payflow-api/actions/workflows/ci.yml)
