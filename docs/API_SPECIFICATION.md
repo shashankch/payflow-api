@@ -5,7 +5,7 @@
 > - **Author**: Payflow Engineering (shashakchandel@gmail.com)
 > - **Status**: Approved / Living Specification
 > - **Created Date**: 2026-08-01
-> - **Last Updated**: 2026-09-08
+> - **Last Updated**: 2026-09-30
 > - **Authoritative Location**: [API_SPECIFICATION.md](API_SPECIFICATION.md)
 > - **Related Documents**: [System Architecture](ARCHITECTURE.md) | [Security Architecture](ARCHITECTURE.md#18-security-architecture-and-threat-model) | [Architecture Decisions (ADRs)](adr/README.md) | [Phased Roadmap](ROADMAP.md) | [Engineering Conventions](CONVENTIONS.md)
 

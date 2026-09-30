@@ -52,8 +52,8 @@ We adopted **Option C**. The quality enforcement system consists of:
 
 3. **Hardened GitHub Actions CI Pipeline**:
    - Updated `.github/workflows/ci.yml` to run `mvn clean verify -B`.
-   - Added automated artifact upload for `target/site/jacoco/` and `target/spotbugsXml.xml` with 14-day retention.
-   - Added code coverage status badge to `README.md`.
+   - Added automated GitHub Pages deployment for Docsify public documentation portal (`https://shashankch.github.io/payflow-api/`) and live interactive JaCoCo coverage reports at `https://shashankch.github.io/payflow-api/coverage/`.
+   - Added code coverage status badge to `README.md` linking directly to the live GitHub Pages report.
 
 ## Consequences
 

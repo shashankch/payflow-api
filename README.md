@@ -4,13 +4,13 @@
 
 ### Enterprise Transaction & Double-Entry Payment Ledger Engine
 
-[![CI Build](https://img.shields.io/badge/CI-Passing-brightgreen?logo=githubactions&logoColor=white&style=flat-square)](https://github.com/shashankchandel/payflow-api/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/Coverage-90%25%20Line%20%7C%2073%25%20Branch-brightgreen?style=flat-square)](#-ci-cd-quality-gates-jacoco--spotbugs)
+[![CI Build](https://img.shields.io/badge/CI-Passing-brightgreen?logo=githubactions&logoColor=white&style=flat-square)](https://github.com/shashankch/payflow-api/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/Coverage-90%25%20Line%20%7C%2073%25%20Branch-brightgreen?style=flat-square)](https://shashankch.github.io/payflow-api/coverage/)
 [![Java 25](https://img.shields.io/badge/Java-25-ED8B00?logo=openjdk&logoColor=white&style=flat-square)](https://dev.java/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.0-6DB33F?logo=springboot&logoColor=white&style=flat-square)](https://spring.io/projects/spring-boot)
 [![Docker](https://img.shields.io/badge/Docker-Multi--stage%20Temurin%2025-2496ED?logo=docker&logoColor=white&style=flat-square)](Dockerfile)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-HPA%20%26%20RollingUpdate-326CE5?logo=kubernetes&logoColor=white&style=flat-square)](k8s/)
-[![Tests](https://img.shields.io/badge/Tests-191%20Passing-brightgreen?logo=junit5&logoColor=white&style=flat-square)](https://junit.org/junit5/)
+[![Tests](https://img.shields.io/badge/Tests-191%20Passing-brightgreen?logo=junit5&logoColor=white&style=flat-square)](docs/ARCHITECTURE.md#15-testing-strategy-rigor-concurrency--unit-verification)
 [![Architecture](https://img.shields.io/badge/Architecture-Modular%20Monolith-6366f1?style=flat-square)](docs/ARCHITECTURE.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 
@@ -103,6 +103,8 @@ graph TD
 
 | Document | Description |
 | :--- | :--- |
+| 🚀 **[Live Documentation Hub](https://shashankch.github.io/payflow-api/)** | Interactive Docsify portal with full-text search, dark mode, and dynamic markdown rendering |
+| 📊 **[JaCoCo Code Coverage Report](https://shashankch.github.io/payflow-api/coverage/)** | Live interactive code coverage report (90% Line, 73% Branch) generated per-build |
 | 📘 **[System Architecture](docs/ARCHITECTURE.md)** | Deep-dive concurrency models, pessimistic locking mechanics, test pyramid |
 | 🛡️ **[Security Architecture & Threat Model](docs/ARCHITECTURE.md#18-security-architecture-and-threat-model)** | Zero-Trust filter chain, STRIDE threat model, IAM policy matrix, financial concurrency controls |
 | 🔒 **[Security Policy](SECURITY.md)** | Open-source vulnerability reporting guidelines and project security posture |
