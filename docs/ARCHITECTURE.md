@@ -5,7 +5,7 @@
 > - **Author**: Payflow Engineering (shashakchandel@gmail.com)
 > - **Status**: Approved / Living Design Document
 > - **Created Date**: 2026-08-01
-> - **Last Updated**: 2026-09-20
+> - **Last Updated**: 2026-09-30
 > - **Authoritative Location**: [ARCHITECTURE.md](ARCHITECTURE.md)
 > - **Related Documents**: [API Specification](API_SPECIFICATION.md) | [Security Policy](../SECURITY.md) | [Architecture Decisions (ADRs)](adr/README.md) | [Phased Roadmap](ROADMAP.md) | [Engineering Conventions](CONVENTIONS.md)
 
@@ -660,7 +660,7 @@ In distributed Kubernetes environments, terminating pods requires coordinated dr
   - **Line Coverage**: Minimum 80% (Achieved: **90%** across 191 tests).
   - **Branch Coverage**: Minimum 70% (Achieved: **73%** across 191 tests).
   - Pure DTOs, configuration classes, entities, and generated MapStruct classes are excluded from coverage calculations.
-- **GitHub Actions Workflow Hardening**: `.github/workflows/ci.yml` executes `mvn clean verify -B`, failing fast on formatting, checkstyle, test failures, SpotBugs warnings, or coverage violations, while uploading JaCoCo and SpotBugs report artifacts for 14-day retention.
+- **GitHub Actions Workflow Hardening**: `.github/workflows/ci.yml` executes `mvn clean verify -B`, failing fast on formatting, checkstyle, test failures, SpotBugs warnings, or coverage violations, while uploading JaCoCo and SpotBugs report artifacts for 14-day retention and deploying the Docsify documentation portal (`https://shashankch.github.io/payflow-api/`) with live interactive JaCoCo coverage reports (`https://shashankch.github.io/payflow-api/coverage/`) to GitHub Pages.
 
 ---
 

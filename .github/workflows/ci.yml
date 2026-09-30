@@ -51,3 +51,38 @@ jobs:
           path: target/spotbugsXml.xml
           retention-days: 14
           if-no-files-found: ignore
+
+      - name: Prepare Documentation and Coverage Site
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          mkdir -p public/coverage
+          cp README.md public/
+          cp CHANGELOG.md public/
+          cp SECURITY.md public/
+          cp -r docs public/
+          cp -r docs-site/* public/
+          cp -r target/site/jacoco/* public/coverage/
+          touch public/.nojekyll
+
+      - name: Upload Pages Artifact
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public/
+
+  deploy-pages:
+    name: Deploy Documentation & JaCoCo to GitHub Pages
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+

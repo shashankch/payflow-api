@@ -1,0 +1,6 @@
+- [📘 Architecture](docs/ARCHITECTURE.md)
+- [🌐 API Specs](docs/API_SPECIFICATION.md)
+- [🗓️ Roadmap](docs/ROADMAP.md)
+- [📜 ADRs](docs/adr/README.md)
+- [📊 JaCoCo Coverage](/coverage/ ':target=_blank')
+- [GitHub](https://github.com/shashankch/payflow-api)

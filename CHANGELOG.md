@@ -40,7 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integrated `jacoco-maven-plugin:0.8.15` enforcing minimum 80% line coverage and 70% branch coverage across core business and security packages; achieved **90% line coverage** and **73% branch coverage** across 191 unit tests with 0 missed classes.
 - Created comprehensive unit test suites: `JwtAccessDeniedHandlerTest`, `JwtAuthenticationEntryPointTest`, `JwtAuthenticationFilterTest`, `SecurityUtilsTest`, and `IdempotencyCleanupServiceTest`.
 - Hardened `.github/workflows/ci.yml` executing `mvn clean verify -B` with automated artifact upload for JaCoCo coverage reports and SpotBugs analysis (14-day retention).
-- Added code coverage badge to `README.md`.
+- Added automated GitHub Pages deployment for the Docsify public documentation portal (`https://shashankch.github.io/payflow-api/`) and live interactive JaCoCo coverage reports (`https://shashankch.github.io/payflow-api/coverage/`).
 - Authored ADR-030 (*Automated CI/CD Quality Gates, JaCoCo Coverage Enforcement, and SpotBugs Static Analysis*).
 - Added `spring-modulith-events-kafka`, `spring-kafka`, `spring-kafka-test`, and Testcontainers `kafka` dependencies to `pom.xml`.
 - Marked domain event `TransferCompletedEvent` with `@Externalized` and configured programmatic dynamic routing via `EventExternalizationConfiguration` in `KafkaConfig.java`, routing to `${payflow.kafka.transfers-topic}` partitioned by `senderUpi` for strict chronological delivery per account.

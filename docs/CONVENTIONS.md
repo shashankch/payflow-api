@@ -60,6 +60,9 @@ This document outlines the coding standards, repository conventions, Git workflo
 - **Test Method Naming**: Use descriptive names reflecting intent:
   - `should[ExpectedBehavior]_when[StateUnderTest]()`
   - Example: `shouldRejectTransfer_whenSenderHasInsufficientBalance()`
+- **Quality Gates & Static Analysis**:
+  - `spotbugs-maven-plugin` enforces zero static bytecode bugs during `mvn verify`.
+  - `jacoco-maven-plugin` enforces strict bundle-level code coverage thresholds (minimum 80% line, 70% branch coverage across domain, service, and security packages) with automated GitHub Pages live reporting.
 
 ---
 
