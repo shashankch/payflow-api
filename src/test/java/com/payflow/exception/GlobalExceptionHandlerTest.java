@@ -15,6 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
@@ -186,5 +187,41 @@ class GlobalExceptionHandlerTest {
 		assertEquals("Internal Server Error", problem.getTitle());
 		assertEquals("An unexpected internal error occurred", problem.getDetail());
 		assertNotNull(problem.getProperties().get("timestamp"));
+	}
+
+	@Test
+	void testHandleFeatureDisabled() {
+		FeatureDisabledException ex = new FeatureDisabledException("AI features disabled");
+		ProblemDetail problem = handler.handleFeatureDisabled(ex);
+
+		assertEquals(HttpStatus.SERVICE_UNAVAILABLE.value(), problem.getStatus());
+		assertEquals("Feature Disabled", problem.getTitle());
+		assertEquals("AI features disabled", problem.getDetail());
+	}
+
+	@Test
+	void testHandleValidationException() {
+		org.springframework.validation.BeanPropertyBindingResult bindingResult = new org.springframework.validation.BeanPropertyBindingResult(
+				new Object(), "target");
+		bindingResult.addError(new org.springframework.validation.FieldError("target", "amount", "must not be null"));
+
+		MethodArgumentNotValidException ex = new MethodArgumentNotValidException(null, bindingResult);
+		ProblemDetail problem = handler.handleValidationException(ex);
+
+		assertEquals(HttpStatus.UNPROCESSABLE_ENTITY.value(), problem.getStatus());
+		assertEquals("Validation Failure", problem.getTitle());
+		assertNotNull(problem.getProperties().get("errors"));
+	}
+
+	@Test
+	void testEnrichProblemDetailWithRequestId() {
+		org.slf4j.MDC.put("requestId", "test-req-123");
+		try {
+			UserNotFoundException ex = new UserNotFoundException(1L);
+			ProblemDetail problem = handler.handleUserNotFound(ex);
+			assertEquals("test-req-123", problem.getProperties().get("requestId"));
+		} finally {
+			org.slf4j.MDC.remove("requestId");
+		}
 	}
 }

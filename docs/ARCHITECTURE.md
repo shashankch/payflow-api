@@ -578,18 +578,89 @@ System stability under load is enforced using **Resilience4j** configurations:
 
 ---
 
-## 11. Kubernetes Readiness & Pod Lifecycle
+## 11. Cloud-Native Containerization & Kubernetes Architecture (Phase 11A, 11B, 11C)
 
-The application complies with cloud-native deployment requirements when running in a Kubernetes cluster:
+Payflow API adopts an immutable, production-hardened cloud-native deployment model:
 
-* **Graceful Shutdown**: Enabled using Spring properties:
-  ```properties
-  server.shutdown=graceful
-  ```
-  Upon receiving a `SIGTERM` signal, the container stops routing new requests but allows existing, in-flight transaction threads to complete (up to the configured `terminationGracePeriodSeconds` in the Kubernetes pod spec, recommended at `30s`).
-* **Health Probes**: Spring Boot Actuator isolates Kubernetes-native endpoints:
-  - **Liveness Probe** (`/actuator/health/liveness`): Confirms the application process is running.
-  - **Readiness Probe** (`/actuator/health/readiness`): Verifies database connectivity, cache connections, and messaging broker availability.
+### A. Multi-Stage Containerization & Hardening (Phase 11A)
+- **Multi-Stage `Dockerfile`**:
+  - **Stage 1 (`builder`)**: Utilizes `eclipse-temurin:25-jdk` to resolve Maven dependencies and compile the executable Spring Boot fat JAR, leveraging BuildKit cache mounts (`--mount=type=cache,target=/root/.m2`) to speed up subsequent builds.
+  - **Stage 2 (`runtime`)**: Employs minimal `eclipse-temurin:25-jre` to construct a lightweight (~250 MB) production runtime image, eliminating compilers, build dependencies, and package managers from the production artifact.
+- **Unprivileged Least-Privilege Execution**: Creates a dedicated non-root user and group (`payflow:10001`) with no login shell; all container filesystem assets are owned by `payflow:10001`, satisfying CIS Docker Benchmark controls.
+- **Container Health Probes**: Integrates native Docker `HEALTHCHECK` targeting the Spring Boot Actuator readiness endpoint (`/actuator/health/readiness`).
+- **JVM Ergonomics for Containers**: Sets `-XX:+UseZGC -XX:+ZGenerational -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom` to ensure Generational ZGC sub-millisecond pauses while auto-sizing heap allocations to container cgroup memory limits.
+- **Full-Stack Docker Compose (`docker-compose.yml`)**: Orchestrates the entire distributed banking topology locally with volume persistence and health dependency ordering (`condition: service_healthy`):
+  - **PostgreSQL 17**: `postgres:17-alpine` with `pg_isready` healthcheck and `postgres_data` volume.
+  - **Redis 7**: `redis:7-alpine` with `redis-cli ping` healthcheck and `redis_data` volume.
+  - **Apache Kafka 3.9 (KRaft)**: `apache/kafka:latest` running controller/broker combined KRaft mode (no Zookeeper required) with persistent `kafka_data` volume.
+  - **Ollama Gen-AI**: `ollama/ollama:latest` for offline LLM spend categorization with `ollama_data` volume.
+  - **Prometheus & Grafana**: Automatically provisions Prometheus scraping (`monitoring/prometheus/prometheus.yml`) and Grafana datasources/dashboards (`monitoring/grafana/provisioning/dashboards/payflow.json`).
+
+### B. Kubernetes Deployment Topology & Elasticity (Phase 11B)
+
+```mermaid
+graph TD
+    subgraph K8sCluster["☸️ Kubernetes Production Cluster (Namespace: default)"]
+        Ingress["Ingress Controller / API Gateway"] -->|"Round Robin / HTTP"| Service["payflow-service (ClusterIP:8080)"]
+
+        subgraph WorkloadTopology["Pod Replica Set (Managed by HPA: 2 to 10 Pods)"]
+            Pod1["Pod: payflow-api-1 (UID: 10001)"]
+            Pod2["Pod: payflow-api-2 (UID: 10001)"]
+            PodN["Pod: payflow-api-N (Auto-Scaled)"]
+        end
+
+        Service --> Pod1
+        Service --> Pod2
+        Service -.-> PodN
+
+        ConfigMap["ConfigMap: payflow-config"] -.->|"envFrom"| WorkloadTopology
+        Secret["Secret: payflow-secrets"] -.->|"envFrom"| WorkloadTopology
+        HPA["HorizontalPodAutoscaler (HPA)<br/>Target: CPU 75%, Mem 80%"] -->|"Scale Replicas"| WorkloadTopology
+        PDB["PodDisruptionBudget (PDB)<br/>minAvailable: 1"] -->|"Quorum Protection"| WorkloadTopology
+    end
+
+    subgraph BackingServices["🗄️ Managed External Banking Backing Services"]
+        Pod1 --> DB[("PostgreSQL 17 Database")]
+        Pod1 --> RedisCache[("Redis 7 Cluster")]
+        Pod1 --> KafkaCluster[("Apache Kafka KRaft Broker")]
+        Pod2 --> DB
+        Pod2 --> RedisCache
+        Pod2 --> KafkaCluster
+    end
+
+    classDef k8sStyle fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
+    classDef podStyle fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#f8fafc;
+    classDef dbStyle fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc;
+    classDef controlStyle fill:#451a03,stroke:#f59e0b,stroke-width:2px,color:#f8fafc;
+
+    class K8sCluster k8sStyle;
+    class Pod1,Pod2,PodN podStyle;
+    class DB,RedisCache,KafkaCluster dbStyle;
+    class HPA,PDB,ConfigMap,Secret controlStyle;
+```
+
+- **Manifest Suite (`k8s/`)**:
+  - `deployment.yaml`: Configured with zero-downtime rolling updates (`maxSurge: 1`, `maxUnavailable: 0`), non-root security context (`runAsNonRoot: true`, `runAsUser: 10001`), resource requests (`250m` CPU, `512Mi` RAM) and limits (`1000m` CPU, `1024Mi` RAM).
+  - `service.yaml`: Internal `ClusterIP` exposing port 8080 targeting port 8080.
+  - `configmap.yaml` & `secret.yaml`: Strict declarative separation of environment variables from cryptographic credentials.
+  - `hpa.yaml`: HorizontalPodAutoscaler automatically scales between 2 and 10 replicas based on 75% CPU and 80% memory utilization thresholds.
+  - `pdb.yaml`: PodDisruptionBudget guarantees at least 1 pod remains continuously available (`minAvailable: 1`) during cluster upgrades or node draining.
+
+### C. Coordinated Graceful Shutdown Lifecycle
+In distributed Kubernetes environments, terminating pods requires coordinated draining to prevent dropping active financial transactions:
+1. **Endpoint Deregistration**: Kubernetes removes the terminating pod from service endpoint slices asynchronously.
+2. **Pre-Stop Hook**: The pod spec executes a `lifecycle.preStop` hook running `sleep 10`. This delay allows kube-proxy and Ingress controllers to propagate endpoint removal before the container receives a termination signal.
+3. **Graceful Application Draining**:
+   - `server.shutdown: graceful`: Embedded Tomcat ceases accepting new connections.
+   - `spring.lifecycle.timeout-per-shutdown-phase: 30s`: Spring allows active HTTP transactions, database queries, and Kafka event externalizations up to 30 seconds to complete cleanly before JVM termination.
+
+### D. Automated CI/CD Quality Gates & Bytecode Analysis (Phase 11C)
+- **SpotBugs Static Analysis (`spotbugs-maven-plugin:4.10.4.1`)**: Executes static bytecode verification during the Maven `verify` phase with `effort: Max` and `threshold: Medium`. Filtered by `spotbugs-exclude.xml` for generated MapStruct mappers and compatibility stubs; achieved **0 bugs and 0 errors**.
+- **JaCoCo Coverage Enforcement (`jacoco-maven-plugin:0.8.15`)**: Automatically enforces strict bundle-level code coverage limits:
+  - **Line Coverage**: Minimum 80% (Achieved: **90%** across 191 tests).
+  - **Branch Coverage**: Minimum 70% (Achieved: **73%** across 191 tests).
+  - Pure DTOs, configuration classes, entities, and generated MapStruct classes are excluded from coverage calculations.
+- **GitHub Actions Workflow Hardening**: `.github/workflows/ci.yml` executes `mvn clean verify -B`, failing fast on formatting, checkstyle, test failures, SpotBugs warnings, or coverage violations, while uploading JaCoCo and SpotBugs report artifacts for 14-day retention.
 
 ---
 

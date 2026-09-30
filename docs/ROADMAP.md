@@ -78,28 +78,28 @@ Enterprise reliability and distributed coordination:
 ---
 
 ## Phase 9 — Event Streaming, Outbox Lifecycle & Production Hardening ✅
-Decoupled event-driven architecture and enterprise production hardening:
-- **9A — Kafka via Spring Modulith Event Externalization**: Transparently bridge domain events from the transactional outbox registry to partitioned Apache Kafka topics with producer retry idempotence and guaranteed at-least-once outbox delivery. Non-production environments continue seamless in-process event dispatching.
-- **9B — Production Hardening & Architecture Audit Remediation**: Enterprise hardening addressing security controls (fail-fast JWT secret validation, BOLA mitigation, anti-clickjacking), targeted cache invalidation, automated transactional outbox retention cleanup, and integration test execution gates.
+Decoupled event-driven architecture and production resilience:
+- **9A — Kafka via Spring Modulith Event Externalization**: Bridge domain events from transactional outbox to partitioned Apache Kafka topics with at-least-once delivery guarantees.
+- **9B — Production Hardening & Security Audit**: Fail-fast secret validation, BOLA protection, targeted cache invalidation, and automated outbox retention cleanup.
 
 ---
 
 ## Phase 10 — Financial Intelligence & Performance Optimization ✅
 Intelligent automation and runtime scalability:
-- **10A — Gen-AI Spend Categorization & Financial Insights**: Spring AI 2.0.1 integration providing automated expenditure classification and contextual budgeting tips with structured JSON output, guarded by Resilience4j circuit breakers and deterministic keyword heuristic fallback.
-- **10B — Virtual Threads & Resource Tuning**: Enabled Java 25 Virtual Threads for high-concurrency throughput, introduced a lightweight single-instance production profile (`prod-light` for 1 GiB RAM), and optimized HikariCP connection pooling and JVM memory bounds.
+- **10A — Gen-AI Spend Categorization**: Spring AI spend classification and actionable budgeting advice with circuit-breaker-backed heuristic fallback.
+- **10B — Virtual Threads & Resource Tuning**: High-concurrency Java 25 Virtual Threads, bounded HikariCP connection pools, and lightweight `prod-light` profile.
 
 ---
 
-## Phase 11 — Containerization, Kubernetes & Production Infrastructure ⬜ (Next Up)
-Cloud-native packaging and deployment:
-- **11A — Multi-Stage Containerization & Local Orchestration**: Secure multi-stage Docker build with non-root runtime, paired with full-stack Docker Compose orchestrating PostgreSQL, Redis, Kafka, Ollama (offline local AI), Prometheus, and Grafana.
-- **11B — Cloud-Native Kubernetes Deployment**: Production Kubernetes manifests (Deployments, Services, ConfigMaps, Secrets, HPA) configured with HTTP health probes, graceful shutdown, and container resource limits.
-- **11C — CI/CD Pipeline Hardening & Quality Gates**: Automated static bytecode analysis (SpotBugs) and strict code coverage thresholds (JaCoCo) integrated into the continuous integration pipeline.
+## Phase 11 — Containerization, Kubernetes & Production Infrastructure ✅
+Cloud-native packaging, orchestration, and automated quality gates:
+- **11A — Multi-Stage Containerization & Local Orchestration**: Minimal multi-stage Docker build (Java 25 JRE, non-root user, healthcheck) and full-stack Docker Compose (PostgreSQL, Redis, Kafka, Ollama, Prometheus, Grafana).
+- **11B — Cloud-Native Kubernetes Deployment**: Declarative Kubernetes manifests (Deployments, Services, ConfigMaps, Secrets, HPA, PDB) with graceful shutdown coordination.
+- **11C — CI/CD Pipeline Hardening & Quality Gates**: Automated static analysis (SpotBugs) and strict code coverage enforcement (JaCoCo) integrated into GitHub Actions.
 
 ---
 
-## Phase 12 — Production Readiness & Release Finalization ⬜
+## Phase 12 — Production Readiness & Release Finalization ⬜ (Next Up)
 Final verification and public milestone release:
-- **12A — End-to-End System Smoke Verification**: Comprehensive verification of clean clone-and-run workflows, multi-container smoke tests, and OpenAPI endpoint validation.
-- **12B — Documentation Finalization & Open-Source Release**: Comprehensive documentation audit across all architecture diagrams and decision logs, accompanied by semantic version bump to `v1.0.0`.
+- **12A — End-to-End System Smoke Verification**: Clone-and-run verification, container smoke tests, and OpenAPI validation.
+- **12B — Documentation Finalization & Open-Source Release**: Comprehensive documentation audit and semantic version release `v1.0.0`.

@@ -21,7 +21,7 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 
 @Component
-public class JwtTokenProvider {
+public final class JwtTokenProvider {
 
 	private static final Logger LOG = LoggerFactory.getLogger(JwtTokenProvider.class);
 	public static final String DEFAULT_SECRET = "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970";
