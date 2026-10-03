@@ -1,0 +1,36 @@
+shape: sequence_diagram
+
+client: API Client / Ingress {
+  icon: "../assets/icons/client.svg"
+}
+pod1: Pod 1 (IdempotencyFilter) {
+  icon: "../assets/icons/server.svg"
+}
+pod2: Pod 2 (IdempotencyFilter) {
+  icon: "../assets/icons/server.svg"
+}
+redis: Redis Lock (Redisson) {
+  icon: "../assets/icons/redis.svg"
+}
+db: PostgreSQL Database {
+  icon: "../assets/icons/postgresql.svg"
+}
+
+client -> pod1: "1. POST /api/v1/transactions (Key: tx-123)"
+client -> pod2: "2. POST /api/v1/transactions (Key: tx-123 [Duplicate])"
+
+pod1 -> redis: "3. tryLock(\"payflow:lock:idemp:tx-123\", wait=2s, lease=10s)"
+redis -> pod1: "4. Lock Acquired (true)"
+pod2 -> redis: "5. tryLock(\"payflow:lock:idemp:tx-123\", wait=2s, lease=10s) [Blocks up to 2s]"
+
+pod1 -> db: "6. Check & record PROCESSING status"
+pod1 -> db: "7. Execute transaction & atomic commit"
+pod1 -> db: "8. Record SUCCESS with response body"
+pod1 -> redis: "9. unlock(\"payflow:lock:idemp:tx-123\")"
+redis -> pod1: "10. Lock Released"
+pod1 -> client: "11. 201 Created (Transaction Response)"
+
+redis -> pod2: "12. Lock Acquired (after Pod 1 release)"
+pod2 -> db: "13. SELECT idempotency record (Status: SUCCESS)"
+pod2 -> client: "14. 201 Created (Replay Cached Response)"
+pod2 -> redis: "15. unlock(\"payflow:lock:idemp:tx-123\")"

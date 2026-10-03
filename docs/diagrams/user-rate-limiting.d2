@@ -1,0 +1,31 @@
+shape: sequence_diagram
+
+client: Client / User A {
+  icon: "../assets/icons/client.svg"
+}
+filter: JwtAuthenticationFilter {
+  icon: "../assets/icons/shield.svg"
+}
+resolver: SecurityContextRateLimiterKeyResolver {
+  icon: "../assets/icons/shield.svg"
+}
+service: UserRateLimiterService {
+  icon: "../assets/icons/spring.svg"
+}
+reg: RateLimiterRegistry {
+  icon: "../assets/icons/lock.svg"
+}
+core: TransactionService {
+  icon: "../assets/icons/java.svg"
+}
+
+client -> filter: "POST /api/v1/transactions (Bearer JWT)"
+filter -> resolver: "Resolve Principal (alice@payflow)"
+resolver -> service: "Key = \"transferLimiter:alice@payflow\""
+service -> reg: "rateLimiter(key, \"transferLimiter\")"
+service -> reg: "Inherits base 10 req/s template & tracks access timestamp" {
+  style.stroke-dash: 3
+}
+service -> core: "[Permitted <= 10 req/s] Proceed with transfer"
+core -> client: "201 Created (TransactionResponse)"
+service -> client: "[Exceeded > 10 req/s] 429 Too Many Requests (Retry-After: 1)"

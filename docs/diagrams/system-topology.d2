@@ -1,0 +1,99 @@
+direction: down
+
+client: Client App {
+  shape: rectangle
+  icon: "../assets/icons/client.svg"
+}
+
+gateway: API Gateway / Ingress {
+  shape: rectangle
+  icon: "../assets/icons/gateway.svg"
+  tooltip: "Spring Security / JWT / v1 Versioning"
+}
+
+client -> gateway: "HTTP POST (Idempotency-Key)"
+
+k8s: Kubernetes Pod / Spring Boot Container {
+  controllers: REST Controllers {
+    shape: rectangle
+    icon: "../assets/icons/spring.svg"
+    label: "UserController / TransactionController"
+  }
+
+  services: Domain Services {
+    shape: rectangle
+    icon: "../assets/icons/java.svg"
+    label: "TransactionService / UserService / SpendInsightsService"
+  }
+
+  concurrency: Concurrency & Idempotency {
+    shape: rectangle
+    icon: "../assets/icons/lock.svg"
+    label: "Pessimistic Lock / Redisson Lock / Idempotency"
+  }
+
+  outbox: Spring Modulith Outbox {
+    shape: rectangle
+    icon: "../assets/icons/queue.svg"
+    label: "ApplicationEventPublisher -> event_publication"
+  }
+
+  telemetry: Observability Pipeline {
+    shape: rectangle
+    icon: "../assets/icons/shield.svg"
+    label: "OTel Tracing + Structured MDC Logging"
+  }
+
+  controllers -> services: "DTO Delegation"
+  services -> concurrency: "Lock & Idempotency"
+  services -> outbox: "Outbox Publisher"
+}
+
+gateway -> k8s.controllers: "Bearer JWT Authentication"
+
+stores: Persistence & Streaming Tier {
+  postgres: PostgreSQL 17 Database {
+    shape: cylinder
+    icon: "../assets/icons/postgresql.svg"
+    label: "PostgreSQL 17\n(Ledger, Transactions, Locks)"
+  }
+
+  redis: Redis 7 Cluster {
+    shape: cylinder
+    icon: "../assets/icons/redis.svg"
+    label: "Redis 7 (Redlock & Cache-Aside)"
+  }
+
+  kafka: Apache Kafka (KRaft) {
+    shape: queue
+    icon: "../assets/icons/kafka.svg"
+    label: "Apache Kafka Broker\n(topic: payflow.transfers)"
+  }
+
+  ai_engine: Ollama Gen-AI {
+    shape: rectangle
+    icon: "../assets/icons/ai.svg"
+    label: "Ollama Gen-AI (Spend Insights)"
+  }
+}
+
+monitoring: Metrics & Telemetry {
+  prometheus: Prometheus Server {
+    shape: rectangle
+    icon: "../assets/icons/prometheus.svg"
+  }
+  grafana: Grafana Dashboards {
+    shape: rectangle
+    icon: "../assets/icons/grafana.svg"
+  }
+  grafana -> prometheus: "PromQL Queries"
+}
+
+k8s.concurrency -> stores.postgres: "SELECT ... FOR UPDATE"
+k8s.concurrency -> stores.redis: "Redlock RLock (2s wait, 10s lease)"
+k8s.services -> stores.redis: "Cache-Aside (users, user_ledgers)"
+k8s.services -> stores.ai_engine: "Structured LLM Prompt"
+k8s.outbox -> stores.postgres: "Atomic Outbox Write"
+k8s.outbox -> stores.kafka: "spring-modulith-events-kafka"
+
+monitoring.prometheus -> k8s.controllers: "Scrape /actuator/prometheus"

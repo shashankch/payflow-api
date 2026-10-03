@@ -71,6 +71,15 @@ This document outlines the coding standards, repository conventions, Git workflo
 - **Parity**: Every feature implemented in code must be documented in `README.md`, `docs/ARCHITECTURE.md`, and `docs/API_SPECIFICATION.md`.
 - **ADRs**: Any major architectural decision (e.g., locking strategy, caching library choice) must be recorded as an individual numbered ADR under `docs/adr/`.
 - **Changelog**: Every merged PR must include an entry in `CHANGELOG.md` under `[Unreleased]`.
+- **Architectural Diagrams (D2 & SVGs)**:
+  - All architecture, sequence, and data flow diagrams are authored using the **D2 diagramming language**.
+  - Canonical D2 sources are stored in `docs/diagrams/*.d2`.
+  - Self-contained SVGs are pre-compiled into `docs/assets/diagrams/*.svg` with automatic dual light/dark theme support (`d2 --theme=0 --dark-theme=200`).
+  - Markdowns embed the pre-rendered SVG (`![Alt Text](assets/diagrams/name.svg)`) alongside a collapsible `<details><summary>📐 View Declarative D2 Diagram Source</summary>...` block, ensuring native, universal image rendering across GitHub, IDE markdown previewers (VS Code, IntelliJ, PyCharm), and the Material for MkDocs documentation portal.
+  - **CI/CD Quality Gates & Automation**:
+    - **Drift Enforcement**: PR and push builds in `.github/workflows/ci.yml` run `./scripts/generate-diagrams.sh --check` to fail fast if any SVG has drifted from its `.d2` source.
+    - **Docs Validation**: PR builds execute `mkdocs build --strict` to validate navigation, links, and markdown syntax.
+    - **1-Click Regeneration**: Maintainers can trigger `.github/workflows/generate-diagrams.yml` via GitHub Actions `workflow_dispatch` to automatically recompile all diagrams and commit them directly back to the branch without needing a local D2 installation.
 - **Design Document Structure**: All architectural design documents in `docs/` must incorporate standard design document sections:
   - **Metadata Header**: Short title, author, creation date, status (Draft/Approved), and authoritative relative link.
   - **Executive Summary & Background**: High-level problem statement, business motivation, and non-obvious domain context.

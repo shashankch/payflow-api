@@ -1,0 +1,92 @@
+direction: down
+
+ingress: Ingress Controller / API Gateway {
+  shape: rectangle
+  icon: "../assets/icons/gateway.svg"
+}
+
+cluster: Kubernetes Production Cluster (Namespace: default) {
+  service: payflow-service {
+    shape: rectangle
+    icon: "../assets/icons/kubernetes.svg"
+    label: "payflow-service (ClusterIP:8080)"
+  }
+
+  workloads: Pod Replica Set (HPA 2 to 10 Pods) {
+    pod1: Pod payflow-api-1 {
+      shape: rectangle
+      icon: "../assets/icons/docker.svg"
+      label: "Pod 1 (payflow:10001)\nVirtual Threads Enabled"
+    }
+
+    pod2: Pod payflow-api-2 {
+      shape: rectangle
+      icon: "../assets/icons/docker.svg"
+      label: "Pod 2 (payflow:10001)\nVirtual Threads Enabled"
+    }
+
+    podN: Pod payflow-api-N {
+      shape: rectangle
+      icon: "../assets/icons/docker.svg"
+      label: "Pod N (Auto-Scaled)"
+    }
+  }
+
+  controls: Cluster Governance & Scaling {
+    hpa: HorizontalPodAutoscaler {
+      shape: rectangle
+      icon: "../assets/icons/kubernetes.svg"
+      label: "HPA (Min: 2, Max: 10)\nTarget: CPU 75%, Mem 80%"
+    }
+
+    pdb: PodDisruptionBudget {
+      shape: rectangle
+      icon: "../assets/icons/shield.svg"
+      label: "PDB (minAvailable: 1)"
+    }
+
+    config: ConfigMap & Secrets {
+      shape: rectangle
+      icon: "../assets/icons/lock.svg"
+      label: "payflow-config & payflow-secrets"
+    }
+  }
+
+  service -> workloads.pod1: "Round Robin"
+  service -> workloads.pod2: "Round Robin"
+  service -> workloads.podN: "Round Robin"
+
+  controls.hpa -> workloads: "Scale Replicas"
+  controls.pdb -> workloads: "Quorum Protection"
+  controls.config -> workloads: "envFrom Injection"
+}
+
+ingress -> cluster.service: "TLS 1.3 / HTTP"
+
+backing: Managed External Backing Services {
+  postgres: PostgreSQL 17 {
+    shape: cylinder
+    icon: "../assets/icons/postgresql.svg"
+    label: "PostgreSQL 17 Database"
+  }
+
+  redis: Redis 7 Cluster {
+    shape: cylinder
+    icon: "../assets/icons/redis.svg"
+    label: "Redis 7 Cluster (Redlock & Cache)"
+  }
+
+  kafka: Apache Kafka (KRaft) {
+    shape: queue
+    icon: "../assets/icons/kafka.svg"
+    label: "Apache Kafka Broker (KRaft Mode)"
+  }
+}
+
+cluster.workloads.pod1 -> backing.postgres: "HikariCP (Max 20 Pool)"
+cluster.workloads.pod1 -> backing.redis: "Lettuce & Redisson"
+cluster.workloads.pod1 -> backing.kafka: "payflow.transfers"
+
+cluster.workloads.pod2 -> backing.postgres
+cluster.workloads.pod2 -> backing.redis
+cluster.workloads.pod2 -> backing.kafka

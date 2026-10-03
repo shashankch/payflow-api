@@ -52,7 +52,7 @@ We adopted **Option C**. The quality enforcement system consists of:
 
 3. **Hardened GitHub Actions CI Pipeline**:
    - Updated `.github/workflows/ci.yml` to run `mvn clean verify -B`.
-   - Added automated GitHub Pages deployment for Docsify public documentation portal (`https://shashankch.github.io/payflow-api/`) and live interactive JaCoCo coverage reports at `https://shashankch.github.io/payflow-api/coverage/`.
+   - Added automated GitHub Pages deployment for Material for MkDocs public documentation portal (`https://shashankch.github.io/payflow-api/`) with D2 diagrams, coverage quality gates at `https://shashankch.github.io/payflow-api/coverage/`, and live interactive JaCoCo coverage reports at `https://shashankch.github.io/payflow-api/coverage-report/`.
    - Added code coverage status badge to `README.md` linking directly to the live GitHub Pages report.
 
 ## Consequences

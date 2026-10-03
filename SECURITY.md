@@ -1,6 +1,6 @@
 # Security Policy — Payflow API
 
-> **Project Status**: Payflow API is an open-source educational and reference architecture project licensed under the [MIT License](LICENSE). The project is currently under active development and is not deployed to production environments.
+> **Project Status**: Payflow API is an open-source educational and reference architecture project licensed under the [MIT License](https://github.com/shashankch/payflow-api/blob/main/LICENSE). The project is currently under active development and is not deployed to production environments.
 
 ---
 
@@ -8,7 +8,7 @@
 
 Payflow API implements defense-in-depth security principles for financial ledger integrity, including Zero-Trust request validation, STRIDE threat mitigations, deterministic row locking, immutable double-entry balance ledgers, and SHA-256 payload verification.
 
-For full architectural specifications, see [Security Architecture & Threat Model](docs/ARCHITECTURE.md#18-security-architecture-and-threat-model).
+For full architectural specifications, see [Security Architecture & Threat Model](ARCHITECTURE.md#18-security-architecture-and-threat-model).
 
 ---
 

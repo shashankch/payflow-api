@@ -1,0 +1,23 @@
+shape: sequence_diagram
+
+tx1: "Transaction 1 (Aarav -> Priya)" {
+  icon: "../assets/icons/java.svg"
+}
+db: "PostgreSQL Engine" {
+  icon: "../assets/icons/postgresql.svg"
+}
+tx2: "Transaction 2 (Priya -> Aarav)" {
+  icon: "../assets/icons/java.svg"
+}
+
+tx1 -> db: "Deterministic Ordering: 'aarav@payflow' < 'priya@payflow'" {
+  style.stroke-dash: 3
+}
+
+tx1 -> db: "Lock 'aarav@payflow' (ACQUIRED)"
+tx2 -> db: "Lock 'aarav@payflow' (BLOCKED / WAITING)"
+tx1 -> db: "Lock 'priya@payflow' (ACQUIRED)"
+tx1 -> db: "Debit Aarav, Credit Priya, Commit & Release"
+db -> tx2: "Lock 'aarav@payflow' (GRANTED)"
+tx2 -> db: "Lock 'priya@payflow' (ACQUIRED)"
+tx2 -> db: "Debit Priya, Credit Aarav, Commit & Release"

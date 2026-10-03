@@ -1,0 +1,34 @@
+shape: sequence_diagram
+
+client: HTTP Client {
+  icon: "../assets/icons/client.svg"
+}
+filter: JwtAuthenticationFilter {
+  icon: "../assets/icons/shield.svg"
+}
+provider: JwtTokenProvider {
+  icon: "../assets/icons/lock.svg"
+}
+context: SecurityContextHolder {
+  icon: "../assets/icons/spring.svg"
+}
+controller: Protected Controller {
+  icon: "../assets/icons/java.svg"
+}
+entrypoint: JwtAuthenticationEntryPoint {
+  icon: "../assets/icons/shield.svg"
+}
+
+client -> filter: "1. Request with Authorization: Bearer <token>"
+filter -> provider: "2. validateToken(token)"
+
+provider -> filter: "3a. (Case: Invalid / Expired Signature) false"
+filter -> entrypoint: "4a. commence() Exception translation"
+entrypoint -> client: "5a. 401 Unauthorized (RFC 7807 ProblemDetail)"
+
+provider -> filter: "3b. (Case: Valid Token) true"
+filter -> provider: "4b. getUpiIdFromToken(token)"
+provider -> filter: "5b. upiId & referenceId claims"
+filter -> context: "6b. setAuthentication(UsernamePasswordAuthenticationToken)"
+filter -> controller: "7b. FilterChain.doFilter(req, res)"
+controller -> client: "8b. 200 OK / 201 Created Response"
