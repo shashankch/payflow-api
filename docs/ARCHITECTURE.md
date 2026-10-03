@@ -7,7 +7,7 @@
 > - **Created Date**: 2026-08-01
 > - **Last Updated**: 2026-09-30
 > - **Authoritative Location**: [ARCHITECTURE.md](ARCHITECTURE.md)
-> - **Related Documents**: [API Specification](API_SPECIFICATION.md) | [Security Policy](../SECURITY.md) | [Architecture Decisions (ADRs)](adr/README.md) | [Phased Roadmap](ROADMAP.md) | [Engineering Conventions](CONVENTIONS.md)
+> - **Related Documents**: [API Specification](API_SPECIFICATION.md) | [Security Policy](SECURITY.md) | [Architecture Decisions (ADRs)](adr/README.md) | [Phased Roadmap](ROADMAP.md) | [Engineering Conventions](CONVENTIONS.md)
 
 ---
 
@@ -69,39 +69,113 @@ Payflow solves these challenges through:
 
 The diagram below maps the target environment topology, showcasing both the synchronous request-response flow and the asynchronous event-driven pipelines.
 
-```mermaid
-graph TD
-    %% Clients and Gateway
-    Client["Client App"] -- "HTTP POST (with Idempotency-Key)" --> Gateway["API Gateway (Spring Security / JWT / v1 Versioning)"]
+![System Topology & Core Flow](assets/diagrams/system-topology.svg)
 
-    subgraph "Kubernetes Pod / Spring Boot Container"
-        Gateway --> Controller["UserController / TransactionController"]
-        Controller --> Service["TransactionService / UserService / AIService"]
-        Service --> Locking["Pessimistic Lock / Redis Distributed Lock"]
-        Service --> Idempotency["Idempotency Filter & Registry"]
-        Service --> EventPub["ApplicationEventPublisher"]
-        EventPub --> ModulithLog["Spring Modulith Event Publication Log"]
-        ModulithLog --> EventListener["@ApplicationModuleListener"]
-        
-        %% Observability
-        Tracing["Micrometer Tracing + OTel Bridge"] -.-> TraceOut["W3C traceparent propagation"]
-        Logging["MDC Logger (Structured JSON)"] -.-> LogOut["traceId / spanId / requestId"]
-    end
+<details>
+<summary>📐 View Declarative D2 Diagram Source</summary>
 
-    %% Databases & Cache
-    Locking -- "SELECT ... FOR UPDATE" --> PostgresDB[("PostgreSQL DB")]
-    Idempotency -- "Check / Save State" --> PostgresDB
-    ModulithLog -- "Atomic write in same TX" --> PostgresDB
-    
-    Service -- "Cache-Aside / Distributed Lock" --> Redis[("Redis Cache & Distributed Lock (Redisson)")]
+```d2
+direction: down
 
-    %% Kafka bridge (Phase 9A)
-    ModulithLog -- "spring-modulith-events-kafka" --> Kafka["Apache Kafka Broker (KRaft Mode)"]
+client: Client App {
+  shape: rectangle
+  icon: "docs/assets/icons/client.svg"
+}
 
-    %% Observers
-    Prometheus["Prometheus Server"] -.->|"/actuator/prometheus"| Controller
-    Grafana["Grafana Dashboards"] -.-> Prometheus
+gateway: API Gateway / Ingress {
+  shape: rectangle
+  icon: "docs/assets/icons/gateway.svg"
+  tooltip: "Spring Security / JWT / v1 Versioning"
+}
+
+client -> gateway: "HTTP POST (Idempotency-Key)"
+
+k8s: Kubernetes Pod / Spring Boot Container {
+  controllers: REST Controllers {
+    shape: rectangle
+    icon: "docs/assets/icons/spring.svg"
+    label: "UserController / TransactionController"
+  }
+
+  services: Domain Services {
+    shape: rectangle
+    icon: "docs/assets/icons/java.svg"
+    label: "TransactionService / UserService / SpendInsightsService"
+  }
+
+  concurrency: Concurrency & Idempotency {
+    shape: rectangle
+    icon: "docs/assets/icons/lock.svg"
+    label: "Pessimistic Lock / Redisson Lock / Idempotency"
+  }
+
+  outbox: Spring Modulith Outbox {
+    shape: rectangle
+    icon: "docs/assets/icons/queue.svg"
+    label: "ApplicationEventPublisher -> event_publication"
+  }
+
+  telemetry: Observability Pipeline {
+    shape: rectangle
+    icon: "docs/assets/icons/shield.svg"
+    label: "OTel Tracing + Structured MDC Logging"
+  }
+
+  controllers -> services: "DTO Delegation"
+  services -> concurrency: "Lock & Idempotency"
+  services -> outbox: "Outbox Publisher"
+}
+
+gateway -> k8s.controllers: "Bearer JWT Authentication"
+
+stores: Persistence & Streaming Tier {
+  postgres: PostgreSQL 17 Database {
+    shape: cylinder
+    icon: "docs/assets/icons/postgresql.svg"
+    label: "PostgreSQL 17\n(Ledger, Transactions, Locks)"
+  }
+
+  redis: Redis 7 Cluster {
+    shape: cylinder
+    icon: "docs/assets/icons/redis.svg"
+    label: "Redis 7 (Redlock & Cache-Aside)"
+  }
+
+  kafka: Apache Kafka (KRaft) {
+    shape: queue
+    icon: "docs/assets/icons/kafka.svg"
+    label: "Apache Kafka Broker\n(topic: payflow.transfers)"
+  }
+
+  ai_engine: Ollama Gen-AI {
+    shape: rectangle
+    icon: "docs/assets/icons/ai.svg"
+    label: "Ollama Gen-AI (Spend Insights)"
+  }
+}
+
+monitoring: Metrics & Telemetry {
+  prometheus: Prometheus Server {
+    shape: rectangle
+    icon: "docs/assets/icons/prometheus.svg"
+  }
+  grafana: Grafana Dashboards {
+    shape: rectangle
+    icon: "docs/assets/icons/grafana.svg"
+  }
+  grafana -> prometheus: "PromQL Queries"
+}
+
+k8s.concurrency -> stores.postgres: "SELECT ... FOR UPDATE"
+k8s.concurrency -> stores.redis: "Redlock RLock (2s wait, 10s lease)"
+k8s.services -> stores.redis: "Cache-Aside (users, user_ledgers)"
+k8s.services -> stores.ai_engine: "Structured LLM Prompt"
+k8s.outbox -> stores.postgres: "Atomic Outbox Write"
+k8s.outbox -> stores.kafka: "spring-modulith-events-kafka"
+
+monitoring.prometheus -> k8s.controllers: "Scrape /actuator/prometheus"
 ```
+</details>
 
 ---
 
@@ -136,39 +210,50 @@ Optional<User> findByUpiIdWithLock(@Param("upiId") String upiId);
 ### B. Distributed Locking (Cross-Service & Multi-Instance Coordination)
 When payment requests enter a distributed, multi-pod Kubernetes cluster, duplicate submissions with identical `Idempotency-Key` headers can reach different application instances concurrently. To intercept race conditions at the API gateway layer before database connection pool allocation or transactional row locking, Payflow API implements a **Redis Distributed Lock (Redlock)** using **Redisson** (`RLock`):
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Client as API Client / Ingress
-    participant Pod1 as Pod 1 (IdempotencyFilter)
-    participant Pod2 as Pod 2 (IdempotencyFilter)
-    participant Redis as Redis Distributed Lock (Redisson)
-    participant DB as PostgreSQL Database
+![Redisson Distributed Locking Sequence](assets/diagrams/distributed-lock-sequence.svg)
 
-    Client->>Pod1: POST /api/v1/transactions (Key: tx-123)
-    Client->>Pod2: POST /api/v1/transactions (Key: tx-123 [Duplicate])
-    
-    par Pod 1 tries lock
-        Pod1->>Redis: tryLock("payflow:lock:idemp:tx-123", wait=2s, lease=10s)
-        Redis-->>Pod1: true (Lock Acquired)
-    and Pod 2 tries lock
-        Pod2->>Redis: tryLock("payflow:lock:idemp:tx-123", wait=2s, lease=10s)
-        Note over Pod2,Redis: Pod 2 blocks waiting (up to 2s)
-    end
+<details>
+<summary>📐 View Declarative D2 Diagram Source</summary>
 
-    Pod1->>DB: Check & record PROCESSING status
-    Pod1->>DB: Execute transaction & commit
-    Pod1->>DB: Record SUCCESS with response body
-    Pod1->>Redis: unlock("payflow:lock:idemp:tx-123")
-    Redis-->>Pod1: Lock Released
-    Pod1-->>Client: 201 Created (Transaction Response)
+```d2
+shape: sequence_diagram
 
-    Redis-->>Pod2: Lock Acquired (after Pod 1 release)
-    Pod2->>DB: Find existing idempotency record
-    Note over Pod2,DB: Status is SUCCESS
-    Pod2-->>Client: 201 Created (Replay Cached Response)
-    Pod2->>Redis: unlock("payflow:lock:idemp:tx-123")
+client: API Client / Ingress {
+  icon: "docs/assets/icons/client.svg"
+}
+pod1: Pod 1 (IdempotencyFilter) {
+  icon: "docs/assets/icons/server.svg"
+}
+pod2: Pod 2 (IdempotencyFilter) {
+  icon: "docs/assets/icons/server.svg"
+}
+redis: Redis Lock (Redisson) {
+  icon: "docs/assets/icons/redis.svg"
+}
+db: PostgreSQL Database {
+  icon: "docs/assets/icons/postgresql.svg"
+}
+
+client -> pod1: "1. POST /api/v1/transactions (Key: tx-123)"
+client -> pod2: "2. POST /api/v1/transactions (Key: tx-123 [Duplicate])"
+
+pod1 -> redis: "3. tryLock(\"payflow:lock:idemp:tx-123\", wait=2s, lease=10s)"
+redis -> pod1: "4. Lock Acquired (true)"
+pod2 -> redis: "5. tryLock(\"payflow:lock:idemp:tx-123\", wait=2s, lease=10s) [Blocks up to 2s]"
+
+pod1 -> db: "6. Check & record PROCESSING status"
+pod1 -> db: "7. Execute transaction & atomic commit"
+pod1 -> db: "8. Record SUCCESS with response body"
+pod1 -> redis: "9. unlock(\"payflow:lock:idemp:tx-123\")"
+redis -> pod1: "10. Lock Released"
+pod1 -> client: "11. 201 Created (Transaction Response)"
+
+redis -> pod2: "12. Lock Acquired (after Pod 1 release)"
+pod2 -> db: "13. SELECT idempotency record (Status: SUCCESS)"
+pod2 -> client: "14. 201 Created (Replay Cached Response)"
+pod2 -> redis: "15. unlock(\"payflow:lock:idemp:tx-123\")"
 ```
+</details>
 
 #### Key Design Characteristics:
 1. **Profile-Conditional Architecture**:
@@ -303,44 +388,46 @@ CREATE INDEX idx_idemp_created ON idempotency_registry(created_at);
 
 ### Idempotency Filter Lifecycle Flow
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Client as 📱 HTTP Client
-    participant Filter as 🛡️ IdempotencyFilter
-    participant DB as 🗄️ PostgreSQL (idempotency_registry)
-    participant Engine as 🔒 TransactionService
+![Idempotency Filter Lifecycle Flow](assets/diagrams/idempotency-lifecycle.svg)
 
-    Client->>Filter: POST /api/v1/transactions (Header: Idempotency-Key)
-    alt Missing Idempotency-Key
-        Filter-->>Client: 400 Bad Request (RFC 7807: Missing Required Header)
-    else Key Present
-        Filter->>Filter: Compute SHA-256(requestBody)
-        Filter->>DB: SELECT * FROM idempotency_registry WHERE idempotency_key = ?
-        alt Key Exists & Different Hash
-            Filter-->>Client: 400 Bad Request (RFC 7807: Key Reuse with Different Payload)
-        else Key Exists & Status is PROCESSING / INITIATED
-            alt Lease Expired (> 2 minutes)
-                Filter->>DB: UPDATE idempotency_registry SET updated_at = NOW()
-                Filter->>Engine: Allow Retry Execution -> sendMoney()
-            else Lease Active (<= 2 minutes)
-                Filter-->>Client: 409 Conflict (Request Currently In-Flight)
-            end
-        else Key Exists & Status is SUCCESS
-            Filter-->>Client: Replay Cached HTTP Response (Code & JSON Body)
-        else Key Not Found
-            alt Concurrent Insert Collision (DataIntegrityViolationException)
-                Filter-->>Client: 409 Conflict (Concurrent Request Being Processed)
-            else Successful Insert
-                Filter->>DB: INSERT INTO idempotency_registry (key, hash, status=PROCESSING)
-                Filter->>Engine: doFilterInternal() -> sendMoney()
-                Engine-->>Filter: HTTP 201 Created (TransactionResponse)
-                Filter->>DB: UPDATE idempotency_registry SET status=SUCCESS, response_code=201, response_body=...
-                Filter-->>Client: HTTP 201 Created (Original Response)
-            end
-        end
-    end
+<details>
+<summary>📐 View Declarative D2 Diagram Source</summary>
+
+```d2
+shape: sequence_diagram
+
+client: HTTP Client {
+  icon: "docs/assets/icons/client.svg"
+}
+filter: IdempotencyFilter {
+  icon: "docs/assets/icons/lock.svg"
+}
+db: PostgreSQL (idempotency_registry) {
+  icon: "docs/assets/icons/postgresql.svg"
+}
+service: TransactionService {
+  icon: "docs/assets/icons/spring.svg"
+}
+
+client -> filter: "1. POST /api/v1/transactions (Header: Idempotency-Key)"
+filter -> filter: "2. Validate key regex & compute SHA-256(body)"
+filter -> db: "3. SELECT * FROM idempotency_registry WHERE key = ?"
+
+filter -> db: "4. (Case: Key Not Found) INSERT key, hash, status=PROCESSING"
+filter -> service: "5. doFilterInternal() -> sendMoney(request)"
+service -> filter: "6. HTTP 201 Created (TransactionResponse)"
+filter -> db: "7. UPDATE status=SUCCESS, code=201, body=..."
+filter -> client: "8. HTTP 201 Created (Original Response)"
+
+client -> filter: "9. [Duplicate Request] Same Key & Body"
+filter -> db: "10. SELECT * FROM idempotency_registry WHERE key = ?"
+filter -> client: "11. Replay Cached HTTP 201 Response"
+
+client -> filter: "12. [Tampered Request] Same Key & Different Body"
+filter -> filter: "13. Compare SHA-256 checksums -> Mismatch detected"
+filter -> client: "14. 400 Bad Request (Key Reuse with Different Payload)"
 ```
+</details>
 
 ### In-Flight Lease Recovery & Distributed Race Handling
 - **Crashed Worker Node Recovery**: If an application node crashes mid-flight while a transaction is in status `PROCESSING`, the in-flight lease automatically expires after 2 minutes (`IN_FLIGHT_TIMEOUT`), allowing client retries to re-acquire the lock without waiting for the 24-hour TTL purge.
@@ -373,31 +460,49 @@ CREATE INDEX IF NOT EXISTS idx_event_pub_date ON event_publication(publication_d
 
 ### Transactional Outbox Flow
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Client as 📱 HTTP Client
-    participant Service as 🔒 TransactionService
-    participant Publisher as 📢 ApplicationEventPublisher
-    participant DB as 🗄️ PostgreSQL (users / transactions / event_publication)
-    participant Listener as ⚡ TransferEventListener (@ApplicationModuleListener)
+![Transactional Outbox Flow](assets/diagrams/transactional-outbox-flow.svg)
 
-    Client->>Service: sendMoney(TransferMoneyRequest)
-    Note over Service,DB: Transaction Boundary: @Transactional(READ_COMMITTED)
-    Service->>DB: UPDATE users SET balance = balance - amount WHERE ... (Sender)
-    Service->>DB: UPDATE users SET balance = balance + amount WHERE ... (Receiver)
-    Service->>DB: INSERT INTO transactions ...
-    Service->>DB: INSERT INTO balance_ledger (DEBIT & CREDIT entries) ...
-    Service->>Publisher: publishEvent(TransferCompletedEvent)
-    Publisher->>DB: INSERT INTO event_publication (id, listener_id, event_type, serialized_event, publication_date)
-    Service-->>Client: 201 Created (TransactionResponse)
-    Note over Service,DB: Transaction Commits Atomically in Single DB Unit of Work
+<details>
+<summary>📐 View Declarative D2 Diagram Source</summary>
 
-    Note over DB,Listener: Post-Commit Asynchronous Invocation (Spring Modulith)
-    Publisher->>Listener: onTransferCompleted(TransferCompletedEvent)
-    Listener->>Listener: Asynchronous audit / notification logging
-    Listener->>DB: UPDATE event_publication SET completion_date = NOW() WHERE id = ?
+```d2
+shape: sequence_diagram
+
+client: HTTP Client {
+  icon: "docs/assets/icons/client.svg"
+}
+service: TransactionService {
+  icon: "docs/assets/icons/java.svg"
+}
+publisher: ApplicationEventPublisher {
+  icon: "docs/assets/icons/spring.svg"
+}
+db: PostgreSQL (Atomicity Boundary) {
+  icon: "docs/assets/icons/postgresql.svg"
+}
+listener: TransferEventListener {
+  icon: "docs/assets/icons/queue.svg"
+}
+kafka: Apache Kafka (payflow.transfers) {
+  icon: "docs/assets/icons/kafka.svg"
+}
+
+client -> service: "1. sendMoney(TransferMoneyRequest)"
+service -> db: "2. [Single ACID TX] SELECT ... FOR UPDATE (Row Lock Sender & Receiver)"
+service -> db: "3. UPDATE users SET balance = balance - amount (Sender)"
+service -> db: "4. UPDATE users SET balance = balance + amount (Receiver)"
+service -> db: "5. INSERT INTO balance_ledger (DEBIT & CREDIT rows)"
+service -> db: "6. INSERT INTO transactions (status=COMPLETED)"
+service -> publisher: "7. publishEvent(TransferCompletedEvent)"
+publisher -> db: "8. INSERT INTO event_publication (id, listener_id, event_type, payload)"
+service -> client: "9. 201 Created (TransactionResponse) [TX Commits Atomically]"
+
+publisher -> listener: "10. [Post-Commit Async] onTransferCompleted(event)"
+listener -> kafka: "11. (prod profile) ProducerRecord(topic=payflow.transfers, key=senderUpi)"
+kafka -> listener: "12. acks=all RecordMetadata (offset, partition)"
+listener -> db: "13. UPDATE event_publication SET completion_date = NOW() WHERE id = ?"
 ```
+</details>
 
 ### Module Boundary Verification
 Spring Modulith continuously validates domain encapsulation and architectural coupling rules across packages via `ModulithStructureTest`:
@@ -443,34 +548,48 @@ Payflow secures all financial and private user endpoints using **Spring Security
 
 ### Security Filter Chain Sequence
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Client as 📱 HTTP Client
-    participant Filter as 🛡️ JwtAuthenticationFilter
-    participant Provider as 🔑 JwtTokenProvider
-    participant Context as 🧠 SecurityContextHolder
-    participant Controller as 🎯 Protected Controller
-    participant EntryPoint as 🚫 JwtAuthenticationEntryPoint
+![Security Filter Chain Sequence](assets/diagrams/security-filter-chain.svg)
 
-    Client->>Filter: Request with Authorization: Bearer <token>
-    alt Missing Authorization Header on Protected Route
-        Filter->>Controller: Chain continues without auth
-        Controller-->>EntryPoint: Access Denied / Unauthenticated
-        EntryPoint-->>Client: 401 Unauthorized (RFC 7807 ProblemDetail)
-    else Invalid or Expired Token
-        Filter->>Provider: validateToken(token) -> false
-        Filter->>Controller: Chain continues without auth
-        Controller-->>EntryPoint: Access Denied
-        EntryPoint-->>Client: 401 Unauthorized (RFC 7807 ProblemDetail)
-    else Valid JWT Bearer Token
-        Filter->>Provider: validateToken(token) -> true
-        Filter->>Provider: getUpiIdFromToken(token) -> upiId
-        Filter->>Context: setAuthentication(UsernamePasswordAuthenticationToken)
-        Filter->>Controller: FilterChain.doFilter(req, res)
-        Controller-->>Client: 200 / 201 Response Payload
-    end
+<details>
+<summary>📐 View Declarative D2 Diagram Source</summary>
+
+```d2
+shape: sequence_diagram
+
+client: HTTP Client {
+  icon: "docs/assets/icons/client.svg"
+}
+filter: JwtAuthenticationFilter {
+  icon: "docs/assets/icons/shield.svg"
+}
+provider: JwtTokenProvider {
+  icon: "docs/assets/icons/lock.svg"
+}
+context: SecurityContextHolder {
+  icon: "docs/assets/icons/spring.svg"
+}
+controller: Protected Controller {
+  icon: "docs/assets/icons/java.svg"
+}
+entrypoint: JwtAuthenticationEntryPoint {
+  icon: "docs/assets/icons/shield.svg"
+}
+
+client -> filter: "1. Request with Authorization: Bearer <token>"
+filter -> provider: "2. validateToken(token)"
+
+provider -> filter: "3a. (Case: Invalid / Expired Signature) false"
+filter -> entrypoint: "4a. commence() Exception translation"
+entrypoint -> client: "5a. 401 Unauthorized (RFC 7807 ProblemDetail)"
+
+provider -> filter: "3b. (Case: Valid Token) true"
+filter -> provider: "4b. getUpiIdFromToken(token)"
+provider -> filter: "5b. upiId & referenceId claims"
+filter -> context: "6b. setAuthentication(UsernamePasswordAuthenticationToken)"
+filter -> controller: "7b. FilterChain.doFilter(req, res)"
+controller -> client: "8b. 200 OK / 201 Created Response"
 ```
+</details>
 
 ### Principal-Bound Resource Authorization & Sender Verification (Phase 7B)
 
@@ -507,50 +626,54 @@ During user onboarding (`POST /api/v1/users`), Payflow integrates with upstream 
    - If the external gateway is persistently unreachable or times out, the `@Recover` handler (`UpiValidationService.recoverFromValidationFailure`) logs a warning and proceeds with registration. External third-party outages never compromise user registration availability.
    - If the external gateway explicitly reports `valid = false`, registration is blocked with `InvalidUpiException` (`422 Unprocessable Entity`).
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Client as 📱 Mobile Client
-    participant Controller as 🎯 UserController
-    participant Service as 💼 UserService
-    participant Validator as 🛡️ UpiValidationService
-    participant HTTPClient as 🌐 UpiValidationClient (RestClient)
-    participant Gateway as 🏦 Upstream Banking Gateway
+![UPI Validation & Fallback Flow](assets/diagrams/upi-validation-fallback.svg)
 
-    Client->>Controller: POST /api/v1/users { upiId: "alice@payflow", ... }
-    Controller->>Service: registerUser(request)
-    Service->>Validator: validateUpi("alice@payflow")
-    
-    alt Validation Disabled (Feature Flag)
-        Validator-->>Service: Skip check (Instant OK)
-    else Validation Enabled
-        Validator->>HTTPClient: verify("alice@payflow")
-        HTTPClient->>Gateway: GET /api/v1/upi/verify/alice%40payflow
-        
-        alt Success (valid: true)
-            Gateway-->>HTTPClient: 200 OK { "valid": true, "bankName": "HDFC" }
-            HTTPClient-->>Validator: UpiVerificationResponse(valid=true)
-            Validator-->>Service: Proceed with Registration
-        else Explicit Rejection (valid: false)
-            Gateway-->>HTTPClient: 200 OK { "valid": false }
-            HTTPClient-->>Validator: UpiVerificationResponse(valid=false)
-            Validator-->>Controller: throw InvalidUpiException (422 Unprocessable Entity)
-            Controller-->>Client: 422 ProblemDetail (invalid-upi-id)
-        else Gateway Down / Timeout (Network Failure)
-            Gateway--xHTTPClient: 503 / Timeout (Attempt 1)
-            Note over Validator: Retry 1: Backoff 500ms + Jitter
-            Gateway--xHTTPClient: 503 / Timeout (Attempt 2)
-            Note over Validator: Retry 2: Backoff 1000ms + Jitter
-            Gateway--xHTTPClient: 503 / Timeout (Attempt 3)
-            Validator->>Validator: @Recover handler fallback (Proceed with warning)
-            Validator-->>Service: Fallback OK (Non-blocking onboarding)
-        end
-    end
-    
-    Service->>Service: Persist User Entity to DB
-    Service-->>Controller: User Entity
-    Controller-->>Client: 201 Created (UserResponse)
+<details>
+<summary>📐 View Declarative D2 Diagram Source</summary>
+
+```d2
+shape: sequence_diagram
+
+client: Mobile Client {
+  icon: "docs/assets/icons/client.svg"
+}
+controller: UserController {
+  icon: "docs/assets/icons/spring.svg"
+}
+service: UserService {
+  icon: "docs/assets/icons/java.svg"
+}
+validator: UpiValidationService {
+  icon: "docs/assets/icons/shield.svg"
+}
+http_client: UpiValidationClient {
+  icon: "docs/assets/icons/gateway.svg"
+}
+gateway: Banking Network Gateway {
+  icon: "docs/assets/icons/server.svg"
+}
+
+client -> controller: "1. POST /api/v1/users (CreateUserRequest)"
+controller -> service: "2. registerUser(request)"
+service -> validator: "3. validateUpi(upiId)"
+
+validator -> http_client: "4. verify(upiId)"
+http_client -> gateway: "5. GET /api/v1/upi/verify/{upiId}"
+
+gateway -> http_client: "6a. (Case: Valid UPI) 200 OK { valid: true }"
+http_client -> validator: "7a. UpiVerificationResponse(valid=true)"
+validator -> service: "8a. Validation Passed"
+service -> controller: "9a. Persist User Entity to DB"
+controller -> client: "10a. 201 Created (UserResponse)"
+
+gateway -> http_client: "6b. (Case: Downstream 503 / Timeout)"
+http_client -> validator: "7b. Retries with backoff (500ms, 1000ms)"
+validator -> validator: "8b. @Recover fallback triggered"
+validator -> service: "9b. Proceed with Registration (Warning Logged)"
+service -> controller: "10b. Persist User Entity (Zero Onboarding Outage)"
+controller -> client: "11b. 201 Created (Non-blocking Fallback)"
 ```
+</details>
 
 ---
 
@@ -598,46 +721,106 @@ Payflow API adopts an immutable, production-hardened cloud-native deployment mod
 
 ### B. Kubernetes Deployment Topology & Elasticity (Phase 11B)
 
-```mermaid
-graph TD
-    subgraph K8sCluster["☸️ Kubernetes Production Cluster (Namespace: default)"]
-        Ingress["Ingress Controller / API Gateway"] -->|"Round Robin / HTTP"| Service["payflow-service (ClusterIP:8080)"]
+![Kubernetes Deployment Topology & Elasticity](assets/diagrams/kubernetes-deployment-topology.svg)
 
-        subgraph WorkloadTopology["Pod Replica Set (Managed by HPA: 2 to 10 Pods)"]
-            Pod1["Pod: payflow-api-1 (UID: 10001)"]
-            Pod2["Pod: payflow-api-2 (UID: 10001)"]
-            PodN["Pod: payflow-api-N (Auto-Scaled)"]
-        end
+<details>
+<summary>📐 View Declarative D2 Diagram Source</summary>
 
-        Service --> Pod1
-        Service --> Pod2
-        Service -.-> PodN
+```d2
+direction: down
 
-        ConfigMap["ConfigMap: payflow-config"] -.->|"envFrom"| WorkloadTopology
-        Secret["Secret: payflow-secrets"] -.->|"envFrom"| WorkloadTopology
-        HPA["HorizontalPodAutoscaler (HPA)<br/>Target: CPU 75%, Mem 80%"] -->|"Scale Replicas"| WorkloadTopology
-        PDB["PodDisruptionBudget (PDB)<br/>minAvailable: 1"] -->|"Quorum Protection"| WorkloadTopology
-    end
+ingress: Ingress Controller / API Gateway {
+  shape: rectangle
+  icon: "docs/assets/icons/gateway.svg"
+}
 
-    subgraph BackingServices["🗄️ Managed External Banking Backing Services"]
-        Pod1 --> DB[("PostgreSQL 17 Database")]
-        Pod1 --> RedisCache[("Redis 7 Cluster")]
-        Pod1 --> KafkaCluster[("Apache Kafka KRaft Broker")]
-        Pod2 --> DB
-        Pod2 --> RedisCache
-        Pod2 --> KafkaCluster
-    end
+cluster: Kubernetes Production Cluster (Namespace: default) {
+  service: payflow-service {
+    shape: rectangle
+    icon: "docs/assets/icons/kubernetes.svg"
+    label: "payflow-service (ClusterIP:8080)"
+  }
 
-    classDef k8sStyle fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
-    classDef podStyle fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#f8fafc;
-    classDef dbStyle fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc;
-    classDef controlStyle fill:#451a03,stroke:#f59e0b,stroke-width:2px,color:#f8fafc;
+  workloads: Pod Replica Set (HPA 2 to 10 Pods) {
+    pod1: Pod payflow-api-1 {
+      shape: rectangle
+      icon: "docs/assets/icons/docker.svg"
+      label: "Pod 1 (payflow:10001)\nVirtual Threads Enabled"
+    }
 
-    class K8sCluster k8sStyle;
-    class Pod1,Pod2,PodN podStyle;
-    class DB,RedisCache,KafkaCluster dbStyle;
-    class HPA,PDB,ConfigMap,Secret controlStyle;
+    pod2: Pod payflow-api-2 {
+      shape: rectangle
+      icon: "docs/assets/icons/docker.svg"
+      label: "Pod 2 (payflow:10001)\nVirtual Threads Enabled"
+    }
+
+    podN: Pod payflow-api-N {
+      shape: rectangle
+      icon: "docs/assets/icons/docker.svg"
+      label: "Pod N (Auto-Scaled)"
+    }
+  }
+
+  controls: Cluster Governance & Scaling {
+    hpa: HorizontalPodAutoscaler {
+      shape: rectangle
+      icon: "docs/assets/icons/kubernetes.svg"
+      label: "HPA (Min: 2, Max: 10)\nTarget: CPU 75%, Mem 80%"
+    }
+
+    pdb: PodDisruptionBudget {
+      shape: rectangle
+      icon: "docs/assets/icons/shield.svg"
+      label: "PDB (minAvailable: 1)"
+    }
+
+    config: ConfigMap & Secrets {
+      shape: rectangle
+      icon: "docs/assets/icons/lock.svg"
+      label: "payflow-config & payflow-secrets"
+    }
+  }
+
+  service -> workloads.pod1: "Round Robin"
+  service -> workloads.pod2: "Round Robin"
+  service -> workloads.podN: "Round Robin"
+
+  controls.hpa -> workloads: "Scale Replicas"
+  controls.pdb -> workloads: "Quorum Protection"
+  controls.config -> workloads: "envFrom Injection"
+}
+
+ingress -> cluster.service: "TLS 1.3 / HTTP"
+
+backing: Managed External Backing Services {
+  postgres: PostgreSQL 17 {
+    shape: cylinder
+    icon: "docs/assets/icons/postgresql.svg"
+    label: "PostgreSQL 17 Database"
+  }
+
+  redis: Redis 7 Cluster {
+    shape: cylinder
+    icon: "docs/assets/icons/redis.svg"
+    label: "Redis 7 Cluster (Redlock & Cache)"
+  }
+
+  kafka: Apache Kafka (KRaft) {
+    shape: queue
+    icon: "docs/assets/icons/kafka.svg"
+    label: "Apache Kafka Broker (KRaft Mode)"
+  }
+}
+
+cluster.workloads.pod1 -> backing.postgres: "HikariCP (Max 20 Pool)"
+cluster.workloads.pod1 -> backing.redis: "Lettuce & Redisson"
+cluster.workloads.pod1 -> backing.kafka: "payflow.transfers"
+
+cluster.workloads.pod2 -> backing.postgres
+cluster.workloads.pod2 -> backing.redis
+cluster.workloads.pod2 -> backing.kafka
 ```
+</details>
 
 - **Manifest Suite (`k8s/`)**:
   - `deployment.yaml`: Configured with zero-downtime rolling updates (`maxSurge: 1`, `maxUnavailable: 0`), non-root security context (`runAsNonRoot: true`, `runAsUser: 10001`), resource requests (`250m` CPU, `512Mi` RAM) and limits (`1000m` CPU, `1024Mi` RAM).
@@ -660,7 +843,7 @@ In distributed Kubernetes environments, terminating pods requires coordinated dr
   - **Line Coverage**: Minimum 80% (Achieved: **90%** across 191 tests).
   - **Branch Coverage**: Minimum 70% (Achieved: **73%** across 191 tests).
   - Pure DTOs, configuration classes, entities, and generated MapStruct classes are excluded from coverage calculations.
-- **GitHub Actions Workflow Hardening**: `.github/workflows/ci.yml` executes `mvn clean verify -B`, failing fast on formatting, checkstyle, test failures, SpotBugs warnings, or coverage violations, while uploading JaCoCo and SpotBugs report artifacts for 14-day retention and deploying the Docsify documentation portal (`https://shashankch.github.io/payflow-api/`) with live interactive JaCoCo coverage reports (`https://shashankch.github.io/payflow-api/coverage/`) to GitHub Pages.
+- **GitHub Actions Workflow Hardening**: `.github/workflows/ci.yml` executes `mvn clean verify -B`, failing fast on formatting, checkstyle, test failures, SpotBugs warnings, or coverage violations, while uploading JaCoCo and SpotBugs report artifacts for 14-day retention and deploying the Material for MkDocs documentation portal (`https://shashankch.github.io/payflow-api/`) with D2 diagrams, coverage quality gates (`https://shashankch.github.io/payflow-api/coverage/`), and live interactive JaCoCo coverage reports (`https://shashankch.github.io/payflow-api/coverage-report/`) to GitHub Pages.
 
 ---
 
@@ -711,28 +894,45 @@ Payflow API incorporates **Resilience4j** to safeguard system stability under pe
 ### B. Dynamic Per-User Rate Limiting Pattern
 Unlike traditional global rate limiting, which allows a single abusive script to exhaust server throughput for all customers, Payflow enforces **per-authenticated-user partition isolation**:
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Client as Client / User A
-    participant Filter as JwtAuthenticationFilter
-    participant Resolver as SecurityContextRateLimiterKeyResolver
-    participant Service as UserRateLimiterService
-    participant Reg as RateLimiterRegistry
-    participant Core as TransactionService
+![Dynamic Per-User Rate Limiting Flow](assets/diagrams/user-rate-limiting.svg)
 
-    Client->>Filter: POST /api/v1/transactions (Bearer JWT)
-    Filter->>Resolver: Resolve User Principal (alice@payflow)
-    Resolver->>Service: Key = "transferLimiter:alice@payflow"
-    Service->>Reg: rateLimiter("transferLimiter:alice@payflow", "transferLimiter")
-    Note over Service,Reg: Inherits base 10 req/s template & tracks access timestamp
-    alt Permitted (<= 10 req/s)
-        Service->>Core: Proceed with transfer
-        Core-->>Client: 201 Created (TransactionResponse)
-    else Exceeded (> 10 req/s)
-        Service-->>Client: 429 Too Many Requests (Retry-After: 1)
-    end
+<details>
+<summary>📐 View Declarative D2 Diagram Source</summary>
+
+```d2
+shape: sequence_diagram
+
+client: Client / User A {
+  icon: "docs/assets/icons/client.svg"
+}
+filter: JwtAuthenticationFilter {
+  icon: "docs/assets/icons/shield.svg"
+}
+resolver: SecurityContextRateLimiterKeyResolver {
+  icon: "docs/assets/icons/shield.svg"
+}
+service: UserRateLimiterService {
+  icon: "docs/assets/icons/spring.svg"
+}
+reg: RateLimiterRegistry {
+  icon: "docs/assets/icons/lock.svg"
+}
+core: TransactionService {
+  icon: "docs/assets/icons/java.svg"
+}
+
+client -> filter: "POST /api/v1/transactions (Bearer JWT)"
+filter -> resolver: "Resolve Principal (alice@payflow)"
+resolver -> service: "Key = \"transferLimiter:alice@payflow\""
+service -> reg: "rateLimiter(key, \"transferLimiter\")"
+service -> reg: "Inherits base 10 req/s template & tracks access timestamp" {
+  style.stroke-dash: 3
+}
+service -> core: "[Permitted <= 10 req/s] Proceed with transfer"
+core -> client: "201 Created (TransactionResponse)"
+service -> client: "[Exceeded > 10 req/s] 429 Too Many Requests (Retry-After: 1)"
 ```
+</details>
 
 - **Memory Eviction Safeguard**: Dynamically generated rate limiter instances are tracked by access timestamp. `UserRateLimiterService.evictInactiveLimiters()` executes periodically, purging partitions inactive for >15 minutes from the registry to prevent unbounded memory growth.
 
@@ -759,35 +959,46 @@ To achieve sub-10ms response latencies on repetitive user profile lookups and ba
 ### A. Cache-Aside Workflow & Sequence Diagram
 In the Cache-Aside pattern, the application service inspects the cache before accessing the underlying database. On write operations, the cache entries are evicted rather than updated inline, eliminating race conditions between concurrent database writes and cache updates.
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Client as API Client / Controller
-    participant Service as UserService / TxService
-    participant Cache as CacheManager (Redis / Caffeine)
-    participant DB as PostgreSQL Database
+![Cache-Aside Workflow & Sequence Diagram](assets/diagrams/cache-aside-workflow.svg)
 
-    alt Read Query (e.g. getUserByReferenceId)
-        Client->>Service: Read User Profile / Ledger
-        Service->>Cache: GET key (e.g. "users::refId")
-        alt Cache Hit
-            Cache-->>Service: Return cached JSON / entity
-            Service-->>Client: Return UserResponse / LedgerResponse
-        else Cache Miss
-            Cache-->>Service: null
-            Service->>DB: SELECT query
-            DB-->>Service: Entity record
-            Service->>Cache: PUT key with configured TTL
-            Service-->>Client: Return UserResponse / LedgerResponse
-        end
-    else Write Mutation (e.g. sendMoney or registerUser)
-        Client->>Service: Transfer Funds / Register User
-        Service->>DB: Execute ACID transaction & commit
-        DB-->>Service: Transaction committed
-        Service->>Cache: EVICT affected caches (users, user_ledgers)
-        Service-->>Client: Return Success Response
-    end
+<details>
+<summary>📐 View Declarative D2 Diagram Source</summary>
+
+```d2
+shape: sequence_diagram
+
+client: API Client / Controller {
+  icon: "docs/assets/icons/client.svg"
+}
+service: UserService / TxService {
+  icon: "docs/assets/icons/spring.svg"
+}
+cache: CacheManager (Redis / Caffeine) {
+  icon: "docs/assets/icons/redis.svg"
+}
+db: PostgreSQL Database {
+  icon: "docs/assets/icons/postgresql.svg"
+}
+
+client -> service: "Read User Profile / Ledger"
+service -> cache: "GET key (e.g. users::refId)"
+
+cache -> service: "[Cache Hit] Return cached JSON"
+service -> client: "Return UserResponse / LedgerResponse"
+
+cache -> service: "[Cache Miss] Return null"
+service -> db: "SELECT query"
+db -> service: "Entity record"
+service -> cache: "PUT key with configured TTL"
+service -> client: "Return UserResponse / LedgerResponse"
+
+client -> service: "Transfer Funds / Register User"
+service -> db: "Execute ACID transaction & commit"
+db -> service: "Transaction committed"
+service -> cache: "EVICT affected caches (users, user_ledgers)"
+service -> client: "Return Success Response"
 ```
+</details>
 
 ### B. Profile-Conditional Cache Strategy
 The cache infrastructure adapts transparently across environments via `CacheConfig.java`:
@@ -933,29 +1144,88 @@ Payflow API is engineered from the ground up with a **Zero-Trust** and **Defense
 
 ### A. Zero-Trust Request Lifecycle & Filter Chain
 
-```mermaid
-graph TD
-    Client["Client / API Consumer"] -->|HTTPS / TLS 1.3| WAF["API Gateway / WAF"]
-    WAF -->|X-Request-Id & Bearer JWT| FilterChain["Spring Security Filter Chain"]
-    
-    subgraph Security_Filters["Security Filter Tier"]
-        FilterChain --> RLFilter["RequestLoggingFilter (MDC & Audit)"]
-        RLFilter --> IdFilter["RequestIdFilter (Correlation)"]
-        IdFilter --> JwtFilter["JwtAuthenticationFilter (HMAC-SHA256)"]
-        JwtFilter --> IdempFilter["IdempotencyFilter (SHA-256 Hashing)"]
-    end
-    
-    subgraph Domain_Tier["Domain & Authorization Tier"]
-        IdempFilter --> DomainAuth["Principal-Bound Verification (SecurityUtils)"]
-        DomainAuth --> TxService["TransactionService (ACID Invariants)"]
-    end
-    
-    subgraph Concurrency_Tier["Concurrency & Data Tier"]
-        TxService --> LockOrder["Deterministic Alphabetical Row Lock"]
-        LockOrder --> PessimisticLock["SELECT ... FOR UPDATE (PostgreSQL)"]
-        PessimisticLock --> DoubleEntry["Immutable Balance Ledger"]
-    end
+![Zero-Trust Request Lifecycle & Filter Chain](assets/diagrams/zero-trust-lifecycle.svg)
+
+<details>
+<summary>📐 View Declarative D2 Diagram Source</summary>
+
+```d2
+direction: down
+
+ingress: Ingress & Perimeter Gateway {
+  grid-columns: 2
+
+  client: Client / API Consumer {
+    shape: rectangle
+    icon: "docs/assets/icons/client.svg"
+  }
+  waf: API Gateway / WAF {
+    shape: rectangle
+    icon: "docs/assets/icons/gateway.svg"
+  }
+  client -> waf: "HTTPS / TLS 1.3"
+}
+
+filters: Security Filter Tier {
+  grid-columns: 4
+  
+  req_id: RequestIdFilter (MDC Correlation) {
+    shape: rectangle
+    icon: "docs/assets/icons/shield.svg"
+  }
+  rl: RequestLoggingFilter (Audit & Timing) {
+    shape: rectangle
+    icon: "docs/assets/icons/shield.svg"
+  }
+  jwt: JwtAuthenticationFilter (HMAC-SHA256) {
+    shape: rectangle
+    icon: "docs/assets/icons/lock.svg"
+  }
+  idemp: IdempotencyFilter (SHA-256 Hashing) {
+    shape: rectangle
+    icon: "docs/assets/icons/lock.svg"
+  }
+
+  req_id -> rl -> jwt -> idemp
+}
+
+app_persistence: Application & Persistence Layer {
+  grid-columns: 2
+
+  domain: Domain & Invariants {
+    auth: Principal Verification (SecurityUtils) {
+      shape: rectangle
+      icon: "docs/assets/icons/shield.svg"
+    }
+    tx: TransactionService (ACID Invariants) {
+      shape: rectangle
+      icon: "docs/assets/icons/spring.svg"
+    }
+    auth -> tx
+  }
+
+  data: Concurrency & Ledger Tier {
+    ordering: Deterministic Alphabetical Lock Ordering {
+      shape: rectangle
+    }
+    pessimistic: SELECT ... FOR UPDATE (PostgreSQL) {
+      shape: cylinder
+      icon: "docs/assets/icons/postgresql.svg"
+    }
+    ledger: Immutable Double-Entry Ledger {
+      shape: cylinder
+      icon: "docs/assets/icons/postgresql.svg"
+    }
+    ordering -> pessimistic -> ledger
+  }
+
+  domain.tx -> data.ordering
+}
+
+ingress -> filters: "TLS 1.3 & Bearer JWT"
+filters -> app_persistence: "MDC Correlated & Idempotency Key Checked"
 ```
+</details>
 
 ### B. Threat Model (STRIDE Analysis)
 
@@ -1016,22 +1286,37 @@ When two users concurrently transfer funds to each other (e.g. Aarav sends to Pr
 - Payflow resolves this by sorting both UPI IDs lexicographically (`upiA.compareTo(upiB)`) before issuing `SELECT ... FOR UPDATE` queries.
 - Both transactions request locks in the exact same sequence (`aarav@payflow` first, then `priya@payflow`), converting cyclical deadlocks into sequential lock queues.
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Tx1 as Transaction 1 (Aarav -> Priya)
-    participant DB as PostgreSQL Engine
-    participant Tx2 as Transaction 2 (Priya -> Aarav)
+![Deterministic Alphabetical Row Locking Deadlock Elimination](assets/diagrams/deadlock-elimination.svg)
 
-    Note over Tx1,Tx2: Deterministic Ordering: 'aarav@payflow' < 'priya@payflow'
-    Tx1->>DB: Lock 'aarav@payflow' (ACQUIRED)
-    Tx2->>DB: Lock 'aarav@payflow' (BLOCKED / WAITING)
-    Tx1->>DB: Lock 'priya@payflow' (ACQUIRED)
-    Tx1->>DB: Debit Aarav, Credit Priya, Commit & Release Locks
-    DB-->>Tx2: Lock 'aarav@payflow' (GRANTED)
-    Tx2->>DB: Lock 'priya@payflow' (ACQUIRED)
-    Tx2->>DB: Debit Priya, Credit Aarav, Commit & Release Locks
+<details>
+<summary>📐 View Declarative D2 Diagram Source</summary>
+
+```d2
+shape: sequence_diagram
+
+tx1: "Transaction 1 (Aarav -> Priya)" {
+  icon: "docs/assets/icons/java.svg"
+}
+db: "PostgreSQL Engine" {
+  icon: "docs/assets/icons/postgresql.svg"
+}
+tx2: "Transaction 2 (Priya -> Aarav)" {
+  icon: "docs/assets/icons/java.svg"
+}
+
+tx1 -> db: "Deterministic Ordering: 'aarav@payflow' < 'priya@payflow'" {
+  style.stroke-dash: 3
+}
+
+tx1 -> db: "Lock 'aarav@payflow' (ACQUIRED)"
+tx2 -> db: "Lock 'aarav@payflow' (BLOCKED / WAITING)"
+tx1 -> db: "Lock 'priya@payflow' (ACQUIRED)"
+tx1 -> db: "Debit Aarav, Credit Priya, Commit & Release"
+db -> tx2: "Lock 'aarav@payflow' (GRANTED)"
+tx2 -> db: "Lock 'priya@payflow' (ACQUIRED)"
+tx2 -> db: "Debit Priya, Credit Aarav, Commit & Release"
 ```
+</details>
 
 #### 3. Financial Base-10 Arithmetic Precision
 - All monetary columns (`balance`, `amount`, `balance_before`, `balance_after`) strictly use Java `BigDecimal` denominated in Indian Rupees (INR, ₹) mapped to database column `@Column(precision = 19, scale = 4, nullable = false)`.

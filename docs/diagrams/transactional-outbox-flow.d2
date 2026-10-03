@@ -1,0 +1,35 @@
+shape: sequence_diagram
+
+client: HTTP Client {
+  icon: "../assets/icons/client.svg"
+}
+service: TransactionService {
+  icon: "../assets/icons/java.svg"
+}
+publisher: ApplicationEventPublisher {
+  icon: "../assets/icons/spring.svg"
+}
+db: PostgreSQL (Atomicity Boundary) {
+  icon: "../assets/icons/postgresql.svg"
+}
+listener: TransferEventListener {
+  icon: "../assets/icons/queue.svg"
+}
+kafka: Apache Kafka (payflow.transfers) {
+  icon: "../assets/icons/kafka.svg"
+}
+
+client -> service: "1. sendMoney(TransferMoneyRequest)"
+service -> db: "2. [Single ACID TX] SELECT ... FOR UPDATE (Row Lock Sender & Receiver)"
+service -> db: "3. UPDATE users SET balance = balance - amount (Sender)"
+service -> db: "4. UPDATE users SET balance = balance + amount (Receiver)"
+service -> db: "5. INSERT INTO balance_ledger (DEBIT & CREDIT rows)"
+service -> db: "6. INSERT INTO transactions (status=COMPLETED)"
+service -> publisher: "7. publishEvent(TransferCompletedEvent)"
+publisher -> db: "8. INSERT INTO event_publication (id, listener_id, event_type, payload)"
+service -> client: "9. 201 Created (TransactionResponse) [TX Commits Atomically]"
+
+publisher -> listener: "10. [Post-Commit Async] onTransferCompleted(event)"
+listener -> kafka: "11. (prod profile) ProducerRecord(topic=payflow.transfers, key=senderUpi)"
+kafka -> listener: "12. acks=all RecordMetadata (offset, partition)"
+listener -> db: "13. UPDATE event_publication SET completion_date = NOW() WHERE id = ?"

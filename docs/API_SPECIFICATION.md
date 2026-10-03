@@ -64,23 +64,36 @@ Authenticates a registered user by UPI ID and issues a cryptographically signed 
 - **Request Body DTO (`LoginRequest`)**:
   - `upiId`: String, required (`@NotBlank`), valid UPI format (`@Pattern`).
 
-#### Request Example
-```json
-{
-  "upiId": "alice@payflow"
-}
-```
+=== "cURL Example"
+    ```bash
+    curl -X POST https://api.payflow.com/api/v1/auth/login \
+      -H "Content-Type: application/json" \
+      -d '{
+        "upiId": "alice@payflow"
+      }'
+    ```
 
-#### Response Example (`200 OK`)
-```json
-{
-  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "tokenType": "Bearer",
-  "expiresIn": 3600,
-  "upiId": "alice@payflow",
-  "referenceId": "550e8400-e29b-41d4-a716-446655440000"
-}
-```
+=== "Request Payload"
+    ```json
+    {
+      "upiId": "alice@payflow"
+    }
+    ```
+
+=== "Response (200 OK)"
+    ```json
+    {
+      "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+      "tokenType": "Bearer",
+      "expiresIn": 3600,
+      "upiId": "alice@payflow",
+      "referenceId": "550e8400-e29b-41d4-a716-446655440000"
+    }
+    ```
+
+=== "Error Responses"
+    - `401 Unauthorized`: Invalid UPI ID or user account does not exist.
+    - `422 Unprocessable Entity`: UPI ID format validation failure.
 
 ---
 
@@ -96,33 +109,45 @@ Registers a new client profile with an initial balance.
   - `phoneNumber`: String, required (`@NotBlank`), exactly 10 digits (`@Pattern(regexp = "^\\d{10}$")`).
   - `balance`: BigDecimal, required (`@NotNull`), non-negative (`@DecimalMin("0.0")`), denominated in Indian Rupees (INR, ₹).
 
-#### Request Example
-```json
-{
-  "name": "Aarav Sharma",
-  "upiId": "aarav@upi",
-  "phoneNumber": "9876543210",
-  "balance": 1000.00
-}
-```
+=== "cURL Example"
+    ```bash
+    curl -X POST https://api.payflow.com/api/v1/users \
+      -H "Content-Type: application/json" \
+      -d '{
+        "name": "Aarav Sharma",
+        "upiId": "aarav@upi",
+        "phoneNumber": "9876543210",
+        "balance": 1000.00
+      }'
+    ```
 
-#### Response Example (`201 Created`)
-Headers: `Location: /api/v1/users/a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d`
-```json
-{
-  "referenceId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
-  "name": "Aarav Sharma",
-  "upiId": "aarav@upi",
-  "phoneNumber": "9876543210",
-  "balance": 1000.0000,
-  "createdAt": "2026-08-01T16:00:00Z",
-  "updatedAt": "2026-08-01T16:00:00Z"
-}
-```
+=== "Request Payload"
+    ```json
+    {
+      "name": "Aarav Sharma",
+      "upiId": "aarav@upi",
+      "phoneNumber": "9876543210",
+      "balance": 1000.00
+    }
+    ```
 
-#### Error Responses
-- `409 Conflict`: User with the requested UPI ID already exists (`DuplicateUpiIdException`).
-- `422 Unprocessable Entity`: Input validation failure, or external UPI verification rejected the UPI ID (`InvalidUpiException`, type: `https://api.payflow.com/errors/invalid-upi-id`).
+=== "Response (201 Created)"
+    *Headers: `Location: /api/v1/users/a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d`*
+    ```json
+    {
+      "referenceId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+      "name": "Aarav Sharma",
+      "upiId": "aarav@upi",
+      "phoneNumber": "9876543210",
+      "balance": 1000.0000,
+      "createdAt": "2026-08-01T16:00:00Z",
+      "updatedAt": "2026-08-01T16:00:00Z"
+    }
+    ```
+
+=== "Error Responses"
+    - `409 Conflict`: User with the requested UPI ID already exists (`DuplicateUpiIdException`).
+    - `422 Unprocessable Entity`: Input validation failure, or external UPI verification rejected the UPI ID (`InvalidUpiException`, type: `https://api.payflow.com/errors/invalid-upi-id`).
 
 ---
 
@@ -137,33 +162,39 @@ Retrieves a paginated list of registered users. Requires administrative privileg
   - `size`: Integer, optional. Page size (`@Min(1) @Max(100)`). Default: `10`.
   - `sortBy`: String, optional. Column name to sort. Default: `userId`.
 
-#### Response Example (`200 OK`)
-```json
-{
-  "content": [
-    {
-      "referenceId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
-      "name": "Aarav Sharma",
-      "upiId": "aarav@upi",
-      "phoneNumber": "9876543210",
-      "balance": 1000.0000,
-      "createdAt": "2026-08-01T16:00:00Z",
-      "updatedAt": "2026-08-01T16:00:00Z"
-    }
-  ],
-  "page": 0,
-  "size": 10,
-  "totalElements": 1,
-  "totalPages": 1,
-  "first": true,
-  "last": true
-}
-```
+=== "cURL Example"
+    ```bash
+    curl -X GET "https://api.payflow.com/api/v1/users?page=0&size=10&sortBy=userId" \
+      -H "Authorization: Bearer <admin-token>"
+    ```
 
-#### Error Responses
-- `401 Unauthorized`: Missing, expired, or invalid JWT token.
-- `403 Forbidden`: Caller lacks administrative role privileges (`ForbiddenOperationException`, type: `https://api.payflow.com/errors/forbidden-operation`).
-- `422 Unprocessable Entity`: Query parameter validation failure (e.g. `size < 1` or `size > 100`).
+=== "Response (200 OK)"
+    ```json
+    {
+      "content": [
+        {
+          "referenceId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+          "name": "Aarav Sharma",
+          "upiId": "aarav@upi",
+          "phoneNumber": "9876543210",
+          "balance": 1000.0000,
+          "createdAt": "2026-08-01T16:00:00Z",
+          "updatedAt": "2026-08-01T16:00:00Z"
+        }
+      ],
+      "page": 0,
+      "size": 10,
+      "totalElements": 1,
+      "totalPages": 1,
+      "first": true,
+      "last": true
+    }
+    ```
+
+=== "Error Responses"
+    - `401 Unauthorized`: Missing, expired, or invalid JWT token.
+    - `403 Forbidden`: Caller lacks administrative role privileges (`ForbiddenOperationException`, type: `https://api.payflow.com/errors/forbidden-operation`).
+    - `422 Unprocessable Entity`: Query parameter validation failure (e.g. `size < 1` or `size > 100`).
 
 ---
 
@@ -174,19 +205,29 @@ Fetches a single user record by their unique UUID reference ID.
 - **Path**: `/api/v1/users/{id}`
 - **Authentication**: `Authorization: Bearer <token>` (User can only inspect their own profile)
 
-#### Response Example (`200 OK`)
-```json
-{
-  "referenceId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
-  "name": "Aarav Sharma",
-  "upiId": "aarav@upi",
-  "phoneNumber": "9876543210",
-  "balance": 1000.0000,
-  "createdAt": "2026-08-01T16:00:00Z",
-  "updatedAt": "2026-08-01T16:00:00Z"
-}
-```
-*If not found, returns `404 Not Found`.*
+=== "cURL Example"
+    ```bash
+    curl -X GET https://api.payflow.com/api/v1/users/a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d \
+      -H "Authorization: Bearer <token>"
+    ```
+
+=== "Response (200 OK)"
+    ```json
+    {
+      "referenceId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+      "name": "Aarav Sharma",
+      "upiId": "aarav@upi",
+      "phoneNumber": "9876543210",
+      "balance": 1000.0000,
+      "createdAt": "2026-08-01T16:00:00Z",
+      "updatedAt": "2026-08-01T16:00:00Z"
+    }
+    ```
+
+=== "Error Responses"
+    - `401 Unauthorized`: Missing or invalid JWT bearer token.
+    - `403 Forbidden`: Authenticated user cannot view another user's profile.
+    - `404 Not Found`: User reference ID not found.
 
 ---
 
@@ -197,20 +238,29 @@ Fetches a single user record by their unique UPI ID.
 - **Path**: `/api/v1/users/upi/{upiId}`
 - **Authentication**: `Authorization: Bearer <token>` (User can only inspect their own profile)
 
-#### Response Example (`200 OK`)
-```json
-{
-  "userId": 2,
-  "name": "Priya Patel",
-  "upiId": "priya@upi",
-  "phoneNumber": "9876543211",
-  "balance": 50.0000,
-  "version": 0,
-  "createdAt": "2026-08-01T16:00:00Z",
-  "updatedAt": "2026-08-01T16:00:00Z"
-}
-```
-*If not found, returns `404 Not Found`.*
+=== "cURL Example"
+    ```bash
+    curl -X GET https://api.payflow.com/api/v1/users/upi/priya@upi \
+      -H "Authorization: Bearer <token>"
+    ```
+
+=== "Response (200 OK)"
+    ```json
+    {
+      "userId": 2,
+      "name": "Priya Patel",
+      "upiId": "priya@upi",
+      "phoneNumber": "9876543211",
+      "balance": 50.0000,
+      "version": 0,
+      "createdAt": "2026-08-01T16:00:00Z",
+      "updatedAt": "2026-08-01T16:00:00Z"
+    }
+    ```
+
+=== "Error Responses"
+    - `401 Unauthorized`: Missing or invalid JWT bearer token.
+    - `404 Not Found`: User UPI ID not found.
 
 ---
 
@@ -224,30 +274,40 @@ Retrieves paginated double-entry balance ledger audit entries for a user by UUID
   - `size`: Integer, optional (default `10`), min `1`, max `100`.
 - **Authentication**: `Authorization: Bearer <token>` (User can only view their own ledger)
 
-#### Response Example (`200 OK`)
-```json
-{
-  "content": [
+=== "cURL Example"
+    ```bash
+    curl -X GET "https://api.payflow.com/api/v1/users/a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d/ledger?page=0&size=10" \
+      -H "Authorization: Bearer <token>"
+    ```
+
+=== "Response (200 OK)"
+    ```json
     {
-      "ledgerId": 101,
-      "userReferenceId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
-      "transactionReferenceId": "f9e8d7c6-b5a4-3f2e-1d0c-9b8a7f6e5d4c",
-      "entryType": "DEBIT",
-      "amount": 100.0000,
-      "balanceBefore": 500.0000,
-      "balanceAfter": 400.0000,
-      "createdAt": "2026-08-09T14:00:00Z"
+      "content": [
+        {
+          "ledgerId": 101,
+          "userReferenceId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+          "transactionReferenceId": "f9e8d7c6-b5a4-3f2e-1d0c-9b8a7f6e5d4c",
+          "entryType": "DEBIT",
+          "amount": 100.0000,
+          "balanceBefore": 500.0000,
+          "balanceAfter": 400.0000,
+          "createdAt": "2026-08-09T14:00:00Z"
+        }
+      ],
+      "page": 0,
+      "size": 10,
+      "totalElements": 1,
+      "totalPages": 1,
+      "first": true,
+      "last": true
     }
-  ],
-  "page": 0,
-  "size": 10,
-  "totalElements": 1,
-  "totalPages": 1,
-  "first": true,
-  "last": true
-}
-```
-*If user not found, returns `404 Not Found`.*
+    ```
+
+=== "Error Responses"
+    - `401 Unauthorized`: Missing or invalid JWT bearer token.
+    - `403 Forbidden`: Authenticated user not authorized to inspect this ledger.
+    - `404 Not Found`: User not found.
 
 ---
 
@@ -260,25 +320,31 @@ Retrieves a list of users whose balance exceeds the specified minimum threshold.
 - **Path Variables**:
   - `amount`: BigDecimal, required. Minimum balance threshold denominated in INR (₹).
 
-#### Response Example (`200 OK`)
-```json
-[
-  {
-    "referenceId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
-    "name": "Aarav Sharma",
-    "upiId": "aarav@payflow",
-    "phoneNumber": "9876543210",
-    "balance": 1000.0000,
-    "createdAt": "2026-08-01T16:00:00Z",
-    "updatedAt": "2026-08-01T16:00:00Z"
-  }
-]
-```
+=== "cURL Example"
+    ```bash
+    curl -X GET https://api.payflow.com/api/v1/users/balance/500.00 \
+      -H "Authorization: Bearer <admin-token>"
+    ```
 
-#### Error Responses
-- `400 Bad Request`: Parameter type mismatch (e.g. non-numeric amount string).
-- `401 Unauthorized`: Missing, expired, or invalid JWT token.
-- `403 Forbidden`: Caller lacks administrative role privileges (`ForbiddenOperationException`, type: `https://api.payflow.com/errors/forbidden-operation`).
+=== "Response (200 OK)"
+    ```json
+    [
+      {
+        "referenceId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+        "name": "Aarav Sharma",
+        "upiId": "aarav@payflow",
+        "phoneNumber": "9876543210",
+        "balance": 1000.0000,
+        "createdAt": "2026-08-01T16:00:00Z",
+        "updatedAt": "2026-08-01T16:00:00Z"
+      }
+    ]
+    ```
+
+=== "Error Responses"
+    - `400 Bad Request`: Parameter type mismatch (non-numeric amount).
+    - `401 Unauthorized`: Missing or invalid JWT token.
+    - `403 Forbidden`: Caller lacks administrative role privileges.
 
 ---
 
@@ -296,88 +362,39 @@ Executes a peer-to-peer fund transfer request with guaranteed exactly-once idemp
   - `amount`: BigDecimal, required (`@NotNull`), minimum ₹0.01 (`@DecimalMin("0.01")`), maximum ₹10,00,000 (`@DecimalMax("1000000.00")`), denominated in Indian Rupees (INR, ₹).
   - `note`: String, optional, max 255 characters (`@Size(max = 255)`).
 
-#### Request Example
-```http
-POST /api/v1/transactions HTTP/1.1
-Host: api.payflow.com
-Idempotency-Key: 9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d
-Content-Type: application/json
+=== "cURL Example"
+    ```bash
+    curl -X POST https://api.payflow.com/api/v1/transactions \
+      -H "Authorization: Bearer <token>" \
+      -H "Content-Type: application/json" \
+      -H "Idempotency-Key: 9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d" \
+      -d '{
+        "senderUpiId": "aarav@upi",
+        "receiverUpiId": "priya@upi",
+        "amount": 150.00,
+        "note": "Dinner bill split"
+      }'
+    ```
 
-{
-  "senderUpiId": "aarav@upi",
-  "receiverUpiId": "priya@upi",
-  "amount": 150.00,
-  "note": "Dinner bill split"
-}
-```
+=== "HTTP Request"
+    ```http
+    POST /api/v1/transactions HTTP/1.1
+    Host: api.payflow.com
+    Authorization: Bearer <token>
+    Idempotency-Key: 9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d
+    Content-Type: application/json
 
-#### Response Example (`201 Created`)
-Headers: `Location: /api/v1/transactions/550e8400-e29b-41d4-a716-446655440000`
-```json
-{
-  "transactionId": 1,
-  "referenceId": "550e8400-e29b-41d4-a716-446655440000",
-  "senderUpiId": "aarav@upi",
-  "receiverUpiId": "priya@upi",
-  "amount": 150.0000,
-  "status": "COMPLETED",
-  "type": "TRANSFER",
-  "note": "Dinner bill split",
-  "createdAt": "2026-08-01T16:05:00Z"
-}
-```
+    {
+      "senderUpiId": "aarav@upi",
+      "receiverUpiId": "priya@upi",
+      "amount": 150.00,
+      "note": "Dinner bill split"
+    }
+    ```
 
-#### Error Responses
-- `400 Bad Request`: Missing `Idempotency-Key` header, or key reused with a mismatched payload.
-- `401 Unauthorized`: Missing or invalid JWT bearer token.
-- `403 Forbidden`: Authenticated user is not authorized to transfer from requested sender UPI.
-- `409 Conflict`: A request with the same `Idempotency-Key` is currently in-flight.
-- `422 Unprocessable Entity`: Validation constraint failure or insufficient sender balance.
-- `429 Too Many Requests`: Per-user rate limit exceeded (maximum 10 requests per second; response includes `Retry-After: 1` header).
-- `503 Service Unavailable`: Downstream dependency circuit breaker is open (`upiValidation`) or external provider failure.
-
----
-
-### 8. Retrieve Transaction by Reference ID
-Fetches details of a single transaction by its unique UUID reference ID.
-
-- **HTTP Method**: `GET`
-- **Path**: `/api/v1/transactions/{id}`
-- **Authentication**: `Authorization: Bearer <token>` (Only sender or receiver participants can view)
-
-#### Response Example (`200 OK`)
-```json
-{
-  "transactionId": 1,
-  "referenceId": "550e8400-e29b-41d4-a716-446655440000",
-  "senderUpiId": "aarav@upi",
-  "receiverUpiId": "priya@upi",
-  "amount": 150.0000,
-  "status": "COMPLETED",
-  "type": "TRANSFER",
-  "note": "Dinner bill split",
-  "createdAt": "2026-08-01T16:05:00Z"
-}
-```
-
----
-
-### 9. List Transactions for a User (Paginated)
-Retrieves a paginated list of all transactions where the specified UPI ID is either the sender or receiver.
-
-- **HTTP Method**: `GET`
-- **Path**: `/api/v1/transactions`
-- **Authentication**: `Authorization: Bearer <token>`
-- **Query Parameters**:
-  - `upiId`: String, required. UPI ID to filter transactions.
-  - `page`: Integer, optional. Page index (0-based, `@Min(0)`). Default: `0`.
-  - `size`: Integer, optional. Page size (`@Min(1) @Max(100)`). Default: `10`.
-  - `sortBy`: String, optional. Column name to sort. Default: `createdAt`.
-
-#### Response Example (`200 OK`)
-```json
-{
-  "content": [
+=== "Response (201 Created)"
+    *Headers: `Location: /api/v1/transactions/550e8400-e29b-41d4-a716-446655440000`*
+    ```json
     {
       "transactionId": 1,
       "referenceId": "550e8400-e29b-41d4-a716-446655440000",
@@ -389,15 +406,103 @@ Retrieves a paginated list of all transactions where the specified UPI ID is eit
       "note": "Dinner bill split",
       "createdAt": "2026-08-01T16:05:00Z"
     }
-  ],
-  "page": 0,
-  "size": 10,
-  "totalElements": 1,
-  "totalPages": 1,
-  "first": true,
-  "last": true
-}
-```
+    ```
+
+=== "Error Responses"
+    - `400 Bad Request`: Missing `Idempotency-Key` header, or key reused with a mismatched payload.
+    - `401 Unauthorized`: Missing or invalid JWT bearer token.
+    - `403 Forbidden`: Authenticated user is not authorized to transfer from requested sender UPI.
+    - `409 Conflict`: A request with the same `Idempotency-Key` is currently in-flight.
+    - `422 Unprocessable Entity`: Validation constraint failure or insufficient sender balance.
+    - `429 Too Many Requests`: Per-user rate limit exceeded (maximum 10 requests per second; response includes `Retry-After: 1` header).
+    - `503 Service Unavailable`: Downstream dependency circuit breaker is open (`upiValidation`) or external provider failure.
+
+---
+
+### 8. Retrieve Transaction by Reference ID
+Fetches details of a single transaction by its unique UUID reference ID.
+
+- **HTTP Method**: `GET`
+- **Path**: `/api/v1/transactions/{id}`
+- **Authentication**: `Authorization: Bearer <token>` (Only sender or receiver participants can view)
+
+=== "cURL Example"
+    ```bash
+    curl -X GET https://api.payflow.com/api/v1/transactions/550e8400-e29b-41d4-a716-446655440000 \
+      -H "Authorization: Bearer <token>"
+    ```
+
+=== "Response (200 OK)"
+    ```json
+    {
+      "transactionId": 1,
+      "referenceId": "550e8400-e29b-41d4-a716-446655440000",
+      "senderUpiId": "aarav@upi",
+      "receiverUpiId": "priya@upi",
+      "amount": 150.0000,
+      "status": "COMPLETED",
+      "type": "TRANSFER",
+      "note": "Dinner bill split",
+      "createdAt": "2026-08-01T16:05:00Z"
+    }
+    ```
+
+=== "Error Responses"
+    - `401 Unauthorized`: Missing or invalid JWT bearer token.
+    - `403 Forbidden`: Authenticated principal was neither the sender nor the receiver.
+    - `404 Not Found`: Transaction reference ID does not exist.
+
+---
+
+### 9. List Transactions for a User (Paginated)
+Retrieves a paginated list of all transactions where the specified UPI ID is either the sender or receiver.
+
+- **HTTP Method**: `GET`
+- **Path**: `/api/v1/transactions/user/{upiId}`
+- **Authentication**: `Authorization: Bearer <token>`
+- **Path Variables**:
+  - `upiId`: String, required. Registered UPI handle (e.g. `aarav@upi`). Must match authenticated principal or caller must be a participant.
+- **Query Parameters**:
+  - `page`: Integer, optional. Page index (0-based, `@Min(0)`). Default: `0`.
+  - `size`: Integer, optional. Page size (`@Min(1) @Max(100)`). Default: `10`.
+  - `sortBy`: String, optional. Column name to sort. Default: `createdAt`.
+
+=== "cURL Example"
+    ```bash
+    curl -X GET "https://api.payflow.com/api/v1/transactions/user/aarav@upi?page=0&size=10" \
+      -H "Authorization: Bearer <token>"
+    ```
+
+=== "Response (200 OK)"
+    ```json
+    {
+      "content": [
+        {
+          "transactionId": 1,
+          "referenceId": "550e8400-e29b-41d4-a716-446655440000",
+          "senderUpiId": "aarav@upi",
+          "receiverUpiId": "priya@upi",
+          "amount": 150.0000,
+          "status": "COMPLETED",
+          "type": "TRANSFER",
+          "note": "Dinner bill split",
+          "createdAt": "2026-08-01T16:05:00Z"
+        }
+      ],
+      "page": 0,
+      "size": 10,
+      "totalElements": 1,
+      "totalPages": 1,
+      "first": true,
+      "last": true
+    }
+    ```
+
+=== "Error Responses"
+    - `401 Unauthorized`: Missing or invalid JWT bearer token.
+    - `403 Forbidden`: Authenticated principal is not authorized to view transactions for this UPI ID.
+
+---
 
 ### 10. Generate Spend Insights for Transaction
 Analyzes transaction metadata and recipient UPI handle using Spring AI structured prompt engineering to classify the expenditure into personal finance categories and generate actionable budget insights.
@@ -417,26 +522,32 @@ Analyzes transaction metadata and recipient UPI handle using Spring AI structure
   - `confidenceScore`: Double (0.0 to 1.0)
   - `source`: String (`AI_MODEL` or `RULE_BASED_FALLBACK`)
 
-#### Response Example (`200 OK`)
-```json
-{
-  "transactionReferenceId": "550e8400-e29b-41d4-a716-446655440000",
-  "category": "FOOD_AND_DINING",
-  "amount": 450.00,
-  "summary": "Dining or grocery expenditure with swiggy@upi.",
-  "budgetingTip": "Set a dedicated dining out ceiling to optimize discretionary spending.",
-  "confidenceScore": 0.94,
-  "source": "AI_MODEL"
-}
-```
+=== "cURL Example"
+    ```bash
+    curl -X POST https://api.payflow.com/api/v1/transactions/550e8400-e29b-41d4-a716-446655440000/insights \
+      -H "Authorization: Bearer <token>"
+    ```
 
-#### Fault-Tolerant Behavior
-- Downstream LLM timeouts, rate limits, or outages trip Resilience4j `aiCircuitBreaker`, automatically executing `ruleBasedFallback` with deterministic keyword heuristic categorization (`source: "RULE_BASED_FALLBACK"`), guaranteeing zero API downtime for end users.
+=== "Response (200 OK)"
+    ```json
+    {
+      "transactionReferenceId": "550e8400-e29b-41d4-a716-446655440000",
+      "category": "FOOD_AND_DINING",
+      "amount": 450.00,
+      "summary": "Dining or grocery expenditure with swiggy@upi.",
+      "budgetingTip": "Set a dedicated dining out ceiling to optimize discretionary spending.",
+      "confidenceScore": 0.94,
+      "source": "AI_MODEL"
+    }
+    ```
 
-#### Error Responses
-- `403 Forbidden`: Authenticated user is neither the sender nor receiver of this transaction.
-- `404 Not Found`: Transaction reference ID does not exist.
-- `503 Service Unavailable`: Gen-AI Spend Insights feature is disabled (`payflow.ai.enabled: false`).
+=== "Fault Tolerance"
+    - Downstream LLM timeouts, rate limits, or outages trip Resilience4j `aiCircuitBreaker`, automatically executing `ruleBasedFallback` with deterministic keyword heuristic categorization (`source: "RULE_BASED_FALLBACK"`), guaranteeing zero API downtime for end users.
+
+=== "Error Responses"
+    - `403 Forbidden`: Authenticated user is neither the sender nor receiver of this transaction.
+    - `404 Not Found`: Transaction reference ID does not exist.
+    - `503 Service Unavailable`: Gen-AI Spend Insights feature is disabled (`payflow.ai.enabled: false`).
 
 ---
 

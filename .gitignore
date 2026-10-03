@@ -35,6 +35,18 @@ build/
 ### VS Code ###
 .vscode/
 
+### Python & Virtual Environments ###
+.venv/
+venv/
+ENV/
+env/
+__pycache__/
+*.py[cod]
+
+### MkDocs & Documentation Build Artifacts ###
+site/
+.cache/
+
 ### Internal docs (not committed) ###
 internal/
 internal/*

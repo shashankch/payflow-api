@@ -96,6 +96,7 @@ Cloud-native packaging, orchestration, and automated quality gates:
 - **11A — Multi-Stage Containerization & Local Orchestration**: Minimal multi-stage Docker build (Java 25 JRE, non-root user, healthcheck) and full-stack Docker Compose (PostgreSQL, Redis, Kafka, Ollama, Prometheus, Grafana).
 - **11B — Cloud-Native Kubernetes Deployment**: Declarative Kubernetes manifests (Deployments, Services, ConfigMaps, Secrets, HPA, PDB) with graceful shutdown coordination.
 - **11C — CI/CD Pipeline Hardening & Quality Gates**: Automated static analysis (SpotBugs) and strict code coverage enforcement (JaCoCo) integrated into GitHub Actions.
+- **11D — Documentation Modernization & Declarative D2 Diagrams**: Modernized public documentation portal with Material for MkDocs, declarative D2 architecture diagrams with zero drift enforcement, and bidirectional JaCoCo code coverage navigation.
 
 ---
 

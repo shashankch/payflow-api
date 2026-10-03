@@ -1,0 +1,32 @@
+shape: sequence_diagram
+
+client: API Client / Controller {
+  icon: "../assets/icons/client.svg"
+}
+service: UserService / TxService {
+  icon: "../assets/icons/spring.svg"
+}
+cache: CacheManager (Redis / Caffeine) {
+  icon: "../assets/icons/redis.svg"
+}
+db: PostgreSQL Database {
+  icon: "../assets/icons/postgresql.svg"
+}
+
+client -> service: "Read User Profile / Ledger"
+service -> cache: "GET key (e.g. users::refId)"
+
+cache -> service: "[Cache Hit] Return cached JSON"
+service -> client: "Return UserResponse / LedgerResponse"
+
+cache -> service: "[Cache Miss] Return null"
+service -> db: "SELECT query"
+db -> service: "Entity record"
+service -> cache: "PUT key with configured TTL"
+service -> client: "Return UserResponse / LedgerResponse"
+
+client -> service: "Transfer Funds / Register User"
+service -> db: "Execute ACID transaction & commit"
+db -> service: "Transaction committed"
+service -> cache: "EVICT affected caches (users, user_ledgers)"
+service -> client: "Return Success Response"

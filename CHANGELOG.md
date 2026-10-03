@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Documentation Modernization & D2 Engine Migration
+- Replaced legacy Docsify single-page app with **Material for MkDocs** static site generator (`mkdocs-material` 9.5+) featuring instantaneous client search, dark/light theme switching, and responsive design.
+- Redrew and modernized all 12 architectural topology, sequence, and data flow diagrams across `docs/ARCHITECTURE.md`, `README.md`, and `docs/index.md` using the declarative **D2 diagramming engine** (`docs/diagrams/*.d2`) with offline vector icons and Eclipse Layout Kernel (ELK) collision-free routing.
+- Implemented **Option 1 Hybrid Pre-rendered SVG + Collapsible D2 Source** pattern: pre-rendered self-contained SVGs (`docs/assets/diagrams/*.svg`) with embedded `<details><summary>📐 View Declarative D2 Diagram Source</summary>...` blocks, guaranteeing crisp, zero-flicker rendering across GitHub web, IDE previewers, and the documentation portal.
+- Authored automated compilation script `scripts/generate-diagrams.sh` with dual light/dark theme compilation (`--theme=0 --dark-theme=200`) and `--check` drift detection.
+- Configured enterprise CI/CD quality gates in `.github/workflows/ci.yml`:
+  - Enforced zero diagram drift on PR and push via `./scripts/generate-diagrams.sh --check`.
+  - Enforced strict documentation compilation on PR and push via `mkdocs build --strict`.
+  - Automated deployment of the documentation portal alongside JaCoCo test coverage reports to GitHub Pages on `main` merge.
+- Created `.github/workflows/generate-diagrams.yml` enabling 1-click manual workflow dispatch to recompile D2 diagrams and automatically commit changes without requiring local D2 installation.
+- Created `requirements.txt` specifying deterministic Python dependencies (`mkdocs>=1.6.1`, `mkdocs-material>=9.5.0`, `mkdocs-d2-plugin>=1.6.0`).
+- Created offline SVG icon library under `docs/assets/icons/` (16 scalable vector icons) for zero-dependency compilation.
+- Eliminated redundant documentation files and deduplicated governance markdowns (`CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, `LICENSE`) via single-source relative symlinks in `docs/`.
+- Hardened `.gitignore` to prevent committing build artifacts (`site/`, `.cache/`, `.venv/`, Python bytecode).
+- Corrected API endpoint routes and verified complete parity with Java 25 & Spring Boot 4.1.0 codebase (191 tests, 90% line / 73% branch coverage).
+
 ### Added - Phase 11A (Multi-Stage Containerization & Full-Stack Docker Compose)
 - Created hardened multi-stage `Dockerfile`:
   - Stage 1: Build stage utilizing OpenJDK 25 (`eclipse-temurin:25-jdk`) and Maven layer caching.
@@ -40,7 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integrated `jacoco-maven-plugin:0.8.15` enforcing minimum 80% line coverage and 70% branch coverage across core business and security packages; achieved **90% line coverage** and **73% branch coverage** across 191 unit tests with 0 missed classes.
 - Created comprehensive unit test suites: `JwtAccessDeniedHandlerTest`, `JwtAuthenticationEntryPointTest`, `JwtAuthenticationFilterTest`, `SecurityUtilsTest`, and `IdempotencyCleanupServiceTest`.
 - Hardened `.github/workflows/ci.yml` executing `mvn clean verify -B` with automated artifact upload for JaCoCo coverage reports and SpotBugs analysis (14-day retention).
-- Added automated GitHub Pages deployment for the Docsify public documentation portal (`https://shashankch.github.io/payflow-api/`) and live interactive JaCoCo coverage reports (`https://shashankch.github.io/payflow-api/coverage/`).
+- Added automated GitHub Pages deployment for the Material for MkDocs public documentation portal (`https://shashankch.github.io/payflow-api/`), Code Coverage Quality Gate summary (`https://shashankch.github.io/payflow-api/coverage/`), and live interactive JaCoCo coverage reports (`https://shashankch.github.io/payflow-api/coverage-report/`).
 - Authored ADR-030 (*Automated CI/CD Quality Gates, JaCoCo Coverage Enforcement, and SpotBugs Static Analysis*).
 - Added `spring-modulith-events-kafka`, `spring-kafka`, `spring-kafka-test`, and Testcontainers `kafka` dependencies to `pom.xml`.
 - Marked domain event `TransferCompletedEvent` with `@Externalized` and configured programmatic dynamic routing via `EventExternalizationConfiguration` in `KafkaConfig.java`, routing to `${payflow.kafka.transfers-topic}` partitioned by `senderUpi` for strict chronological delivery per account.

@@ -1,0 +1,32 @@
+shape: sequence_diagram
+
+client: HTTP Client {
+  icon: "../assets/icons/client.svg"
+}
+filter: IdempotencyFilter {
+  icon: "../assets/icons/lock.svg"
+}
+db: PostgreSQL (idempotency_registry) {
+  icon: "../assets/icons/postgresql.svg"
+}
+service: TransactionService {
+  icon: "../assets/icons/spring.svg"
+}
+
+client -> filter: "1. POST /api/v1/transactions (Header: Idempotency-Key)"
+filter -> filter: "2. Validate key regex & compute SHA-256(body)"
+filter -> db: "3. SELECT * FROM idempotency_registry WHERE key = ?"
+
+filter -> db: "4. (Case: Key Not Found) INSERT key, hash, status=PROCESSING"
+filter -> service: "5. doFilterInternal() -> sendMoney(request)"
+service -> filter: "6. HTTP 201 Created (TransactionResponse)"
+filter -> db: "7. UPDATE status=SUCCESS, code=201, body=..."
+filter -> client: "8. HTTP 201 Created (Original Response)"
+
+client -> filter: "9. [Duplicate Request] Same Key & Body"
+filter -> db: "10. SELECT * FROM idempotency_registry WHERE key = ?"
+filter -> client: "11. Replay Cached HTTP 201 Response"
+
+client -> filter: "12. [Tampered Request] Same Key & Different Body"
+filter -> filter: "13. Compare SHA-256 checksums -> Mismatch detected"
+filter -> client: "14. 400 Bad Request (Key Reuse with Different Payload)"

@@ -1,0 +1,139 @@
+site_name: Payflow API
+site_description: Enterprise Transaction & Double-Entry Payment Ledger Engine
+site_url: https://shashankch.github.io/payflow-api/
+repo_url: https://github.com/shashankch/payflow-api
+repo_name: shashankch/payflow-api
+
+theme:
+  name: material
+  language: en
+  icon:
+    logo: material/currency-inr
+    repo: fontawesome/brands/github
+  palette:
+    # Auto preference
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    # Light theme
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      media: "(prefers-color-scheme: light)"
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark theme
+    - scheme: slate
+      primary: indigo
+      accent: sky
+      media: "(prefers-color-scheme: dark)"
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+  font:
+    text: Inter
+    code: JetBrains Mono
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.tabs.link
+
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/extra.js
+
+plugins:
+  - search
+  - d2:
+      layout: dagre
+      theme: 0
+      dark_theme: 200
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+nav:
+  - Overview:
+      - Home: index.md
+      - Engineering Roadmap: ROADMAP.md
+  - Architecture & Design:
+      - System Architecture: ARCHITECTURE.md
+  - API & Standards:
+      - REST API Specification: API_SPECIFICATION.md
+      - Engineering Conventions: CONVENTIONS.md
+  - Architecture Decisions (ADRs):
+      - ADR Index: adr/README.md
+      - 0001 — BigDecimal Monetary Values: adr/0001-use-bigdecimal-for-monetary-values.md
+      - 0002 — Constructor Injection: adr/0002-constructor-injection-over-field-injection.md
+      - 0003 — Rich Domain Model: adr/0003-rich-domain-model-over-anemic-domain-model.md
+      - 0004 — URI Versioning & DTO Isolation: adr/0004-uri-based-api-versioning-and-dto-isolation-layer.md
+      - 0005 — MapStruct DTO Mapping: adr/0005-mapstruct-for-compile-time-type-safe-dto-mapping.md
+      - 0006 — RFC 7807 ProblemDetail: adr/0006-rfc-7807-problemdetail-and-centralized-exception-handling.md
+      - 0007 — UUID Reference IDs: adr/0007-uuid-reference-ids-over-auto-increment-primary-keys.md
+      - 0008 — Spring Modulith Monolith: adr/0008-spring-modulith-modular-monolith-over-distributed-microservices.md
+      - 0009 — OpenTelemetry Tracing: adr/0009-opentelemetry-distributed-tracing-via-micrometer-bridge.md
+      - 0010 — Pessimistic Write Locking: adr/0010-pessimistic-locking-for-high-concurrency-balance-operations.md
+      - 0011 — Deterministic Lock Ordering: adr/0011-deterministic-lock-ordering-for-deadlock-prevention.md
+      - 0012 — Double-Entry Ledger: adr/0012-double-entry-balance-ledger-as-immutable-audit-trail.md
+      - 0013 — Flyway Database Migrations: adr/0013-flyway-database-migrations-over-ddl-auto-generation.md
+      - 0014 — Spring Profiles & Testcontainers: adr/0014-spring-environment-profiles-and-testcontainers-integration-testing-strategy.md
+      - 0015 — SHA-256 Idempotency Engine: adr/0015-sha-256-request-payload-hashing-and-durable-idempotency-engine.md
+      - 0016 — Modulith Outbox Pattern: adr/0016-spring-modulith-event-publication-registry-and-transactional-outbox.md
+      - 0017 — Stateless JWT Authentication: adr/0017-stateless-jwt-authentication-and-spring-security-architecture.md
+      - 0018 — Principal-Bound Authorization: adr/0018-principal-bound-resource-access-control-and-sender-verification.md
+      - 0019 — Declarative RestClient: adr/0019-declarative-http-interface-client-and-resilient-external-service-integration.md
+      - 0020 — Structured Logging & Prometheus: adr/0020-structured-logging-prometheus-metrics-and-opentelemetry-observability.md
+      - 0021 — Resilience4j Rate Limiting: adr/0021-resilience4j-circuit-breaker-per-user-rate-limiting.md
+      - 0022 — Redis Caching & Caffeine Fallback: adr/0022-redis-distributed-caching-and-caffeine-fallback.md
+      - 0023 — Redisson Distributed Locking: adr/0023-redis-distributed-locking-redisson.md
+      - 0024 — Kafka Event Streaming: adr/0024-kafka-event-streaming-spring-modulith.md
+      - 0025 — Production Hardening & Remediation: adr/0025-production-hardening-and-architecture-audit-remediation.md
+      - 0026 — Gen-AI Spend Categorization: adr/0026-gen-ai-spend-categorization-spring-ai.md
+      - 0027 — Virtual Threads & Pool Tuning: adr/0027-virtual-threads-and-bounded-connection-pool.md
+      - 0028 — Multi-Stage Containerization: adr/0028-multi-stage-containerization-docker-compose.md
+      - 0029 — Kubernetes Deployment Topology: adr/0029-kubernetes-deployment-topology-hpa.md
+      - 0030 — CI/CD Quality Gates: adr/0030-ci-cd-quality-gates-jacoco-spotbugs.md
+  - Governance & Releases:
+      - Changelog: CHANGELOG.md
+      - Security Policy: SECURITY.md
+      - Contributing Guide: CONTRIBUTING.md
+      - MIT License: LICENSE.md
+  - Quality & Telemetry:
+      - 📊 Code Coverage & Quality Gates: coverage.md
+      - 🚀 Live JaCoCo Interactive Report: https://shashankch.github.io/payflow-api/coverage-report/
+      - 🔄 CI Pipeline Status: https://github.com/shashankch/payflow-api/actions/workflows/ci.yml
+      - 🐙 GitHub Repository: https://github.com/shashankch/payflow-api

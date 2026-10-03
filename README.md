@@ -6,6 +6,7 @@
 
 [![CI Build](https://img.shields.io/badge/CI-Passing-brightgreen?logo=githubactions&logoColor=white&style=flat-square)](https://github.com/shashankch/payflow-api/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/Coverage-90%25%20Line%20%7C%2073%25%20Branch-brightgreen?style=flat-square)](https://shashankch.github.io/payflow-api/coverage/)
+[![Docs](https://img.shields.io/badge/Docs-MkDocs%20Material-526cfe?logo=materialformkdocs&logoColor=white&style=flat-square)](https://shashankch.github.io/payflow-api/)
 [![Java 25](https://img.shields.io/badge/Java-25-ED8B00?logo=openjdk&logoColor=white&style=flat-square)](https://dev.java/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.0-6DB33F?logo=springboot&logoColor=white&style=flat-square)](https://spring.io/projects/spring-boot)
 [![Docker](https://img.shields.io/badge/Docker-Multi--stage%20Temurin%2025-2496ED?logo=docker&logoColor=white&style=flat-square)](Dockerfile)
@@ -52,50 +53,91 @@ Payflow API evolves through a structured, 12-phase capability roadmap advancing 
 
 ## 🏗️ System Architecture Overview
 
-```mermaid
-graph TD
-    subgraph ClientLayer["📱 Client & Interface Layer"]
-        Client["HTTP Client / Ingress"] -->|"POST /api/v1/transactions"| Filter["RequestIdFilter (MDC X-Request-Id)"]
-        Filter --> Controller["TransactionController (@Valid DTO)"]
-    end
+![System Architecture Overview](docs/assets/diagrams/system-overview.svg)
 
-    subgraph DomainLayer["🔒 Core Transaction Domain & Lock Manager"]
-        Controller -->|"sendMoney()"| TxService["TransactionService (@Transactional)"]
-        TxService --> LockOrder["Alphabetical Lock Ordering (Deadlock Avoidance)"]
-        LockOrder --> UserDomain["User Entity (Domain Invariants: debit / credit)"]
-    end
+<details>
+<summary>📐 View Declarative D2 Diagram Source</summary>
 
-    subgraph PersistenceLayer["🗄️ Persistence & Double-Entry Ledger"]
-        UserDomain -->|"Pessimistic Lock (SELECT FOR UPDATE)"| UserRepo["UserRepository"]
-        TxService -->|"Append Immutable DEBIT & CREDIT Audit Entries"| LedgerRepo["BalanceLedgerRepository"]
-        UserRepo --> DB[("PostgreSQL 17 Database")]
-        LedgerRepo --> DB
-    end
+```d2
+direction: down
 
-    subgraph OutboxStreaming["⚡ Event Outbox & Kafka Streaming"]
-        TxService -->|"Atomic Outbox Publication"| Outbox[("Event Publication Registry")]
-        Outbox --> Kafka["Apache Kafka 3.9 (KRaft)"]
-    end
+client: Client / Mobile App {
+  shape: rectangle
+  icon: "docs/assets/icons/client.svg"
+}
 
-    subgraph ObservabilityStack["📊 Telemetry & Monitoring"]
-        Controller -.-> Prom["Prometheus (/actuator/prometheus)"]
-        Prom -.-> Grafana["Grafana Dashboards (Port 3000)"]
-    end
+ingress: Ingress / API Gateway {
+  shape: rectangle
+  icon: "docs/assets/icons/gateway.svg"
+}
 
-    classDef clientStyle fill:#1e293b,stroke:#475569,stroke-width:2px,color:#f8fafc;
-    classDef webStyle fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#f8fafc;
-    classDef domainStyle fill:#1e1b4b,stroke:#6366f1,stroke-width:2px,color:#f8fafc;
-    classDef dbStyle fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc;
-    classDef streamStyle fill:#701a75,stroke:#d946ef,stroke-width:2px,color:#f8fafc;
-    classDef obsStyle fill:#14532d,stroke:#22c55e,stroke-width:2px,color:#f8fafc;
+security: Spring Security (JWT Filter) {
+  shape: rectangle
+  icon: "docs/assets/icons/shield.svg"
+}
 
-    class Client clientStyle;
-    class Filter,Controller webStyle;
-    class TxService,LockOrder,UserDomain domainStyle;
-    class UserRepo,LedgerRepo,DB dbStyle;
-    class Outbox,Kafka streamStyle;
-    class Prom,Grafana obsStyle;
+idemp: Idempotency Filter (SHA-256) {
+  shape: rectangle
+  icon: "docs/assets/icons/lock.svg"
+}
+
+controller: TransactionController {
+  shape: rectangle
+  icon: "docs/assets/icons/spring.svg"
+}
+
+service: TransactionService {
+  shape: rectangle
+  icon: "docs/assets/icons/java.svg"
+}
+
+client -> ingress: "HTTP POST (Idempotency-Key)"
+ingress -> security: "TLS 1.3"
+security -> idemp: "Bearer JWT"
+idemp -> controller: "Validated Request"
+controller -> service: "sendMoney()"
+
+core_storage: Core Concurrency & Storage {
+  postgres: PostgreSQL 17 {
+    shape: cylinder
+    icon: "docs/assets/icons/postgresql.svg"
+  }
+  redis: Redis 7 (Redlock & Cache) {
+    shape: cylinder
+    icon: "docs/assets/icons/redis.svg"
+  }
+}
+
+async_events: Asynchronous Messaging & Events {
+  outbox: Transactional Outbox {
+    shape: cylinder
+    icon: "docs/assets/icons/queue.svg"
+  }
+  kafka: Apache Kafka (KRaft) {
+    shape: queue
+    icon: "docs/assets/icons/kafka.svg"
+  }
+  outbox -> kafka: "spring-modulith-events-kafka"
+}
+
+ai_resilience: AI & Resilience {
+  ai: Ollama Gen-AI {
+    shape: rectangle
+    icon: "docs/assets/icons/ai.svg"
+  }
+  r4j: Resilience4j {
+    shape: rectangle
+    icon: "docs/assets/icons/shield.svg"
+  }
+}
+
+service -> core_storage.postgres: "Row Lock & Ledger Entries"
+service -> core_storage.redis: "Redlock & Cache-Aside"
+service -> async_events.outbox: "Atomically Persist Event"
+service -> ai_resilience.ai: "Spend Insights"
+service -> ai_resilience.r4j: "Rate Limiting Guard"
 ```
+</details>
 
 ---
 
@@ -103,8 +145,9 @@ graph TD
 
 | Document | Description |
 | :--- | :--- |
-| 🚀 **[Live Documentation Hub](https://shashankch.github.io/payflow-api/)** | Interactive Docsify portal with full-text search, dark mode, and dynamic markdown rendering |
-| 📊 **[JaCoCo Code Coverage Report](https://shashankch.github.io/payflow-api/coverage/)** | Live interactive code coverage report (90% Line, 73% Branch) generated per-build |
+| 🚀 **[Live Documentation Hub](https://shashankch.github.io/payflow-api/)** | Material for MkDocs documentation portal with full-text search, D2 diagram rendering, and dark mode |
+| 📊 **[Code Coverage & Quality Gates](https://shashankch.github.io/payflow-api/coverage/)** | Automated CI/CD quality gates, bundle-level line/branch thresholds, and SpotBugs audit |
+| 🚀 **[Interactive JaCoCo Report](https://shashankch.github.io/payflow-api/coverage-report/)** | Live interactive code coverage drilldown (90% Line, 73% Branch) generated per-build |
 | 📘 **[System Architecture](docs/ARCHITECTURE.md)** | Deep-dive concurrency models, pessimistic locking mechanics, test pyramid |
 | 🛡️ **[Security Architecture & Threat Model](docs/ARCHITECTURE.md#18-security-architecture-and-threat-model)** | Zero-Trust filter chain, STRIDE threat model, IAM policy matrix, financial concurrency controls |
 | 🔒 **[Security Policy](SECURITY.md)** | Open-source vulnerability reporting guidelines and project security posture |

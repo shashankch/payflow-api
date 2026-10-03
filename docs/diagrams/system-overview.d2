@@ -1,0 +1,77 @@
+direction: down
+
+client: Client / Mobile App {
+  shape: rectangle
+  icon: "../assets/icons/client.svg"
+}
+
+ingress: Ingress / API Gateway {
+  shape: rectangle
+  icon: "../assets/icons/gateway.svg"
+}
+
+security: Spring Security (JWT Filter) {
+  shape: rectangle
+  icon: "../assets/icons/shield.svg"
+}
+
+idemp: Idempotency Filter (SHA-256) {
+  shape: rectangle
+  icon: "../assets/icons/lock.svg"
+}
+
+controller: TransactionController {
+  shape: rectangle
+  icon: "../assets/icons/spring.svg"
+}
+
+service: TransactionService {
+  shape: rectangle
+  icon: "../assets/icons/java.svg"
+}
+
+client -> ingress: "HTTP POST (Idempotency-Key)"
+ingress -> security: "TLS 1.3"
+security -> idemp: "Bearer JWT"
+idemp -> controller: "Validated Request"
+controller -> service: "sendMoney()"
+
+core_storage: Core Concurrency & Storage {
+  postgres: PostgreSQL 17 {
+    shape: cylinder
+    icon: "../assets/icons/postgresql.svg"
+  }
+  redis: Redis 7 (Redlock & Cache) {
+    shape: cylinder
+    icon: "../assets/icons/redis.svg"
+  }
+}
+
+async_events: Asynchronous Messaging & Events {
+  outbox: Transactional Outbox {
+    shape: cylinder
+    icon: "../assets/icons/queue.svg"
+  }
+  kafka: Apache Kafka (KRaft) {
+    shape: queue
+    icon: "../assets/icons/kafka.svg"
+  }
+  outbox -> kafka: "spring-modulith-events-kafka"
+}
+
+ai_resilience: AI & Resilience {
+  ai: Ollama Gen-AI {
+    shape: rectangle
+    icon: "../assets/icons/ai.svg"
+  }
+  r4j: Resilience4j {
+    shape: rectangle
+    icon: "../assets/icons/shield.svg"
+  }
+}
+
+service -> core_storage.postgres: "Row Lock & Ledger Entries"
+service -> core_storage.redis: "Redlock & Cache-Aside"
+service -> async_events.outbox: "Atomically Persist Event"
+service -> ai_resilience.ai: "Spend Insights"
+service -> ai_resilience.r4j: "Rate Limiting Guard"

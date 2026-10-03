@@ -1,0 +1,40 @@
+shape: sequence_diagram
+
+client: Mobile Client {
+  icon: "../assets/icons/client.svg"
+}
+controller: UserController {
+  icon: "../assets/icons/spring.svg"
+}
+service: UserService {
+  icon: "../assets/icons/java.svg"
+}
+validator: UpiValidationService {
+  icon: "../assets/icons/shield.svg"
+}
+http_client: UpiValidationClient {
+  icon: "../assets/icons/gateway.svg"
+}
+gateway: Banking Network Gateway {
+  icon: "../assets/icons/server.svg"
+}
+
+client -> controller: "1. POST /api/v1/users (CreateUserRequest)"
+controller -> service: "2. registerUser(request)"
+service -> validator: "3. validateUpi(upiId)"
+
+validator -> http_client: "4. verify(upiId)"
+http_client -> gateway: "5. GET /api/v1/upi/verify/{upiId}"
+
+gateway -> http_client: "6a. (Case: Valid UPI) 200 OK { valid: true }"
+http_client -> validator: "7a. UpiVerificationResponse(valid=true)"
+validator -> service: "8a. Validation Passed"
+service -> controller: "9a. Persist User Entity to DB"
+controller -> client: "10a. 201 Created (UserResponse)"
+
+gateway -> http_client: "6b. (Case: Downstream 503 / Timeout)"
+http_client -> validator: "7b. Retries with backoff (500ms, 1000ms)"
+validator -> validator: "8b. @Recover fallback triggered"
+validator -> service: "9b. Proceed with Registration (Warning Logged)"
+service -> controller: "10b. Persist User Entity (Zero Onboarding Outage)"
+controller -> client: "11b. 201 Created (Non-blocking Fallback)"

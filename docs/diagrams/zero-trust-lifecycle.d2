@@ -1,0 +1,74 @@
+direction: down
+
+ingress: Ingress & Perimeter Gateway {
+  grid-columns: 2
+
+  client: Client / API Consumer {
+    shape: rectangle
+    icon: "../assets/icons/client.svg"
+  }
+  waf: API Gateway / WAF {
+    shape: rectangle
+    icon: "../assets/icons/gateway.svg"
+  }
+  client -> waf: "HTTPS / TLS 1.3"
+}
+
+filters: Security Filter Tier {
+  grid-columns: 4
+  
+  req_id: RequestIdFilter (MDC Correlation) {
+    shape: rectangle
+    icon: "../assets/icons/shield.svg"
+  }
+  rl: RequestLoggingFilter (Audit & Timing) {
+    shape: rectangle
+    icon: "../assets/icons/shield.svg"
+  }
+  jwt: JwtAuthenticationFilter (HMAC-SHA256) {
+    shape: rectangle
+    icon: "../assets/icons/lock.svg"
+  }
+  idemp: IdempotencyFilter (SHA-256 Hashing) {
+    shape: rectangle
+    icon: "../assets/icons/lock.svg"
+  }
+
+  req_id -> rl -> jwt -> idemp
+}
+
+app_persistence: Application & Persistence Layer {
+  grid-columns: 2
+
+  domain: Domain & Invariants {
+    auth: Principal Verification (SecurityUtils) {
+      shape: rectangle
+      icon: "../assets/icons/shield.svg"
+    }
+    tx: TransactionService (ACID Invariants) {
+      shape: rectangle
+      icon: "../assets/icons/spring.svg"
+    }
+    auth -> tx
+  }
+
+  data: Concurrency & Ledger Tier {
+    ordering: Deterministic Alphabetical Lock Ordering {
+      shape: rectangle
+    }
+    pessimistic: SELECT ... FOR UPDATE (PostgreSQL) {
+      shape: cylinder
+      icon: "../assets/icons/postgresql.svg"
+    }
+    ledger: Immutable Double-Entry Ledger {
+      shape: cylinder
+      icon: "../assets/icons/postgresql.svg"
+    }
+    ordering -> pessimistic -> ledger
+  }
+
+  domain.tx -> data.ordering
+}
+
+ingress -> filters: "TLS 1.3 & Bearer JWT"
+filters -> app_persistence: "MDC Correlated & Idempotency Key Checked"
