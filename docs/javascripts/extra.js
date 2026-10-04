@@ -1,7 +1,7 @@
 /* ==========================================================================
    Payflow API — MkDocs Material Interactive Enhancements
-   Mermaid diagram rendering, dynamic theme synchronization, interactive zoom/pan,
-   and fullscreen modal viewer.
+   Diagram zoom/pan controls, fullscreen modal viewer, dynamic theme sync,
+   and instant navigation lifecycle hooks.
    ========================================================================== */
 
 (function () {
@@ -23,10 +23,10 @@
 
   // Ensure modal element exists
   function ensureModal() {
-    let modal = document.getElementById("mermaid-fullscreen-modal");
+    let modal = document.getElementById("diagram-fullscreen-modal");
     if (!modal) {
       modal = document.createElement("div");
-      modal.id = "mermaid-fullscreen-modal";
+      modal.id = "diagram-fullscreen-modal";
       modal.className = "mermaid-modal";
       modal.innerHTML = `
         <div class="mermaid-modal-header">
@@ -84,55 +84,14 @@
     return modal;
   }
 
-  // Render Mermaid diagrams
-  async function renderMermaid() {
-    if (typeof mermaid === "undefined") {
-      console.warn("Mermaid library not loaded yet.");
-      return;
-    }
-
-    const scheme = getCurrentScheme();
-    const mermaidTheme = scheme === "slate" ? "dark" : "default";
-
-    mermaid.initialize({
-      startOnLoad: false,
-      theme: mermaidTheme,
-      securityLevel: "loose",
-      fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif"
-    });
-
-    const mermaidBlocks = document.querySelectorAll(".mermaid");
-    if (!mermaidBlocks.length) return;
-
-    for (const block of mermaidBlocks) {
-      // Save raw definition if not already saved
-      if (!block.getAttribute("data-processed-source")) {
-        block.setAttribute("data-processed-source", block.textContent.trim());
-      } else if (block.getAttribute("data-rendered-theme") === mermaidTheme) {
-        continue;
-      }
-
-      const rawSource = block.getAttribute("data-processed-source");
-      const id = "mermaid-svg-" + Math.random().toString(36).substring(2, 9);
-
-      try {
-        const { svg } = await mermaid.render(id, rawSource);
-        block.innerHTML = svg;
-        block.setAttribute("data-rendered-theme", mermaidTheme);
-        attachDiagramControls(block);
-      } catch (err) {
-        console.error("Mermaid rendering failed for block:", err);
-      }
-    }
-  }
-
-  function attachDiagramControls(mermaidEl) {
-    if (mermaidEl.closest(".mermaid-wrapper")) return;
+  // Attach zoom, pan, and fullscreen toolbar to a diagram image or svg
+  function attachDiagramControls(targetEl) {
+    if (targetEl.closest(".diagram-wrapper") || targetEl.closest(".mermaid-wrapper")) return;
 
     const modal = ensureModal();
 
     const wrapper = document.createElement("div");
-    wrapper.className = "mermaid-wrapper";
+    wrapper.className = "diagram-wrapper";
 
     const controls = document.createElement("div");
     controls.className = "diagram-controls";
@@ -144,20 +103,21 @@
     `;
 
     const viewport = document.createElement("div");
-    viewport.className = "mermaid-viewport";
+    viewport.className = "diagram-viewport";
 
-    mermaidEl.parentNode.insertBefore(wrapper, mermaidEl);
-    viewport.appendChild(mermaidEl);
+    const parent = targetEl.parentNode;
+    parent.insertBefore(wrapper, targetEl);
+    viewport.appendChild(targetEl);
     wrapper.appendChild(controls);
     wrapper.appendChild(viewport);
 
-    let currentScale = 1;
+    let currentScale = 1.0;
     let isDragging = false;
     let startX, startY, scrollLeft, scrollTop;
 
     function updateScale(newScale) {
-      currentScale = Math.min(Math.max(0.5, newScale), 3.0);
-      mermaidEl.style.transform = `scale(${currentScale})`;
+      currentScale = Math.min(Math.max(0.4, newScale), 3.5);
+      targetEl.style.transform = `scale(${currentScale})`;
     }
 
     controls.querySelector('[data-action="zoom-in"]').addEventListener("click", (e) => {
@@ -173,16 +133,22 @@
     controls.querySelector('[data-action="reset"]').addEventListener("click", (e) => {
       e.preventDefault();
       updateScale(1.0);
-      viewport.scrollLeft = (mermaidEl.scrollWidth - viewport.clientWidth) / 2;
+      viewport.scrollLeft = (targetEl.scrollWidth - viewport.clientWidth) / 2;
       viewport.scrollTop = 0;
     });
 
     controls.querySelector('[data-action="fullscreen"]').addEventListener("click", (e) => {
       e.preventDefault();
-      const svg = mermaidEl.querySelector("svg");
       const content = modal.querySelector(".mermaid-modal-content");
       content.innerHTML = "";
-      if (svg) {
+
+      if (targetEl.tagName.toLowerCase() === "img") {
+        const fullImg = document.createElement("img");
+        fullImg.src = targetEl.src;
+        fullImg.alt = targetEl.alt || "Diagram Fullscreen";
+        content.appendChild(fullImg);
+      } else if (targetEl.querySelector("svg")) {
+        const svg = targetEl.querySelector("svg");
         const clone = svg.cloneNode(true);
         clone.removeAttribute("width");
         clone.removeAttribute("height");
@@ -190,8 +156,9 @@
         clone.style.height = "100%";
         content.appendChild(clone);
       } else {
-        content.innerHTML = mermaidEl.innerHTML;
+        content.innerHTML = targetEl.innerHTML;
       }
+
       content.style.transform = "scale(1)";
       modal.classList.add("active");
     });
@@ -230,26 +197,75 @@
     }, { passive: false });
   }
 
-  // Setup on page load and instant navigation
-  function setup() {
-    renderMermaid();
-
-    // Listen for theme palette toggle
-    const toggles = document.querySelectorAll("[data-md-color-scheme]");
-    const observer = new MutationObserver(() => {
-      renderMermaid();
+  // Scan and initialize all diagram images in page content
+  function initDiagramZoom() {
+    const images = document.querySelectorAll(
+      '.md-content img[src*="diagrams/"], .md-content img[src$=".svg"]:not([src*="img.shields.io"]):not([src*="icons/"])'
+    );
+    images.forEach((img) => {
+      attachDiagramControls(img);
     });
-    observer.observe(document.body, { attributes: true, attributeFilter: ["data-md-color-scheme"] });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-md-color-scheme"] });
+
+    const mermaidBlocks = document.querySelectorAll(".mermaid");
+    mermaidBlocks.forEach((block) => {
+      attachDiagramControls(block);
+    });
   }
 
-  if (typeof document$ !== "undefined") {
-    document$.subscribe(() => {
-      setTimeout(setup, 100);
+  // Dynamic coverage report link adjuster
+  function adjustCoverageLink() {
+    const link = document.getElementById("jacoco-direct-link");
+    if (!link) return;
+    const path = window.location.pathname;
+    if (path.includes("/payflow-api/")) {
+      link.href = "/payflow-api/coverage-report/";
+    } else {
+      link.href = "/coverage-report/";
+    }
+  }
+
+  // Master setup function executing on initial load & instant navigation
+  function setupAll() {
+    initDiagramZoom();
+    adjustCoverageLink();
+  }
+
+  // Register with Material for MkDocs instant navigation observable
+  function registerInstantObserver() {
+    if (typeof document$ !== "undefined") {
+      document$.subscribe(() => {
+        setupAll();
+      });
+    } else {
+      // Poll briefly for document$ if MkDocs bundle.js is still initializing
+      let attempts = 0;
+      const interval = setInterval(() => {
+        attempts++;
+        if (typeof document$ !== "undefined") {
+          clearInterval(interval);
+          document$.subscribe(() => {
+            setupAll();
+          });
+        } else if (attempts >= 20) {
+          clearInterval(interval);
+        }
+      }, 50);
+    }
+  }
+
+  // Initial execution
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+      setupAll();
+      registerInstantObserver();
     });
   } else {
-    document.addEventListener("DOMContentLoaded", () => {
-      setTimeout(setup, 100);
-    });
+    setupAll();
+    registerInstantObserver();
   }
+
+  // Safety fallback for popstate and hash navigation
+  window.addEventListener("popstate", () => {
+    setTimeout(setupAll, 50);
+  });
 })();

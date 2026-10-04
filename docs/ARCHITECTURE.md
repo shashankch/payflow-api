@@ -1,13 +1,13 @@
 # Payflow API — System Architecture & Design Document
 
-> **Document Metadata**
-> - **Title**: Payflow API Core System Architecture & Payment Engine Design
-> - **Author**: Payflow Engineering (shashakchandel@gmail.com)
-> - **Status**: Approved / Living Design Document
-> - **Created Date**: 2026-08-01
-> - **Last Updated**: 2026-09-30
-> - **Authoritative Location**: [ARCHITECTURE.md](ARCHITECTURE.md)
-> - **Related Documents**: [API Specification](API_SPECIFICATION.md) | [Security Policy](SECURITY.md) | [Architecture Decisions (ADRs)](adr/README.md) | [Phased Roadmap](ROADMAP.md) | [Engineering Conventions](CONVENTIONS.md)
+!!! info "Document Metadata"
+    - **Title**: Payflow API Core System Architecture & Payment Engine Design
+    - **Author**: Payflow Engineering (shashakchandel@gmail.com)
+    - **Status**: Approved / Living Design Document
+    - **Created Date**: 2026-08-01
+    - **Last Updated**: 2026-09-30
+    - **Authoritative Location**: [ARCHITECTURE.md](ARCHITECTURE.md)
+    - **Related Documents**: [API Specification](API_SPECIFICATION.md) | [Security Policy](SECURITY.md) | [Architecture Decisions (ADRs)](adr/README.md) | [Phased Roadmap](ROADMAP.md) | [Engineering Conventions](CONVENTIONS.md)
 
 ---
 
@@ -28,6 +28,7 @@ In financial payment systems, balance state corruption or double-spending causes
 Furthermore, communicating transaction state to downstream services (such as notification push, fraud monitoring, or rewards engines) via direct HTTP/message calls within a database transaction causes the **dual-write problem**: if the DB commit succeeds but the network call fails, or vice versa, the system enters an inconsistent state.
 
 Payflow solves these challenges through:
+
 1. **Deterministic Lock Ordering**: Alphabetical pessimistic row locking on user accounts to prevent deadlocks and race conditions.
 2. **Double-Entry Balance Ledger**: Immutable, append-only ledger entries preserving complete audit trails.
 3. **Transactional Outbox Pattern**: Writing outbound events to the database in the same ACID transaction as the state change, eliminating network dual-write failures.
@@ -38,6 +39,7 @@ Payflow solves these challenges through:
 ## Goals & Non-Goals
 
 ### Goals
+
 - **Zero Double-Spending**: Guarantee absolute atomicity and isolation for balance transfers under concurrent requests.
 - **Financial Precision**: Enforce exact base-10 arithmetic (`BigDecimal`, `precision = 19, scale = 4`) with banker's rounding (`HALF_EVEN`).
 - **Exactly-Once Mutation Semantics**: Enforce idempotency on payment endpoints via unique `Idempotency-Key` headers and SHA-256 payload verification.
@@ -46,6 +48,7 @@ Payflow solves these challenges through:
 - **Non-Enumerable Entities**: Protect internal primary keys (`Long userId`) by exposing immutable UUID reference IDs (`referenceId`) across all external APIs.
 
 ### Non-Goals
+
 - **Multi-Currency / Forex Conversion Engine**: Version 1 is scoped strictly to single-currency transactions in Indian Rupees (INR, symbol: ₹). Multi-currency conversion is explicitly out of scope for v1.
 - **Physical ATM / Card Issuance Protocol**: Card network rails (Visa/Mastercard ISO 8583) are out of scope.
 - **Direct Banking Clearing House Clearing**: Core banking settlement protocols (NPCI/ISO 20022) are mocked via clean domain adapter interfaces.
@@ -197,6 +200,7 @@ The system enforces strict execution profiles to maximize scalability and transi
 To prevent double-spending under high request concurrency (e.g., a user submitting multiple transfers simultaneously), Payflow implements two tiers of locking:
 
 ### A. Database-Level Pessimistic Locking (Core Ledger)
+
 For balance updates on a single database instance, the transaction service uses database-level pessimistic write locking:
 ```java
 // In UserRepository.java
@@ -204,10 +208,13 @@ For balance updates on a single database instance, the transaction service uses 
 @Query("SELECT u FROM User u WHERE u.upiId = :upiId")
 Optional<User> findByUpiIdWithLock(@Param("upiId") String upiId);
 ```
+
 *This executes a `SELECT ... FOR UPDATE` query in PostgreSQL, blocking other transactions from modifying these specific rows until the current transaction commits.*
+
 * **Deadlock Avoidance**: Lock acquisition is performed in a deterministic order (e.g., sorting the user UPI IDs alphabetically). This prevents deadlock loops when two users perform mutual transfers at the same time.
 
 ### B. Distributed Locking (Cross-Service & Multi-Instance Coordination)
+
 When payment requests enter a distributed, multi-pod Kubernetes cluster, duplicate submissions with identical `Idempotency-Key` headers can reach different application instances concurrently. To intercept race conditions at the API gateway layer before database connection pool allocation or transactional row locking, Payflow API implements a **Redis Distributed Lock (Redlock)** using **Redisson** (`RLock`):
 
 ![Redisson Distributed Locking Sequence](assets/diagrams/distributed-lock-sequence.svg)
@@ -256,30 +263,39 @@ pod2 -> redis: "15. unlock(\"payflow:lock:idemp:tx-123\")"
 </details>
 
 #### Key Design Characteristics:
+
 1. **Profile-Conditional Architecture**:
    - **`prod` Profile**: Activates `RedissonDistributedLockService` backed by `RedissonClient` using `SingleServerConfig` (connection pool: 20, idle: 5, timeout: 3000ms).
    - **`!prod` Profiles (`local`, `test`, `prod-light`)**: Activates `NoOpDistributedLockService`, delivering zero-dependency instant local startup without requiring a Redis daemon.
 2. **Bounded Wait Time (`LOCK_WAIT_TIME = 2s`)**:
    Instead of immediately rejecting duplicate requests with a 409 Conflict, the second request waits up to 2 seconds for the first request to finish, enabling seamless cached response replay.
+
 3. **Fail-Safe Automatic Lease (`LOCK_LEASE_TIME = 10s`)**:
    Guarantees that if a pod crashes or is terminated (`SIGKILL`) during execution, the lock automatically expires in Redis after 10 seconds, preventing permanent distributed deadlocks.
+
 4. **Thread-Ownership Verification (`isHeldByCurrentThread()`)**:
    Before executing `unlock()`, the service confirms that the current thread owns the lock. This prevents `IllegalMonitorStateException` hazards if the lease expired during an unusually slow downstream call.
+
 5. **Defensive Slice Test Fallback**:
    In slice tests (`@WebMvcTest`) where service beans are not scanned, `IdempotencyFilter` falls back gracefully to `new NoOpDistributedLockService()`, eliminating test configuration boilerplate.
 
 ### C. Append-Only Double-Entry Balance Ledger
+
 All financial balance operations execute double-entry bookkeeping by persisting two immutable `BalanceLedgerEntry` records (`DEBIT` for sender, `CREDIT` for receiver) within the same `@Transactional` database boundary as the money transfer:
+
 - **Audit Integrity**: Every ledger entry records `amount`, `balanceBefore`, and `balanceAfter`, providing an immutable audit trail for every user balance state transition.
 - **Balance Reconciliation**: `users.balance` functions as a high-performance denormalized field. The authoritative source of truth can be validated at any time by executing a reconciliation query over the `balance_ledger` table:
   ```sql
   SELECT COALESCE(SUM(CASE WHEN entry_type = 'CREDIT' THEN amount ELSE -amount END), 0)
   FROM balance_ledger WHERE user_id = :userId;
   ```
+
 - **Immutability**: Once written, ledger rows are never updated or deleted. Reversals or refunds append new `CREDIT`/`DEBIT` ledger rows.
 
 ### D. Database Indexing Strategy
+
 To ensure high database read throughput and statement generation speed, the following index constraints are established in Flyway migrations:
+
 - `CREATE UNIQUE INDEX idx_users_upi_id ON users(upi_id);`
 - `CREATE UNIQUE INDEX idx_users_reference_id ON users(reference_id);`
 - `CREATE INDEX idx_tx_sender_created ON transactions(sender_upi_id, created_at DESC);`
@@ -288,7 +304,9 @@ To ensure high database read throughput and statement generation speed, the foll
 - `CREATE INDEX idx_ledger_user_created ON balance_ledger(user_id, created_at DESC);`
 
 ### E. Flyway Versioned Database Migrations
+
 All database DDL changes execute via Flyway versioned SQL scripts located in `src/main/resources/db/migration/`:
+
 - `V1__create_users_table.sql`: Baseline schema for `users` table.
 - `V2__create_transactions_table.sql`: Schema for `transactions` table with foreign keys to `users`.
 - `V3__create_balance_ledger_table.sql`: Schema for `balance_ledger` double-entry audit table.
@@ -297,6 +315,7 @@ All database DDL changes execute via Flyway versioned SQL scripts located in `sr
 Hibernate is configured to `spring.jpa.hibernate.ddl-auto=validate`, forcing JPA mapping validation against Flyway-managed schema while prohibiting unversioned database mutations in production.
 
 ### F. Spring Environment Profiles & Testcontainers Strategy
+
 Configuration is structured cleanly across profile-specific YAML files:
 
 | Profile | Datasource / DB Engine | Flyway | JPA DDL Auto | Primary Purpose |
@@ -335,10 +354,12 @@ Payflow enforces a multi-tier testing strategy following the standard Test Pyram
 ## 4. JPA N+1 Query Resolution
 
 When loading transaction histories (e.g., querying users and their related list of transactions), Hibernate's default lazy loading triggers the **N+1 query problem**:
+
 - 1 query is executed to fetch the page of $N$ users.
 - $N$ queries are executed to fetch the transactions for each individual user.
 
 ### Resolution Strategy
+
 To maintain a high-performance database connection pool, Payflow resolves this using `@EntityGraph` annotations in Spring Data JPA repositories:
 ```java
 // In TransactionRepository.java
@@ -348,6 +369,7 @@ Optional<Transaction> findByReferenceId(UUID referenceId);
 @EntityGraph(attributePaths = {"sender", "receiver"})
 Page<Transaction> findBySenderUpiIdOrReceiverUpiId(String senderUpiId, String receiverUpiId, Pageable pageable);
 ```
+
 This forces Spring Data JPA to generate a single SQL query with `LEFT OUTER JOIN`s, retrieving the transaction along with its associated `sender` and `receiver` `User` entities in a single database round-trip.
 
 ---
@@ -363,6 +385,7 @@ To support continuous releases and backward compatibility for mobile and third-p
   @RequestMapping("/api/v1/transactions")
   public class TransactionController { ... }
   ```
+
 - **Deprecation Policy**: Old version routes (e.g., `/api/v1`) remain active until deprecated by major versions (`/api/v2`), routing traffic transparently via the API Gateway.
 
 ---
@@ -372,6 +395,7 @@ To support continuous releases and backward compatibility for mobile and third-p
 To guarantee "exactly-once" execution on payment mutations, Payflow enforces a durable, database-backed idempotency filter that requires clients to pass a unique `Idempotency-Key` header with write requests.
 
 ### Idempotency Schema
+
 ```sql
 CREATE TABLE idempotency_registry (
     idempotency_key VARCHAR(255) PRIMARY KEY,
@@ -430,10 +454,12 @@ filter -> client: "14. 400 Bad Request (Key Reuse with Different Payload)"
 </details>
 
 ### In-Flight Lease Recovery & Distributed Race Handling
+
 - **Crashed Worker Node Recovery**: If an application node crashes mid-flight while a transaction is in status `PROCESSING`, the in-flight lease automatically expires after 2 minutes (`IN_FLIGHT_TIMEOUT`), allowing client retries to re-acquire the lock without waiting for the 24-hour TTL purge.
 - **Concurrent Insert Collision Safety**: If two concurrent requests with the same key arrive simultaneously and both pass initial existence checks, database unique constraint enforcement triggers a `DataIntegrityViolationException`, which the filter catches and gracefully translates to `409 Conflict`.
 
 ### Background TTL Purge Service
+
 A scheduled job (`IdempotencyCleanupService`) executes periodically (`payflow.idempotency.cleanup-cron`) to purge expired records older than the configured TTL (`payflow.idempotency.ttl-hours`, default 24 hours). The `idx_idemp_created` B-Tree index ensures constant-time range scan performance during deletion.
 
 ---
@@ -443,6 +469,7 @@ A scheduled job (`IdempotencyCleanupService`) executes periodically (`payflow.id
 To achieve reliable event-driven messaging, Payflow uses **Spring Modulith's Event Publication Registry** (`spring-modulith-starter-jpa`) to atomically persist domain events within the same database transaction as the business state change. This eliminates the dual-write problem without requiring custom outbox polling infrastructure.
 
 ### Event Publication Schema
+
 ```sql
 CREATE TABLE IF NOT EXISTS event_publication (
     id UUID NOT NULL,
@@ -505,6 +532,7 @@ listener -> db: "13. UPDATE event_publication SET completion_date = NOW() WHERE 
 </details>
 
 ### Module Boundary Verification
+
 Spring Modulith continuously validates domain encapsulation and architectural coupling rules across packages via `ModulithStructureTest`:
 ```java
 ApplicationModules modules = ApplicationModules.of(PayflowApiApplication.class);
@@ -522,6 +550,7 @@ modules.verify();
 ### Kafka Event Externalization Topology (Phase 9A)
 
 When running under the `prod` profile (or the `kafka` test/dev profile via `application-kafka.yml`), Spring Modulith automatically binds the transactional outbox registry to Apache Kafka:
+
 1. **Topic & Replication**: Created via `NewTopic` using property `${payflow.kafka.transfers-topic:payflow.transfers}` with 3 partitions. Replication factor is configurable via `${payflow.kafka.topic-replicas}` (defaults to `3` in `application-prod.yml` for multi-broker cluster durability, and `1` in `application-kafka.yml` for single-broker dev/test containers).
 2. **Dynamic Programmatic Routing**: Configured via `EventExternalizationConfiguration`, dynamically binding `@Externalized` `TransferCompletedEvent` to the exact same topic property, ensuring topic creation and event externalization never diverge.
 3. **Partitioning Key**: `senderUpi` (e.g. `aarav@payflow`), ensuring all transfer events originating from the same sender arrive strictly in order at the same partition for consumer groups.
@@ -696,6 +725,7 @@ System stability under load is enforced using **Resilience4j** configurations:
 * **Retries & Backoff**: Outbound requests (e.g. to third-party banking processors) are wrapped in Spring Retry & Resilience4j Circuit Breaker policies using **exponential backoff with random jitter** to prevent thundering herd requests on recovering downstream hosts.
 * **Virtual Threads Integration (Project Loom — Phase 10B)**:
   Java 25 virtual threads are enabled globally (`spring.threads.virtual.enabled=true`). Since virtual threads do not block OS kernel threads during blocking I/O (database transactions, external HTTP REST calls, Redis operations), the application services thousands of concurrent requests with minimal memory overhead (~1 KB per virtual thread vs ~1 MB per platform thread). To prevent relational database connection starvation, HikariCP's maximum pool size is explicitly bounded (`maximum-pool-size=20`, `idle-timeout=300000ms`, `max-lifetime=1800000ms` in `prod`, and `maximum-pool-size=5` in `prod-light`).
+
 * **Gen-AI Fault Tolerance & Heuristic Fallback (Phase 10A)**:
   The Gen-AI Spend Insights engine (`LlmInsightClient`) is protected by a dedicated Resilience4j Circuit Breaker (`aiCircuitBreaker`) and time limiter. When downstream LLM inference encounters timeouts, rate limits, or connectivity failures, the circuit breaker instantly diverts execution to `ruleBasedFallback(Transaction, Throwable)`. This heuristic fallback evaluates recipient handle metadata across 8 expenditure categories, ensuring 100% endpoint uptime and zero disruption to the payment system.
 
@@ -706,6 +736,7 @@ System stability under load is enforced using **Resilience4j** configurations:
 Payflow API adopts an immutable, production-hardened cloud-native deployment model:
 
 ### A. Multi-Stage Containerization & Hardening (Phase 11A)
+
 - **Multi-Stage `Dockerfile`**:
   - **Stage 1 (`builder`)**: Utilizes `eclipse-temurin:25-jdk` to resolve Maven dependencies and compile the executable Spring Boot fat JAR, leveraging BuildKit cache mounts (`--mount=type=cache,target=/root/.m2`) to speed up subsequent builds.
   - **Stage 2 (`runtime`)**: Employs minimal `eclipse-temurin:25-jre` to construct a lightweight (~250 MB) production runtime image, eliminating compilers, build dependencies, and package managers from the production artifact.
@@ -830,7 +861,9 @@ cluster.workloads.pod2 -> backing.kafka
   - `pdb.yaml`: PodDisruptionBudget guarantees at least 1 pod remains continuously available (`minAvailable: 1`) during cluster upgrades or node draining.
 
 ### C. Coordinated Graceful Shutdown Lifecycle
+
 In distributed Kubernetes environments, terminating pods requires coordinated draining to prevent dropping active financial transactions:
+
 1. **Endpoint Deregistration**: Kubernetes removes the terminating pod from service endpoint slices asynchronously.
 2. **Pre-Stop Hook**: The pod spec executes a `lifecycle.preStop` hook running `sleep 10`. This delay allows kube-proxy and Ingress controllers to propagate endpoint removal before the container receives a termination signal.
 3. **Graceful Application Draining**:
@@ -838,6 +871,7 @@ In distributed Kubernetes environments, terminating pods requires coordinated dr
    - `spring.lifecycle.timeout-per-shutdown-phase: 30s`: Spring allows active HTTP transactions, database queries, and Kafka event externalizations up to 30 seconds to complete cleanly before JVM termination.
 
 ### D. Automated CI/CD Quality Gates & Bytecode Analysis (Phase 11C)
+
 - **SpotBugs Static Analysis (`spotbugs-maven-plugin:4.10.4.1`)**: Executes static bytecode verification during the Maven `verify` phase with `effort: Max` and `threshold: Medium`. Filtered by `spotbugs-exclude.xml` for generated MapStruct mappers and compatibility stubs; achieved **0 bugs and 0 errors**.
 - **JaCoCo Coverage Enforcement (`jacoco-maven-plugin:0.8.15`)**: Automatically enforces strict bundle-level code coverage limits:
   - **Line Coverage**: Minimum 80% (Achieved: **90%** across 191 tests).
@@ -852,12 +886,14 @@ In distributed Kubernetes environments, terminating pods requires coordinated dr
 Payflow implements the **Three Pillars of Observability** — Metrics, Tracing, and Logging — using industry-standard open-source tooling and Spring Boot 4 / Micrometer Observation architecture:
 
 ### A. Distributed Tracing (OpenTelemetry & Micrometer Observation)
+
 - **Micrometer Tracing** with the **OpenTelemetry bridge** (`micrometer-tracing-bridge-otel` and `opentelemetry-exporter-otlp`) automatically generates and propagates W3C-standard `traceparent` headers (`traceId`, `spanId`) across HTTP controllers, database queries, and async thread pools.
 - **Method-Level Spans**: Domain service operations like `TransactionService.sendMoney()` are instrumented with `@Observed(name = "payflow.transfers.send", contextualName = "send-money-transfer")` via `ObservedAspect`, creating dedicated trace spans and execution timers automatically.
 - **Header Correlation**: The client-provided or auto-generated `X-Request-Id` (via `RequestIdFilter`) coexists with W3C `traceparent` context, returning both headers in HTTP responses.
 - Compatible with **Grafana Tempo**, **Jaeger**, or any OTLP-compatible tracing backend.
 
 ### B. Business & System Metrics (Prometheus + Grafana)
+
 - **Business Metrics (`MetricsConfig.java`)**:
   - `payflow.transfers.total`: Counter tagged by transfer status (`COMPLETED`, `FAILED`, `INSUFFICIENT_BALANCE`, `FORBIDDEN`).
   - `payflow.transfers.amount`: Distribution summary with SLA percentiles (p50, p95, p99) tracking transfer monetary distribution in Indian Rupees (INR, ₹).
@@ -866,6 +902,7 @@ Payflow implements the **Three Pillars of Observability** — Metrics, Tracing, 
 - **Prometheus Scraping**: Prometheus scrapes `/actuator/prometheus` without authentication barriers (`SecurityConfig` permits actuator metric endpoints).
 
 ### C. Structured Logging & MDC Enrichment (`RequestLoggingFilter.java`)
+
 - **MDC Correlation**: `RequestIdFilter` and `RequestLoggingFilter` populate MDC keys across every request:
   - `requestId`: Unique request identifier (`X-Request-Id`).
   - `traceId` and `spanId`: OpenTelemetry trace context.
@@ -884,6 +921,7 @@ Payflow implements the **Three Pillars of Observability** — Metrics, Tracing, 
 Payflow API incorporates **Resilience4j** to safeguard system stability under peak traffic spikes, noisy neighbor conditions, and downstream service degradations.
 
 ### A. Resilience Policy Configuration Matrix
+
 | Policy | Component | Target | Key Configuration Parameters | Failure Behavior |
 | :--- | :--- | :--- | :--- | :--- |
 | **Rate Limiter** | `transferLimiter` | `TransactionService.sendMoney()` | `limitForPeriod: 10`, `limitRefreshPeriod: 1s`, `timeoutDuration: 0s` | Returns HTTP `429 Too Many Requests` with `Retry-After: 1` |
@@ -892,6 +930,7 @@ Payflow API incorporates **Resilience4j** to safeguard system stability under pe
 | **Transaction Timeout** | Database Engine | Balance debit/credit & ledger write | `timeout = 5s` (Spring `@Transactional`) | Aborts deadlock-prone or hung SQL transactions |
 
 ### B. Dynamic Per-User Rate Limiting Pattern
+
 Unlike traditional global rate limiting, which allows a single abusive script to exhaust server throughput for all customers, Payflow enforces **per-authenticated-user partition isolation**:
 
 ![Dynamic Per-User Rate Limiting Flow](assets/diagrams/user-rate-limiting.svg)
@@ -937,12 +976,15 @@ service -> client: "[Exceeded > 10 req/s] 429 Too Many Requests (Retry-After: 1)
 - **Memory Eviction Safeguard**: Dynamically generated rate limiter instances are tracked by access timestamp. `UserRateLimiterService.evictInactiveLimiters()` executes periodically, purging partitions inactive for >15 minutes from the registry to prevent unbounded memory growth.
 
 ### C. Downstream Circuit Breaking & Selective Exception Filtering
+
 The external UPI verification gateway is guarded by a Resilience4j Circuit Breaker:
+
 - **Count-Based Sliding Window**: Measures the outcome of the last 10 calls. Once 5 calls are completed, if >=50% fail with network exceptions (`RestClientException`, `IOException`), the circuit trips to `OPEN`.
 - **Selective Exception Filtering**: Client data errors (such as `InvalidUpiException` mapped to HTTP 422) are domain validation rejections and explicitly excluded via `ignoreExceptions`, ensuring bad user inputs do not falsely trip downstream infrastructure breakers.
 - **Fail-Fast & Recovery**: In `OPEN` state, downstream calls fail fast without network traversal. After 5 seconds, the circuit transitions to `HALF_OPEN`, testing 3 probe requests to automatically heal back to `CLOSED`.
 
 ### D. Resilience Metrics & Actuator Integration
+
 - **Prometheus Gauges & Counters**:
   - `resilience4j.circuitbreaker.state`: Current state (`closed`, `open`, `half_open`).
   - `resilience4j.circuitbreaker.calls`: Total calls tagged by `kind` (`successful`, `failed`, `ignored`).
@@ -957,6 +999,7 @@ The external UPI verification gateway is guarded by a Resilience4j Circuit Break
 To achieve sub-10ms response latencies on repetitive user profile lookups and balance ledger inspection while shielding PostgreSQL from read connection exhaustion, Payflow API implements a **Profile-Conditional Cache-Aside Architecture** using Spring Cache, Redis (Lettuce), and Caffeine.
 
 ### A. Cache-Aside Workflow & Sequence Diagram
+
 In the Cache-Aside pattern, the application service inspects the cache before accessing the underlying database. On write operations, the cache entries are evicted rather than updated inline, eliminating race conditions between concurrent database writes and cache updates.
 
 ![Cache-Aside Workflow & Sequence Diagram](assets/diagrams/cache-aside-workflow.svg)
@@ -1001,6 +1044,7 @@ service -> client: "Return Success Response"
 </details>
 
 ### B. Profile-Conditional Cache Strategy
+
 The cache infrastructure adapts transparently across environments via `CacheConfig.java`:
 
 | Environment / Profile | Cache Provider | Implementation Class | Characteristics & Configuration |
@@ -1009,6 +1053,7 @@ The cache infrastructure adapts transparently across environments via `CacheConf
 | **`!prod` (`local`, `test`, `prod-light`)** | **Caffeine** | `CaffeineCacheManager` | High-performance in-memory cache requiring zero external network dependencies or Docker containers. Spec: `maximumSize=1000,expireAfterWrite=600s`. |
 
 ### C. Cache Names, Key Schemes & TTL Matrix
+
 Cache policies are externalized in `application.yml` and tuned based on data volatility and freshness requirements:
 
 | Cache Name | Cached Methods | Key Scheme | TTL | Eviction Triggers |
@@ -1017,20 +1062,26 @@ Cache policies are externalized in `application.yml` and tuned based on data vol
 | `user_ledgers` | `getUserLedger()` | `#userReferenceId + '_' + #pageable.pageNumber` | **1 minute** (`60s`) | Targeted eviction on `sendMoney()` (sender & receiver keys only) |
 
 ### D. Serialization & Entity Hardening
+
 1. **Modern JSON Serialization (`RedisSerializer.json()`)**:
    Spring Data Redis 3.x / Spring Framework 7 deprecates `GenericJackson2JsonRedisSerializer`. Payflow leverages `RedisSerializer.json()` for non-intrusive, polymorphic JSON value encoding. This avoids native Java binary serialization vulnerabilities while ensuring human-readable inspectability in Redis CLI (`redis-cli`).
+
 2. **Null-Safety Handling**:
    Read operations use `@Cacheable(..., unless = "#result == null")`. When a service method returns `Optional<User>`, Spring's caching aspect unwraps the `Optional` before SpEL condition evaluation. The `#result == null` guard ensures empty optionals are not cached, preventing false positive hits for non-existent users.
+
 3. **Circular Reference & Proxy Isolation**:
    Domain entities are hardened for JSON serialization:
+
    - `User` and `BalanceLedgerEntry` implement `java.io.Serializable` (`serialVersionUID = 1L`).
    - `BalanceLedgerEntry` is decorated with `@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})` to prevent Jackson serialization failures on uninitialized Hibernate bytecode proxies.
    - Lazy JPA relationships (`user`, `transaction`) in `BalanceLedgerEntry` are annotated with `@JsonIgnore` to eliminate circular reference graphs during JSON marshaling.
 
 ### E. Targeted Cache Invalidation Mechanics (Phase 9B)
+
 Prior to Phase 9B, `TransactionService.sendMoney()` utilized blanket cache invalidation (`@CacheEvict(value = {"users", "user_ledgers"}, allEntries = true)`). In production, this created a **Cache Stampede (Thundering Herd)** vulnerability, purging all cached active sessions across the entire application whenever any two users completed a transfer.
 
 In Phase 9B, Payflow API replaced blanket eviction with programmatic **Targeted Eviction** (`evictTargetedCaches`):
+
 1. **Scope Bounded**: Only the transaction's `sender` and `receiver` keys are invalidated.
 2. **Multi-Key Invalidation**: Selectively evicts each participant's primary lookup keys:
    - `users` cache: `upiId`, `referenceId`, and internal `userId`.
@@ -1044,6 +1095,7 @@ In Phase 9B, Payflow API replaced blanket eviction with programmatic **Targeted 
 To ensure maximum code coverage and high system reliability, the project defines a two-tier testing strategy consisting of isolated unit tests and full-stack integration tests.
 
 ### A. Isolated Unit Testing Strategy
+
 Unit tests focus on isolating individual components and verifying business logic without booting the database or messaging middleware:
 
 1. **Controller Layer (MockMVC)**:
@@ -1059,6 +1111,7 @@ Unit tests focus on isolating individual components and verifying business logic
    - Outbound REST endpoints (UPI validation via HTTP Interface Client), the AI model assistant API, and Kafka brokers are mocked or stubbed during unit verification using WireMock and MockRestServiceServer to prevent flaky test execution and external network dependence.
 
 ### B. Advanced Integration Testing (Rigor & Concurrency Verification)
+
 Integration tests verify the full lifecycle of a transaction across actual container dependencies using **Testcontainers** to orchestrate PostgreSQL and Kafka instances during Maven build phases:
 
 1. **Concurrent Race Condition Testing**:
@@ -1081,18 +1134,23 @@ Integration tests verify the full lifecycle of a transaction across actual conta
 To establish robust domain boundaries and prevent corrupt data state, the entity layer adheres to Rich Domain Model principles and precise database constraints:
 
 ### A. Financial Precision (`BigDecimal`)
+
 All monetary columns (`balance`, `amount`) are represented using `BigDecimal` mapped to database column definition `@Column(precision = 19, scale = 4, nullable = false)`. Floating-point binary arithmetic primitives (`double`, `float`) are prohibited to eliminate representation error accumulation.
 
 ### B. Rich Domain Invariants
+
 Entities encapsulate their own business invariants and state transitions:
+
 - **`User.debit(BigDecimal amount)`**: Enforces positive debit amounts and verifies balance adequacy (`balance >= amount`). Throws `IllegalStateException` or domain exceptions if invariants fail.
 - **`User.credit(BigDecimal amount)`**: Enforces positive credit amounts and updates account balance atomically in-memory.
 
 ### C. Auditability & Optimistic Locking
+
 - **Audit Timestamps**: `@CreationTimestamp Instant createdAt` and `@UpdateTimestamp Instant updatedAt` automatically track record creation and updates.
 - **Optimistic Locking**: `@Version Long version` enables Hibernate to prevent lost updates during concurrent non-locking state updates.
 
 ### D. Relational Foreign Key Integrity
+
 The `Transaction` entity maintains explicit JPA `@ManyToOne(fetch = FetchType.LAZY)` foreign key relationships to `User` for `sender` and `receiver`, while retaining denormalized `senderUpiId` and `receiverUpiId` fields for index-optimized queries.
 
 ---
@@ -1102,9 +1160,11 @@ The `Transaction` entity maintains explicit JPA `@ManyToOne(fetch = FetchType.LA
 Payflow validates UPI IDs against an external validation service during user registration using modern Spring outbound HTTP communication patterns:
 
 ### A. RestClient (Spring Framework 7)
+
 `RestClient` is the modern synchronous HTTP client that replaces the deprecated `RestTemplate`. It provides a fluent, immutable API with built-in error handling and serialization support.
 
 ### B. HTTP Interface Client
+
 Payflow defines outbound API contracts as declarative Java interfaces using `@GetExchange` / `@PostExchange` annotations:
 
 ```java
@@ -1117,6 +1177,7 @@ public interface UpiValidationClient {
 Spring generates the implementation proxy backed by `RestClient` at runtime — conceptually similar to OpenFeign but fully Spring-native with zero external dependencies.
 
 ### C. Resilience (Framework 7 Native @Retryable)
+
 Outbound HTTP calls are wrapped with Framework 7's native `@Retryable` annotation (now part of `spring-core`) providing exponential backoff with jitter:
 
 ```
@@ -1128,6 +1189,7 @@ Attempt 3 → success or fallback
 Graceful fallback: if the UPI validation service is unavailable, registration proceeds with a warning log — external service failures never block core user onboarding.
 
 ### D. HTTP Client Comparison Matrix
+
 | Client | Era | Model | Use Case |
 | :--- | :--- | :--- | :--- |
 | `RestTemplate` | Spring 3 (deprecated in FW7) | Imperative, verbose | Legacy codebases |
@@ -1243,6 +1305,7 @@ The system attack surface has been systematically modeled against the **STRIDE**
 ### C. Identity & Access Management (IAM) & Endpoint Policy Matrix
 
 #### 1. Authentication Architecture
+
 - **Stateless Bearer Tokens**: Authenticated via HMAC-SHA256 (`HS256`) signed JSON Web Tokens (JJWT 0.13.0).
 - **Token Claims**: Contains `sub` (UPI handle), `referenceId` (UUID), `roles` (`ROLE_USER`), `iat` (issued at), and `exp` (expiration).
 - **Token Expiration**: Strict 1-hour validity window (`3,600,000 ms`) to minimize exposure window if a client token is intercepted.
@@ -1269,19 +1332,24 @@ The system attack surface has been systematically modeled against the **STRIDE**
 | `/swagger-ui/**`, `/v3/api-docs/**` | `GET` | Public | No | OpenAPI 3.0 interactive documentation |
 
 #### 3. Transport, Browser & Framing Security
+
 - **Anti-Clickjacking**: Spring Security enforces `frameOptions().sameOrigin()`, ensuring that console, admin, or API documentation frames cannot be embedded in malicious cross-origin iframes.
 - **CORS Hardening**: Cross-Origin Resource Sharing is configured via `payflow.security.cors.allowed-origins`. Credential sharing (`allowCredentials`) is automatically disabled if wildcard origins (`*`) are detected, preventing credential leakage.
 
 ### D. Financial State Protection & Concurrency Security
 
 #### 1. Zero Double-Spending Guarantee
+
 To eliminate race conditions and double-spending vulnerabilities during concurrent transfers:
+
 1. Every transfer executes inside a Spring `@Transactional(isolation = Isolation.READ_COMMITTED, timeout = 5)` boundary.
 2. User balances are read and locked using **Pessimistic Write Locking** (`SELECT ... FOR UPDATE` via `UserRepository.findUserForUpdateByUpiId()`).
 3. Concurrent threads attempting to debit the same sender account block at the database engine until the active transaction commits or aborts.
 
 #### 2. Deadlock Elimination via Deterministic Lock Ordering
+
 When two users concurrently transfer funds to each other (e.g. Aarav sends to Priya while Priya sends to Aarav):
+
 - Acquiring locks in request order causes cyclical wait-for graphs and database deadlocks.
 - Payflow resolves this by sorting both UPI IDs lexicographically (`upiA.compareTo(upiB)`) before issuing `SELECT ... FOR UPDATE` queries.
 - Both transactions request locks in the exact same sequence (`aarav@payflow` first, then `priya@payflow`), converting cyclical deadlocks into sequential lock queues.
@@ -1319,6 +1387,7 @@ tx2 -> db: "Debit Priya, Credit Aarav, Commit & Release"
 </details>
 
 #### 3. Financial Base-10 Arithmetic Precision
+
 - All monetary columns (`balance`, `amount`, `balance_before`, `balance_after`) strictly use Java `BigDecimal` denominated in Indian Rupees (INR, ₹) mapped to database column `@Column(precision = 19, scale = 4, nullable = false)`.
 - Floating-point types (`double`, `float`) are prohibited across the codebase to prevent IEEE 754 decimal rounding inaccuracies.
 - Monetary divisions and conversions explicitly define `RoundingMode.HALF_EVEN` (Banker's Rounding).
@@ -1326,6 +1395,7 @@ tx2 -> db: "Debit Priya, Credit Aarav, Commit & Release"
 ### E. Input Validation, Durable Idempotency & Cryptographic Protection
 
 #### 1. Durable Idempotency & Payload Tampering Prevention
+
 1. **Header Requirement & Boundary Validation**: Mutation endpoints require an `Idempotency-Key` HTTP header. Keys must be 1-255 characters conforming to `^[A-Za-z0-9_.:-]+$`, rejecting malformed or oversized keys immediately with `400 Bad Request` before database or lock acquisition.
 2. **SHA-256 Request Payload Digest**: The raw HTTP request payload bytes are hashed using SHA-256 (`MessageDigest.getInstance("SHA-256")`).
 3. **Tampering Detection**: If a client re-submits an existing `Idempotency-Key` with a different payload (e.g., changed amount or recipient), the engine detects a checksum mismatch and rejects the request with `400 Bad Request` (`Key Reuse`).
@@ -1333,6 +1403,7 @@ tx2 -> db: "Debit Priya, Credit Aarav, Commit & Release"
 5. **Cached Response Replay**: Successfully executed transfers replay the cached `201 Created` HTTP response without executing duplicate balance mutations.
 
 #### 2. Input Validation & Injection Mitigation
+
 - **Jakarta Bean Validation (`@Valid`)**: All incoming DTOs enforce strict declarative constraints:
   - `@NotBlank`, `@Size(min = 3, max = 50)`
   - `@Pattern(regexp = "^[a-zA-Z0-9._-]+@[a-zA-Z0-9]+$")` (UPI ID syntax enforcement)
@@ -1342,6 +1413,7 @@ tx2 -> db: "Debit Priya, Credit Aarav, Commit & Release"
 - **Cross-Site Scripting (XSS)**: All responses return `application/json` or `application/problem+json`; HTML rendering is disabled in API controllers.
 
 #### 3. Transactional Outbox Lifecycle & Retention Maintenance (Phase 9B)
+
 - **Automated Retention Purge**: Domain events published through Spring Modulith are recorded in the `event_publication` table.
 - **Scheduled Maintenance**: `OutboxCleanupService` runs daily at 02:00 AM UTC (`0 0 2 * * *`) via Spring's `@Scheduled` annotation.
 - **Spring Modulith 2.0 API**: Calls `CompletedEventPublications.deletePublicationsOlderThan(Duration.ofDays(7))` to cleanly delete completed event records that have aged beyond the 7-day retention period (`payflow.outbox.retention-days`).
@@ -1350,23 +1422,27 @@ tx2 -> db: "Debit Priya, Credit Aarav, Commit & Release"
 ### F. Resilience, Fault Tolerance & DoS Mitigation
 
 #### 1. Dynamic Per-User Rate Limiting
+
 - **Partitioned Rate Limiting**: Implemented via `@PerUserRateLimiter(name = "transferLimiter")` and dynamic Resilience4j registries. Limits are segregated per authenticated user principal (or remote IP for unauthenticated routes).
 - **Default Baseline Policy**: 10 requests per second (`limit-for-period = 10`, `limit-refresh-period = 1s`, `timeout-duration = 0ms`).
 - **RFC 6585 & RFC 7807 Compliance**: Rejections immediately short-circuit with HTTP `429 Too Many Requests`, an explicit `Retry-After: 1` header, and standardized ProblemDetail payload (`https://api.payflow.com/errors/rate-limit-exceeded`).
 - **Memory Leak Protection**: Inactive user limiters are automatically audited and evicted every 15 minutes by `evictInactiveLimiters()`.
 
 #### 2. Circuit Breaker & Cascade Failure Protection
+
 - **External UPI Integration**: Downstream UPI banking network calls via `UpiValidationService` are wrapped in a Resilience4j `@CircuitBreaker(name = "upiValidation")`.
 - **Sliding Window Evaluation**: Monitors the last 10 requests (`COUNT_BASED`). If 50% or more fail within a minimum of 5 recorded calls, the circuit opens.
 - **Fail-Fast & Fallback**: In the `OPEN` state, requests fail fast with RFC 7807 `503 Service Unavailable` (`https://api.payflow.com/errors/service-unavailable`) without saturating thread pools or hammering downstream systems.
 - **Auto-Recovery**: After 5 seconds, the circuit transitions to `HALF_OPEN`, permitting 3 canary probe requests to verify downstream health before closing.
 
 #### 3. Execution Timeouts
+
 - **Strict Time Limits**: External validation and outbound integrations enforce Resilience4j `TimeLimiter` policies (default 5 seconds), preventing connection starvation and pool exhaustion.
 
 ### G. Observability, Auditability & Data Privacy
 
 #### 1. Immutable Double-Entry Balance Ledger
+
 - Direct balance updates without ledger entries are forbidden.
 - Every completed transfer writes two immutable records to `balance_ledger` (`DEBIT` and `CREDIT`) recording:
   - Account reference (`user_id`, `upi_id`)
@@ -1377,6 +1453,7 @@ tx2 -> db: "Debit Priya, Credit Aarav, Commit & Release"
 - Ledger tables contain no `UPDATE` or `DELETE` triggers; historical state can be audited or reconstructed at any point in time.
 
 #### 2. Sensitive Data Masking, Log Sanitization & Transport Security
+
 - **Credential Masking**: Passwords, raw JWT signatures, and authorization secret keys are excluded from `toString()` representations and log statements.
 - **Structured Logging (ECS)**: Production logs output structured JSON adhering to Elastic Common Schema (`logging.structured.format.console: ecs`).
 - **MDC Trace Correlation**: Every log statement automatically captures `requestId` (`X-Request-Id`), `traceId`, `spanId`, `http.status`, `http.method`, and `http.latency_ms`.
@@ -1405,6 +1482,7 @@ Documenting rejected alternatives and evaluating the penalty ("cost of getting i
 ## 20. Open & Resolved Design Issues
 
 ### Resolved Design Decisions
+
 - **`RES-001`: MapStruct for DTO Mapping** — Resolved in Phase 2C. Replaced custom manual factories with type-safe MapStruct mappers.
 - **`RES-002`: RFC 7807 Error Standard** — Resolved in Phase 2D. Standardized all exception responses on Spring `ProblemDetail`.
 - **`RES-003`: User Reference IDs** — Resolved in Phase 2E. Added `UUID referenceId` to `User` entity to insulate API boundaries from auto-increment IDs.
@@ -1419,5 +1497,6 @@ Documenting rejected alternatives and evaluating the penalty ("cost of getting i
 - **`RES-012`: Java 25 Virtual Threads and Bounded HikariCP Connection Pool Optimization** — Resolved in Phase 10B (ADR-027). Enabled `spring.threads.virtual.enabled: true` globally on Java 25, bounded HikariCP pools, and introduced low-memory `prod-light` profile with local Caffeine caching and synchronous Modulith events.
 
 ### Open Questions & Future Evaluation
+
 - **`OPEN-001`: Transfer Amount Cap Configuration** — Default cap set to ₹1,00,000 (`100,000.00`). Evaluating whether per-user dynamic velocity caps should be stored in Redis.
 

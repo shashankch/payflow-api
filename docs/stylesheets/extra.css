@@ -87,6 +87,101 @@
 }
 
 /* --------------------------------------------------------------------------
+   Readability, List Typography & Content Spacing Polish
+   -------------------------------------------------------------------------- */
+.md-typeset {
+  font-size: 0.92rem;
+  line-height: 1.8;
+}
+
+.md-typeset p {
+  line-height: 1.8;
+  margin-bottom: 1.25rem;
+}
+
+.md-typeset ul,
+.md-typeset ol {
+  margin-top: 0.75rem;
+  margin-bottom: 1.4rem;
+  padding-left: 1.75rem;
+}
+
+.md-typeset li {
+  margin-bottom: 0.6rem;
+  line-height: 1.75;
+}
+
+.md-typeset li:last-child {
+  margin-bottom: 0;
+}
+
+.md-typeset li > p {
+  margin-top: 0.45rem;
+  margin-bottom: 0.6rem;
+}
+
+.md-typeset li > ul,
+.md-typeset li > ol {
+  margin-top: 0.45rem;
+  margin-bottom: 0.6rem;
+}
+
+.md-typeset h1 {
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+  letter-spacing: -0.025em;
+}
+
+.md-typeset h2 {
+  margin-top: 2.75rem;
+  margin-bottom: 1.1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--diagram-border);
+}
+
+.md-typeset h3 {
+  margin-top: 2.2rem;
+  margin-bottom: 0.9rem;
+}
+
+.md-typeset h4 {
+  margin-top: 1.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.md-typeset hr {
+  margin: 2.75rem 0;
+  border-bottom: 1px solid var(--diagram-border);
+  opacity: 0.7;
+}
+
+/* Admonitions & Callouts Polish */
+.md-typeset .admonition {
+  border-radius: 8px;
+  margin: 1.75rem 0;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+}
+
+.md-typeset .admonition-title {
+  font-weight: 700;
+  padding: 0.65rem 1rem;
+}
+
+.md-typeset details {
+  border-radius: 8px;
+  border: 1px solid var(--diagram-border);
+  margin: 1.5rem 0;
+  background: var(--diagram-bg);
+}
+
+.md-typeset details summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0.65rem 1rem;
+  color: var(--md-primary-fg-color);
+}
+
+/* --------------------------------------------------------------------------
    Tables Styling & Responsive Layout
    -------------------------------------------------------------------------- */
 .md-typeset table:not([class]) {
@@ -147,7 +242,8 @@
 /* --------------------------------------------------------------------------
    Mermaid Diagrams & Interactive Zoom Controls
    -------------------------------------------------------------------------- */
-.mermaid-wrapper {
+.mermaid-wrapper,
+.diagram-wrapper {
   position: relative;
   background: var(--diagram-bg);
   border: 1px solid var(--diagram-border);
@@ -158,19 +254,21 @@
   overflow: hidden;
 }
 
-.mermaid-viewport {
+.mermaid-viewport,
+.diagram-viewport {
   overflow: auto;
   display: flex;
   justify-content: center;
   align-items: center;
   min-height: 380px;
-  max-height: 650px;
+  max-height: 680px;
   cursor: grab;
   user-select: none;
   padding: 1rem 0;
 }
 
-.mermaid-viewport:active {
+.mermaid-viewport:active,
+.diagram-viewport:active {
   cursor: grabbing;
 }
 
@@ -182,9 +280,15 @@
   width: 100%;
 }
 
-.mermaid-viewport .mermaid svg {
+.mermaid-viewport .mermaid svg,
+.diagram-viewport img,
+.diagram-viewport svg {
   max-width: 100% !important;
   height: auto;
+  transform-origin: center top;
+  transition: transform 0.15s ease-out;
+  display: block;
+  margin: 0 auto;
 }
 
 /* Diagram Interactive Toolbar */
@@ -310,10 +414,12 @@
   height: 80vh;
 }
 
-.mermaid-modal-content svg {
+.mermaid-modal-content svg,
+.mermaid-modal-content img {
   max-width: 95% !important;
-  max-height: 75vh !important;
+  max-height: 80vh !important;
   height: auto;
+  object-fit: contain;
 }
 
 /* --------------------------------------------------------------------------
@@ -333,7 +439,7 @@
 }
 
 .md-typeset .tabbed-content {
-  padding: 1rem;
+  padding: 1.25rem 1.5rem;
 }
 
 /* --------------------------------------------------------------------------
@@ -341,11 +447,25 @@
    -------------------------------------------------------------------------- */
 .md-typeset code {
   border-radius: 4px;
-  padding: 0.15em 0.4em;
-  font-size: 0.85em;
+  padding: 0.18em 0.45em;
+  font-size: 0.86em;
+}
+
+[data-md-color-scheme="default"] .md-typeset code {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #0f172a;
+}
+
+[data-md-color-scheme="slate"] .md-typeset code {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #7dd3fc;
 }
 
 .highlight {
-  border-radius: 6px;
+  border-radius: 8px;
+  border: 1px solid var(--diagram-border);
   overflow: hidden;
+  margin: 1.5rem 0;
 }

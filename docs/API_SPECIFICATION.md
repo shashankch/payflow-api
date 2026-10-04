@@ -1,13 +1,13 @@
 # Payflow API — REST API Specification
 
-> **Document Metadata**
-> - **Title**: Payflow REST API Interface & Schema Specification
-> - **Author**: Payflow Engineering (shashakchandel@gmail.com)
-> - **Status**: Approved / Living Specification
-> - **Created Date**: 2026-08-01
-> - **Last Updated**: 2026-09-30
-> - **Authoritative Location**: [API_SPECIFICATION.md](API_SPECIFICATION.md)
-> - **Related Documents**: [System Architecture](ARCHITECTURE.md) | [Security Architecture](ARCHITECTURE.md#18-security-architecture-and-threat-model) | [Architecture Decisions (ADRs)](adr/README.md) | [Phased Roadmap](ROADMAP.md) | [Engineering Conventions](CONVENTIONS.md)
+!!! info "Document Metadata"
+    - **Title**: Payflow REST API Interface & Schema Specification
+    - **Author**: Payflow Engineering (shashakchandel@gmail.com)
+    - **Status**: Approved / Living Specification
+    - **Created Date**: 2026-08-01
+    - **Last Updated**: 2026-09-30
+    - **Authoritative Location**: [API_SPECIFICATION.md](API_SPECIFICATION.md)
+    - **Related Documents**: [System Architecture](ARCHITECTURE.md) | [Security Architecture](ARCHITECTURE.md#18-security-architecture-and-threat-model) | [Architecture Decisions (ADRs)](adr/README.md) | [Phased Roadmap](ROADMAP.md) | [Engineering Conventions](CONVENTIONS.md)
 
 This document details the REST API endpoints, request/response models, input validation rules, and error handling behaviors for the Payflow API service.
 
@@ -27,6 +27,7 @@ This document details the REST API endpoints, request/response models, input val
 ## Interactive OpenAPI & Swagger Documentation
 
 Payflow API auto-generates live, interactive OpenAPI 3.0 documentation using **Springdoc OpenAPI 3.1.1**:
+
 - **Swagger UI (Interactive Playground)**: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
 - **OpenAPI 3.0 JSON Specification**: [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs)
 
@@ -56,6 +57,7 @@ When an API error occurs (validation error, resource not found, conflict, etc.),
 ## Endpoints
 
 ### 0. User Authentication (Login)
+
 Authenticates a registered user by UPI ID and issues a cryptographically signed JWT access token.
 
 - **HTTP Method**: `POST`
@@ -98,6 +100,7 @@ Authenticates a registered user by UPI ID and issues a cryptographically signed 
 ---
 
 ### 1. Register User
+
 Registers a new client profile with an initial balance.
 
 - **HTTP Method**: `POST`
@@ -152,6 +155,7 @@ Registers a new client profile with an initial balance.
 ---
 
 ### 2. List Users (Paginated, Admin Only)
+
 Retrieves a paginated list of registered users. Requires administrative privileges (`ROLE_ADMIN`).
 
 - **HTTP Method**: `GET`
@@ -199,6 +203,7 @@ Retrieves a paginated list of registered users. Requires administrative privileg
 ---
 
 ### 3. Retrieve User by Reference ID
+
 Fetches a single user record by their unique UUID reference ID.
 
 - **HTTP Method**: `GET`
@@ -232,6 +237,7 @@ Fetches a single user record by their unique UUID reference ID.
 ---
 
 ### 4. Retrieve User by UPI ID
+
 Fetches a single user record by their unique UPI ID.
 
 - **HTTP Method**: `GET`
@@ -265,6 +271,7 @@ Fetches a single user record by their unique UPI ID.
 ---
 
 ### 5. Retrieve User Balance Ledger History
+
 Retrieves paginated double-entry balance ledger audit entries for a user by UUID reference ID.
 
 - **HTTP Method**: `GET`
@@ -312,6 +319,7 @@ Retrieves paginated double-entry balance ledger audit entries for a user by UUID
 ---
 
 ### 6. Filter Users by Minimum Balance (Admin Only)
+
 Retrieves a list of users whose balance exceeds the specified minimum threshold. Requires administrative privileges (`ROLE_ADMIN`).
 
 - **HTTP Method**: `GET`
@@ -349,6 +357,7 @@ Retrieves a list of users whose balance exceeds the specified minimum threshold.
 ---
 
 ### 7. Create Money Transfer
+
 Executes a peer-to-peer fund transfer request with guaranteed exactly-once idempotency and sender verification.
 
 - **HTTP Method**: `POST`
@@ -420,6 +429,7 @@ Executes a peer-to-peer fund transfer request with guaranteed exactly-once idemp
 ---
 
 ### 8. Retrieve Transaction by Reference ID
+
 Fetches details of a single transaction by its unique UUID reference ID.
 
 - **HTTP Method**: `GET`
@@ -455,6 +465,7 @@ Fetches details of a single transaction by its unique UUID reference ID.
 ---
 
 ### 9. List Transactions for a User (Paginated)
+
 Retrieves a paginated list of all transactions where the specified UPI ID is either the sender or receiver.
 
 - **HTTP Method**: `GET`
@@ -505,6 +516,7 @@ Retrieves a paginated list of all transactions where the specified UPI ID is eit
 ---
 
 ### 10. Generate Spend Insights for Transaction
+
 Analyzes transaction metadata and recipient UPI handle using Spring AI structured prompt engineering to classify the expenditure into personal finance categories and generate actionable budget insights.
 
 - **HTTP Method**: `POST`
@@ -583,6 +595,7 @@ All error responses adhere to the standard RFC 7807 and RFC 9457 `application/pr
 ```
 
 ### Rate Limit Exceeded (`429 Too Many Requests`)
+
 *Response includes header: `Retry-After: 1`*
 ```json
 {
@@ -597,6 +610,7 @@ All error responses adhere to the standard RFC 7807 and RFC 9457 `application/pr
 ```
 
 ### Service Unavailable / Circuit Breaker Open (`503 Service Unavailable`)
+
 ```json
 {
   "type": "https://api.payflow.com/errors/service-unavailable",

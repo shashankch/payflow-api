@@ -13,14 +13,17 @@ Traditional single-stage Docker images carry build dependencies (JDK, Maven, bui
 ## Considered Options
 
 ### Option A: Single-Stage JDK Base Image Running as Root
+
 - **Pros**: Minimal Dockerfile complexity.
 - **Cons**: Severe security vulnerability (container breakout risks as root); image sizes exceed 850 MB; includes unnecessary compiler, build tools, and transient package managers in production.
 
 ### Option B: JLink-Based Custom Minimal Runtime via Alpine Linux
+
 - **Pros**: Extremely tiny container footprint (~80 MB).
 - **Cons**: High build complexity; glibc/musl compatibility issues with modern dynamic libraries; non-trivial debugging and maintenance overhead with Java 25 previews.
 
 ### Option C: Multi-Stage Build with Eclipse Temurin 25 JRE, Non-Root User, and Full-Stack Compose (Chosen)
+
 - **Pros**:
   - Clear separation of concerns: Stage 1 (`eclipse-temurin:25-jdk`) builds the executable fat JAR using layer caching; Stage 2 (`eclipse-temurin:25-jre`) provides a lean, hardened runtime (~250 MB).
   - Enforces least privilege: Executes under dedicated unprivileged non-root system user (`payflow:10001`).
@@ -53,9 +56,11 @@ We adopted **Option C**. Key implementation highlights include:
 ## Consequences
 
 ### Positive
+
 - **Reduced Attack Surface**: No compiler, package cache, or root privileges exist in the runtime container.
 - **Predictable Garbage Collection**: Generational ZGC provides sub-millisecond GC pauses across container memory allocations.
 - **One-Command Environment Launch**: Developers can execute `docker compose up -d` to bring up the entire distributed banking infrastructure with health-checked dependency startup.
 
 ### Trade-offs & Mitigations
+
 - **Base Image Updates**: Minor base image patches must be audited periodically. Automated GitHub Dependabot and CI workflows verify base image freshness.

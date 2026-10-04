@@ -9,6 +9,7 @@
 Maintaining the structural integrity, security, and correctness of an enterprise transactional banking system requires strict, automated quality gates integrated into the developer feedback loop and CI/CD pipelines.
 
 Without enforced quality gates, regression bugs, unhandled null references, concurrency hazards, and code coverage decay easily slip through peer reviews. Specifically, the engineering team required:
+
 1. Automated static code analysis detecting bug patterns, serialization risks, and security flaws at build time.
 2. Automated code coverage enforcement requiring high thresholds on domain and transactional logic before code can be merged into `main`.
 3. Automated artifact archiving allowing developers to inspect coverage reports directly within pull requests.
@@ -16,14 +17,17 @@ Without enforced quality gates, regression bugs, unhandled null references, conc
 ## Considered Options
 
 ### Option A: Manual Code Review and Spot Auditing
+
 - **Pros**: Zero initial configuration overhead.
 - **Cons**: High cognitive load on reviewers; inconsistent enforcement; vulnerable to human oversight on edge cases.
 
 ### Option B: External SaaS Quality Platforms (e.g., SonarQube Cloud)
+
 - **Pros**: Rich web UI and historical metrics tracking.
 - **Cons**: Adds external SaaS dependency, API token management, and network latency to CI builds; potential enterprise firewall constraints.
 
 ### Option C: Native Maven Verification Pipeline with SpotBugs and JaCoCo Plugins (Chosen)
+
 - **Pros**:
   - Zero external SaaS dependencies: Everything runs natively within the standard `mvn clean verify` lifecycle.
   - SpotBugs Static Analysis (`spotbugs-maven-plugin:4.10.4.1`): Audits Java 25 bytecode for null-pointer paths, unclosed resources, mutable exposures, and constructor leak vulnerabilities. Filtered via `spotbugs-exclude.xml` for generated MapStruct mappers and compatibility stubs.
@@ -58,9 +62,11 @@ We adopted **Option C**. The quality enforcement system consists of:
 ## Consequences
 
 ### Positive
+
 - **Guaranteed Coverage Baseline**: Pull requests failing to meet the 80% line or 70% branch threshold are automatically blocked by CI.
 - **Proactive Bug Prevention**: SpotBugs detects concurrency, null-pointer, and resource leaks during local compilation before committing.
 - **Standardized Developer Workflow**: Running `mvn clean verify` locally produces identical validation results to the GitHub Actions CI environment.
 
 ### Trade-offs & Mitigations
+
 - **Branch Coverage Sensitivity**: Writing idiomatic Java with complex branching requires corresponding unit test scenarios. We maintain dedicated unit test suites (`JwtAuthenticationFilterTest`, `IdempotencyFilterTest`, `UserControllerTest`, `SecurityUtilsTest`) covering all conditional branches.
