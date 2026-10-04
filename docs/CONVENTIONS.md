@@ -38,6 +38,7 @@ This document outlines the coding standards, repository conventions, Git workflo
 
   [optional body explaining rationale]
   ```
+
   - **Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `ci`.
   - **Example**: `feat(domain): replace Double balance with BigDecimal in User entity`
 - **PR Size**: Keep PRs small and scoped to a single sub-phase (target: <500 lines of code changed).

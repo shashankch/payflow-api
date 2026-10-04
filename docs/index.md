@@ -151,6 +151,7 @@ service -> ai_resilience.r4j: "Rate Limiting Guard"
     # Start server with active 'local' profile (H2 in-memory, port 8080)
     mvn spring-boot:run
     ```
+
     - **Swagger UI Interactive Docs**: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
     - **OpenAPI 3.0 JSON Specification**: [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs)
     - **H2 Console**: [http://localhost:8080/h2-console](http://localhost:8080/h2-console) (`jdbc:h2:mem:payupidb`, Credentials: `user` / `user`)
@@ -160,6 +161,7 @@ service -> ai_resilience.r4j: "Rate Limiting Guard"
     # Spin up complete distributed stack (Postgres, Redis, Kafka, Ollama, Prometheus, Grafana)
     docker compose up -d --build
     ```
+
     - **Payflow API**: [http://localhost:8080](http://localhost:8080)
     - **Prometheus**: [http://localhost:9090](http://localhost:9090)
     - **Grafana**: [http://localhost:3000](http://localhost:3000) (Credentials: `admin` / `admin`)
@@ -170,15 +172,17 @@ service -> ai_resilience.r4j: "Rate Limiting Guard"
     # Deploy declarative manifests to Kubernetes cluster
     kubectl apply -f k8s/
     ```
-    - ConfigMap, Secrets, Deployment with rolling updates
-    - Horizontal Pod Autoscaler (HPA) min 2, max 10
-    - Pod Disruption Budget (PDB) minAvailable: 1
+
+    - **Cluster Workloads**: ConfigMap, Secrets, and Deployment with rolling update strategy
+    - **Horizontal Pod Autoscaler (HPA)**: Min 2, max 10 replicas based on 70% CPU / 80% Memory
+    - **High Availability**: Pod Disruption Budget (PDB) with `minAvailable: 1`
 
 === "Quality Verification Pipeline"
     ```bash
     # Execute full verification pipeline: Spotless, Checkstyle, SpotBugs, Tests & JaCoCo gates
     mvn clean verify -DskipITs
     ```
+
     - **Spotless**: Code formatting verification
     - **Checkstyle**: Enterprise static code linting
     - **SpotBugs**: Bytecode bug pattern analysis

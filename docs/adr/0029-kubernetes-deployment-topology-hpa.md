@@ -9,6 +9,7 @@
 Production payment systems must guarantee high availability (99.99%), zero-downtime rolling updates, automated resilience against pod/node failures, and dynamic elasticity to handle unpredictable payment traffic spikes (e.g., peak salary credit days or festive shopping sales). 
 
 Deploying bare-metal or single-instance application containers risks service disruptions during deployments or traffic surges. The operational architecture required a standard cloud-native Kubernetes deployment topology incorporating:
+
 1. Declarative separation between configuration (`ConfigMap`), credentials (`Secret`), and workload lifecycle (`Deployment`).
 2. Coordination of graceful shutdown to prevent dropping in-flight HTTP transactions during rolling redeployments or scale-down events.
 3. Proactive health probe integration distinguishing between pod startup, deadlocks (liveness), and traffic readiness (readiness).
@@ -17,14 +18,17 @@ Deploying bare-metal or single-instance application containers risks service dis
 ## Considered Options
 
 ### Option A: Static Replica Deployment without Probes or HPA
+
 - **Pros**: Simplest manifest configuration.
 - **Cons**: Prone to downtime during rolling updates (traffic routed to non-ready pods); unable to adapt to transaction bursts; manual operator intervention required for scaling.
 
 ### Option B: Cloud-Managed Serverless Container Platform (e.g., AWS Fargate / Google Cloud Run)
+
 - **Pros**: Fully managed infrastructure; automatic scaling to zero.
 - **Cons**: High cold-start latencies for JVM applications; vendor lock-in; inflexible networking constraints with stateful backing databases and Apache Kafka clusters.
 
 ### Option C: Declarative Kubernetes Topology with Rolling Updates, Graceful PreStop Hooks, HPA, and PDB (Chosen)
+
 - **Pros**:
   - Cloud-agnostic and portable across any certified Kubernetes cluster (EKS, GKE, AKS, OpenShift, or local Minikube/Kind).
   - High availability via zero-downtime `RollingUpdate` (`maxSurge: 1`, `maxUnavailable: 0`).
@@ -54,9 +58,11 @@ We adopted **Option C**. The architecture includes:
 ## Consequences
 
 ### Positive
+
 - **Zero-Downtime Deployments**: New pods achieve readiness verification prior to old pod retirement.
 - **Traffic Burst Protection**: HPA automatically expands application capacity under sudden high-volume UPI transaction surges.
 - **Transaction Safety**: Graceful shutdown coordination eliminates dropped connections and incomplete transactions during pod cycling.
 
 ### Trade-offs & Mitigations
+
 - **Deployment Duration**: The 10s pre-stop sleep intentionally extends rolling update completion time by a few seconds; this trade-off is essential for 100% transaction integrity.

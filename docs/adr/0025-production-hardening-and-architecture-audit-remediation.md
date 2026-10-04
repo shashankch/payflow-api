@@ -10,32 +10,42 @@ Following an end-to-end Principal Engineer architectural and code audit of the P
 
 1. **Production JWT Secret Fallback Vulnerability (`SEC-01`)**:
    In `JwtTokenProvider`, if the `PAYFLOW_SECURITY_JWT_SECRET` environment variable was omitted in a production environment, the application silently fell back to a hardcoded, publicly visible test secret, allowing attackers to forge arbitrary user and admin tokens.
+
 2. **Broken Object Level Authorization & Balance Enumeration (`SEC-02`)**:
    Endpoints `GET /api/v1/users` (bulk user directory) and `GET /api/v1/users/balance/{amount}` (balance threshold querying) lacked administrative role constraints, permitting any authenticated standard user to harvest customer profiles, phone numbers, and account balances.
+
 3. **Transport & Frame Security Exposures (`SEC-03`, `SEC-04`)**:
    Spring Security configuration allowed credential inclusion (`allowCredentials = true`) on wildcard origins (`allowedOrigins = *`), violating the Fetch/CORS specification and opening credential exposure risks. Additionally, `frameOptions().disable()` disabled clickjacking defenses globally.
+
 4. **Spring 6.1+ / Spring 7 Parameter Validation Handling (`ARCH-02`)**:
    Method parameter validation violations (`@Min`, `@Max`, `@PathVariable`, `@RequestParam`) in Spring Framework 6.1+ / 7 throw `HandlerMethodValidationException` rather than `MethodArgumentNotValidException`, which resulted in generic unhandled 500 errors instead of standardized RFC 9457 `ProblemDetail` responses.
+
 5. **Unbounded Idempotency Key Injection (`ARCH-03`)**:
    The `Idempotency-Key` header was accepted without length or character constraints, allowing arbitrarily large strings to cause database column overflows (`VARCHAR(255)`) or resource exhaustion in distributed locks.
+
 6. **Unbounded Growth in Transactional Outbox Registry (`ARCH-04`)**:
    Spring Modulith persists completed event publications to the `event_publication` table. Without an automated maintenance job, this table grows indefinitely under high transfer volumes, degrading query performance and exhausting database storage.
+
 7. **Cache Stampede via Blanket Eviction (`PERF-01`)**:
    On every transfer, `@CacheEvict(value = {"users", "user_ledgers"}, allEntries = true)` wiped all user profiles and ledger histories across the entire application, causing heavy thundering-herd database queries under concurrent traffic.
+
 8. **Integration Test Execution Blindspot (`TEST-01`, `TEST-02`)**:
    `pom.xml` lacked `maven-failsafe-plugin`, causing all containerized integration tests (`*IT.java` covering concurrency, deadlock avoidance, and Kafka outbox delivery) to be bypassed during `mvn test` and CI builds. Furthermore, repository slice tests (`@DataJpaTest`) were absent for `TransactionRepository` and `IdempotencyRepository`.
 
 ## Considered Options
 
 ### For Cache Eviction:
+
 - **Option A (Global Invalidation)**: Continue using `@CacheEvict(allEntries = true)`. Simple, but causes massive cache stampedes and database churn in production.
 - **Option B (Targeted Invalidation — Chosen)**: Programmatically evict only keys belonging to the transaction participants (`sender` and `receiver` by `id`, `upiId`, and `referenceId`, plus sender/receiver ledger caches) via `CacheManager`. Unrelated user cache entries remain untouched.
 
 ### For Outbox Cleanup:
+
 - **Option A (Custom SQL Cron)**: Run custom native SQL `DELETE FROM event_publication WHERE completion_date < ...`. Bypasses Spring Modulith abstraction and couples cleanup to vendor-specific table schemas.
 - **Option B (Spring Modulith CompletedEventPublications — Chosen)**: Inject `CompletedEventPublications` from `spring-modulith-events-api` and invoke `deletePublicationsOlderThan(Duration.ofDays(7))` via a scheduled `@Transactional` job at 02:00 AM UTC.
 
 ### For Production JWT Protection:
+
 - **Option A (Rely on Deployment Checklist)**: Hope operators set `PAYFLOW_SECURITY_JWT_SECRET`. Fragile and prone to human error.
 - **Option B (Fail-Fast Environment Invariant Check — Chosen)**: Inject `Environment` into `JwtTokenProvider` constructor. When `environment.matchesProfiles("prod")`, verify secret is non-null, distinct from `DEFAULT_SECRET`, and $\ge$ 256 bits (32 chars); throw `IllegalStateException` on bootstrap otherwise.
 
@@ -64,6 +74,7 @@ We selected the production-grade options across all audit dimensions:
 ## Consequences
 
 ### Positive
+
 - **Zero Authentication Bypass**: Production deployment cannot start with insecure default JWT secrets.
 - **Zero BOLA Vulnerability**: Directory scraping and balance enumeration are strictly blocked for non-admin tokens.
 - **Stable Cache Hit Ratio**: Transfers no longer wipe cached sessions of unrelated users.
@@ -71,5 +82,6 @@ We selected the production-grade options across all audit dimensions:
 - **Guaranteed Integration Verification**: All Testcontainers tests run consistently in standard Maven verify lifecycles.
 
 ### Negative / Trade-offs
+
 - Targeted cache eviction requires explicit coordination of multiple key formats (`upi:`, `ref:`, `id:`) rather than a single blanket eviction annotation.
 - Administrative operations require minting admin tokens with `ROLE_ADMIN` authority in test environments (`@WithMockUser(roles = "ADMIN")`).

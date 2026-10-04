@@ -30,11 +30,11 @@ The complete, class-by-class interactive JaCoCo coverage report is automatically
   </a>
 </p>
 
-> [!NOTE]
-> Every page within the interactive JaCoCo report features an integrated, persistent top navigation header allowing seamless single-click bidirectional navigation:
->
-> - `&larr; Back to Documentation Portal`: Returns directly to the root documentation homepage.
-> - `📊 Coverage Quality Gates`: Returns directly to this Quality Gate & Thresholds summary page.
+!!! note "Seamless Navigation"
+    Every page within the interactive JaCoCo report features an integrated, persistent top navigation header allowing seamless single-click bidirectional navigation:
+
+    - **← Back to Documentation Portal**: Returns directly to the root documentation homepage.
+    - **📊 Coverage Quality Gates**: Returns directly to this Quality Gate & Thresholds summary page.
 
 ---
 
@@ -74,7 +74,9 @@ Following industry best practices ([ADR-030](adr/0030-ci-cd-quality-gates-jacoco
       link.href = "/coverage-report/";
     }
   }
-  if (document.readyState === "loading") {
+  if (typeof document$ !== "undefined") {
+    document$.subscribe(adjustCoverageLink);
+  } else if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", adjustCoverageLink);
   } else {
     adjustCoverageLink();
