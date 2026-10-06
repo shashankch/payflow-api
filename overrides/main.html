@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block libs %}
+  <script>
+    /* ==========================================================================
+       Fix Material for MkDocs instant navigation SVG href TypeError:
+       Material's internal vi() normalizes URLs via `t[r] = t[r]` on [href], [src].
+       SVG elements (<image>, <use>, etc.) have a read-only SVGAnimatedString `href`
+       accessor. Assigning to it in strict mode throws TypeError and breaks SPA navigation.
+       ========================================================================== */
+    (function () {
+      function patchSvgHref(proto) {
+        if (!proto) return;
+        try {
+          var desc = Object.getOwnPropertyDescriptor(proto, "href");
+          if (desc && desc.get && !desc.set && desc.configurable) {
+            Object.defineProperty(proto, "href", {
+              get: desc.get,
+              set: function (val) {
+                if (typeof val === "string") {
+                  this.setAttribute("href", val);
+                } else if (val && typeof val.baseVal === "string") {
+                  this.setAttribute("href", val.baseVal);
+                }
+              },
+              configurable: true,
+              enumerable: desc.enumerable
+            });
+          }
+        } catch (e) {}
+      }
+      var targets = [
+        typeof SVGElement !== "undefined" ? SVGElement.prototype : null,
+        typeof SVGImageElement !== "undefined" ? SVGImageElement.prototype : null,
+        typeof SVGUseElement !== "undefined" ? SVGUseElement.prototype : null,
+        typeof SVGAElement !== "undefined" ? SVGAElement.prototype : null
+      ];
+      targets.forEach(function (t) {
+        var curr = t;
+        while (curr && curr !== Object.prototype) {
+          patchSvgHref(curr);
+          curr = Object.getPrototypeOf(curr);
+        }
+      });
+    })();
+  </script>
+  {{ super() }}
+{% endblock %}

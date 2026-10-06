@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed - MkDocs Instant Navigation, Diagram Controls & Documentation Typography
+- Resolved Material for MkDocs instant navigation failure caused by `TypeError: Cannot set property href of #<SVGImageElement> which has only a getter` by defining a safe SVG `href` setter polyfill in `overrides/main.html` and `docs/javascripts/extra.js`.
+- Restricted diagram zoom/pan controls strictly to architectural diagram images (`img[src*="diagrams/"]`), preventing unintended zoom wrapping on inline Twemoji emojis and status badges.
+- Eliminated artificial container height restrictions (`max-height: 680px`) on diagram viewports, ensuring diagrams display fully without clipping by box borders.
+- Styled diagram interactive toolbar to display cleanly on hover only (`.diagram-wrapper:hover .diagram-controls`).
+- Refined documentation typography to standard developer portal proportions (`font-size: 0.8rem` / 14.5px, line-height 1.6, compact table padding, and proportional heading scales).
+- Consolidated code coverage portal documentation to a single canonical reference linking directly to the live interactive JaCoCo report at `/payflow-api/coverage-report/`.
+
 ### Added - Documentation Modernization & D2 Engine Migration
 - Replaced legacy Docsify single-page app with **Material for MkDocs** static site generator (`mkdocs-material` 9.5+) featuring instantaneous client search, dark/light theme switching, and responsive design.
 - Redrew and modernized all 12 architectural topology, sequence, and data flow diagrams across `docs/ARCHITECTURE.md`, `README.md`, and `docs/index.md` using the declarative **D2 diagramming engine** (`docs/diagrams/*.d2`) with offline vector icons and Eclipse Layout Kernel (ELK) collision-free routing.

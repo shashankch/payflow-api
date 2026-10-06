@@ -1,6 +1,7 @@
 /* ==========================================================================
    Payflow API — MkDocs Material Theme Enhancements & Polish
-   High-contrast typography, dark mode visibility, diagram zoom & tab styles
+   Crisp typography, compact documentation standards, dark mode contrast,
+   hover diagram zoom controls, and responsive spacious viewports.
    ========================================================================== */
 
 /* --------------------------------------------------------------------------
@@ -87,28 +88,29 @@
 }
 
 /* --------------------------------------------------------------------------
-   Readability, List Typography & Content Spacing Polish
+   Compact Typography & Quality Documentation Standards
+   (Reduced overall text content size to standard clean proportions)
    -------------------------------------------------------------------------- */
 .md-typeset {
-  font-size: 0.92rem;
-  line-height: 1.8;
+  font-size: 0.8rem;
+  line-height: 1.6;
 }
 
 .md-typeset p {
-  line-height: 1.8;
-  margin-bottom: 1.25rem;
+  line-height: 1.6;
+  margin-bottom: 0.85rem;
 }
 
 .md-typeset ul,
 .md-typeset ol {
-  margin-top: 0.75rem;
-  margin-bottom: 1.4rem;
-  padding-left: 1.75rem;
+  margin-top: 0.35rem;
+  margin-bottom: 0.85rem;
+  padding-left: 1.4rem;
 }
 
 .md-typeset li {
-  margin-bottom: 0.6rem;
-  line-height: 1.75;
+  margin-bottom: 0.25rem;
+  line-height: 1.55;
 }
 
 .md-typeset li:last-child {
@@ -116,41 +118,49 @@
 }
 
 .md-typeset li > p {
-  margin-top: 0.45rem;
-  margin-bottom: 0.6rem;
+  margin-top: 0.2rem;
+  margin-bottom: 0.35rem;
 }
 
 .md-typeset li > ul,
 .md-typeset li > ol {
-  margin-top: 0.45rem;
-  margin-bottom: 0.6rem;
+  margin-top: 0.2rem;
+  margin-bottom: 0.35rem;
 }
 
 .md-typeset h1 {
-  margin-top: 1.5rem;
-  margin-bottom: 1.5rem;
-  letter-spacing: -0.025em;
+  font-size: 1.75rem;
+  margin-top: 1.25rem;
+  margin-bottom: 1rem;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
 }
 
 .md-typeset h2 {
-  margin-top: 2.75rem;
-  margin-bottom: 1.1rem;
-  padding-bottom: 0.4rem;
+  font-size: 1.3rem;
+  margin-top: 1.8rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.35rem;
   border-bottom: 1px solid var(--diagram-border);
+  line-height: 1.35;
 }
 
 .md-typeset h3 {
-  margin-top: 2.2rem;
-  margin-bottom: 0.9rem;
+  font-size: 1.05rem;
+  margin-top: 1.35rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.4;
 }
 
 .md-typeset h4 {
-  margin-top: 1.75rem;
-  margin-bottom: 0.75rem;
+  font-size: 0.92rem;
+  margin-top: 1.1rem;
+  margin-bottom: 0.4rem;
+  line-height: 1.4;
 }
 
 .md-typeset hr {
-  margin: 2.75rem 0;
+  margin: 1.8rem 0;
   border-bottom: 1px solid var(--diagram-border);
   opacity: 0.7;
 }
@@ -158,26 +168,30 @@
 /* Admonitions & Callouts Polish */
 .md-typeset .admonition {
   border-radius: 8px;
-  margin: 1.75rem 0;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+  margin: 1.25rem 0;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.04);
 }
 
 .md-typeset .admonition-title {
   font-weight: 700;
-  padding: 0.65rem 1rem;
+  font-size: 0.82rem;
+  padding: 0.55rem 0.9rem;
 }
 
 .md-typeset details {
   border-radius: 8px;
   border: 1px solid var(--diagram-border);
-  margin: 1.5rem 0;
+  margin: 1.1rem 0;
+  font-size: 0.78rem;
   background: var(--diagram-bg);
 }
 
 .md-typeset details summary {
   cursor: pointer;
   font-weight: 600;
-  padding: 0.65rem 1rem;
+  padding: 0.55rem 0.9rem;
   color: var(--md-primary-fg-color);
 }
 
@@ -191,23 +205,23 @@
   border: 1px solid var(--table-border);
   border-radius: 6px;
   overflow: hidden;
-  margin: 1.5rem 0;
-  font-size: 0.88rem;
+  margin: 1.1rem 0;
+  font-size: 0.78rem;
 }
 
 .md-typeset table:not([class]) th {
   background: var(--table-head-bg);
   color: var(--md-default-fg-color);
   font-weight: 600;
-  padding: 0.85rem 1rem;
+  padding: 0.6rem 0.85rem;
   border: 1px solid var(--table-border);
   text-align: left;
 }
 
 .md-typeset table:not([class]) td {
-  padding: 0.85rem 1rem;
+  padding: 0.55rem 0.85rem;
   border: 1px solid var(--table-border);
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
 .md-typeset table:not([class]) tr:nth-child(even) {
@@ -231,6 +245,30 @@
   transform: translateY(-1px);
 }
 
+/* Emojis (Twemoji): clean inline text sizing with zero zoom, border, or hover transform */
+.twemoji,
+.emoji,
+.md-typeset .twemoji,
+.md-typeset .emoji,
+.md-typeset p a img.twemoji,
+.md-typeset p a img.emoji {
+  display: inline-block !important;
+  vertical-align: -0.15em !important;
+  width: 1.15em !important;
+  height: 1.15em !important;
+  max-width: 1.15em !important;
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  transform: none !important;
+  margin: 0 0.1em !important;
+}
+
+.md-typeset p a img.twemoji:hover,
+.md-typeset p a img.emoji:hover {
+  transform: none !important;
+}
+
 /* Center all standalone content images & architecture diagrams */
 .md-typeset p > img:only-child {
   display: block;
@@ -240,71 +278,82 @@
 }
 
 /* --------------------------------------------------------------------------
-   Mermaid Diagrams & Interactive Zoom Controls
+   Diagrams & Interactive Zoom Controls
+   (Generous viewport, no clipping border, controls appear ONLY on hover)
    -------------------------------------------------------------------------- */
 .mermaid-wrapper,
 .diagram-wrapper {
   position: relative;
   background: var(--diagram-bg);
   border: 1px solid var(--diagram-border);
-  border-radius: 8px;
-  margin: 2rem 0;
-  padding: 1.5rem 1rem;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+  margin: 1.75rem 0;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.05);
   overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.mermaid-wrapper:hover,
+.diagram-wrapper:hover {
+  border-color: var(--md-primary-fg-color--light);
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.08);
 }
 
 .mermaid-viewport,
 .diagram-viewport {
-  overflow: auto;
+  width: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 380px;
-  max-height: 680px;
-  cursor: grab;
-  user-select: none;
-  padding: 1rem 0;
-}
-
-.mermaid-viewport:active,
-.diagram-viewport:active {
-  cursor: grabbing;
-}
-
-.mermaid-viewport .mermaid {
-  transform-origin: center top;
-  transition: transform 0.15s ease-out;
-  display: flex;
-  justify-content: center;
-  width: 100%;
+  min-height: auto;
+  max-height: none; /* No artificial clipping height that hides diagram */
+  overflow: visible;
+  padding: 0;
+  box-sizing: border-box;
 }
 
 .mermaid-viewport .mermaid svg,
 .diagram-viewport img,
 .diagram-viewport svg {
   max-width: 100% !important;
+  width: 100%;
   height: auto;
-  transform-origin: center top;
+  max-height: none;
+  transform-origin: center center;
   transition: transform 0.15s ease-out;
   display: block;
   margin: 0 auto;
 }
 
-/* Diagram Interactive Toolbar */
+/* Diagram Interactive Toolbar — HIDDEN BY DEFAULT, SHOWN ONLY ON HOVER */
 .diagram-controls {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  top: 14px;
+  right: 14px;
   display: flex;
-  gap: 6px;
-  background: rgba(15, 23, 42, 0.85);
+  gap: 4px;
+  background: rgba(15, 23, 42, 0.9);
   backdrop-filter: blur(8px);
-  padding: 4px 8px;
+  -webkit-backdrop-filter: blur(8px);
+  padding: 4px 6px;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   z-index: 10;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
+}
+
+.diagram-wrapper:hover .diagram-controls,
+.mermaid-wrapper:hover .diagram-controls {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
 }
 
 .zoom-btn {
@@ -429,7 +478,7 @@
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid var(--diagram-border);
-  margin: 1.5rem 0;
+  margin: 1.1rem 0;
 }
 
 .md-typeset .tabbed-labels {
@@ -439,7 +488,7 @@
 }
 
 .md-typeset .tabbed-content {
-  padding: 1.25rem 1.5rem;
+  padding: 1rem 1.25rem;
 }
 
 /* --------------------------------------------------------------------------
@@ -447,8 +496,8 @@
    -------------------------------------------------------------------------- */
 .md-typeset code {
   border-radius: 4px;
-  padding: 0.18em 0.45em;
-  font-size: 0.86em;
+  padding: 0.15em 0.4em;
+  font-size: 0.82em;
 }
 
 [data-md-color-scheme="default"] .md-typeset code {
@@ -467,5 +516,5 @@
   border-radius: 8px;
   border: 1px solid var(--diagram-border);
   overflow: hidden;
-  margin: 1.5rem 0;
+  margin: 1.1rem 0;
 }

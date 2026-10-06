@@ -1,27 +1,57 @@
 /* ==========================================================================
    Payflow API — MkDocs Material Interactive Enhancements
-   Diagram zoom/pan controls, fullscreen modal viewer, dynamic theme sync,
-   and instant navigation lifecycle hooks.
+   - SVG href setter polyfill (resolves instant navigation TypeError)
+   - Diagram hover zoom/pan controls, fullscreen modal viewer
+   - Dynamic coverage link path synchronization
    ========================================================================== */
 
 (function () {
   "use strict";
 
-  // Determine current theme scheme
-  function getCurrentScheme() {
-    const palette = typeof __md_get !== "undefined" ? __md_get("__palette") : null;
-    if (palette && palette.color && palette.color.scheme === "slate") {
-      return "slate";
+  /* --------------------------------------------------------------------------
+     1. Fix Material for MkDocs Instant Navigation with SVG href/src
+     -------------------------------------------------------------------------- */
+  (function fixSvgHrefSetter() {
+    function patchSvgHref(proto) {
+      if (!proto) return;
+      try {
+        var desc = Object.getOwnPropertyDescriptor(proto, "href");
+        if (desc && desc.get && !desc.set && desc.configurable) {
+          Object.defineProperty(proto, "href", {
+            get: desc.get,
+            set: function (val) {
+              if (typeof val === "string") {
+                this.setAttribute("href", val);
+              } else if (val && typeof val.baseVal === "string") {
+                this.setAttribute("href", val.baseVal);
+              }
+            },
+            configurable: true,
+            enumerable: desc.enumerable
+          });
+        }
+      } catch (e) {}
     }
-    const htmlScheme = document.documentElement.getAttribute("data-md-color-scheme");
-    if (htmlScheme === "slate") return "slate";
-    if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
-      return "slate";
-    }
-    return "default";
-  }
 
-  // Ensure modal element exists
+    var targets = [
+      typeof SVGElement !== "undefined" ? SVGElement.prototype : null,
+      typeof SVGImageElement !== "undefined" ? SVGImageElement.prototype : null,
+      typeof SVGUseElement !== "undefined" ? SVGUseElement.prototype : null,
+      typeof SVGAElement !== "undefined" ? SVGAElement.prototype : null
+    ];
+
+    targets.forEach(function (t) {
+      var curr = t;
+      while (curr && curr !== Object.prototype) {
+        patchSvgHref(curr);
+        curr = Object.getPrototypeOf(curr);
+      }
+    });
+  })();
+
+  /* --------------------------------------------------------------------------
+     2. Fullscreen Modal Viewer for Diagrams
+     -------------------------------------------------------------------------- */
   function ensureModal() {
     let modal = document.getElementById("diagram-fullscreen-modal");
     if (!modal) {
@@ -84,7 +114,9 @@
     return modal;
   }
 
-  // Attach zoom, pan, and fullscreen toolbar to a diagram image or svg
+  /* --------------------------------------------------------------------------
+     3. Diagram Controls & Viewport Wrapping
+     -------------------------------------------------------------------------- */
   function attachDiagramControls(targetEl) {
     if (targetEl.closest(".diagram-wrapper") || targetEl.closest(".mermaid-wrapper")) return;
 
@@ -106,7 +138,12 @@
     viewport.className = "diagram-viewport";
 
     const parent = targetEl.parentNode;
-    parent.insertBefore(wrapper, targetEl);
+    if (parent && parent.tagName.toLowerCase() === "p" && parent.childNodes.length === 1) {
+      parent.parentNode.insertBefore(wrapper, parent);
+      parent.remove();
+    } else if (parent) {
+      parent.insertBefore(wrapper, targetEl);
+    }
     viewport.appendChild(targetEl);
     wrapper.appendChild(controls);
     wrapper.appendChild(viewport);
@@ -117,23 +154,32 @@
 
     function updateScale(newScale) {
       currentScale = Math.min(Math.max(0.4, newScale), 3.5);
-      targetEl.style.transform = `scale(${currentScale})`;
+      if (Math.abs(currentScale - 1.0) < 0.05) {
+        currentScale = 1.0;
+        targetEl.style.transform = "none";
+        viewport.style.overflow = "visible";
+        viewport.style.cursor = "default";
+      } else {
+        targetEl.style.transform = `scale(${currentScale})`;
+        viewport.style.overflow = "auto";
+        viewport.style.cursor = "grab";
+      }
     }
 
     controls.querySelector('[data-action="zoom-in"]').addEventListener("click", (e) => {
       e.preventDefault();
-      updateScale(currentScale + 0.2);
+      updateScale(currentScale + 0.25);
     });
 
     controls.querySelector('[data-action="zoom-out"]').addEventListener("click", (e) => {
       e.preventDefault();
-      updateScale(currentScale - 0.2);
+      updateScale(currentScale - 0.25);
     });
 
     controls.querySelector('[data-action="reset"]').addEventListener("click", (e) => {
       e.preventDefault();
       updateScale(1.0);
-      viewport.scrollLeft = (targetEl.scrollWidth - viewport.clientWidth) / 2;
+      viewport.scrollLeft = 0;
       viewport.scrollTop = 0;
     });
 
@@ -163,18 +209,23 @@
       modal.classList.add("active");
     });
 
-    // Mouse drag panning
+    // Mouse drag panning when zoomed
     viewport.addEventListener("mousedown", (e) => {
-      if (e.target.closest(".diagram-controls")) return;
+      if (currentScale <= 1.0 || e.target.closest(".diagram-controls")) return;
       isDragging = true;
+      viewport.style.cursor = "grabbing";
       startX = e.pageX - viewport.offsetLeft;
       startY = e.pageY - viewport.offsetTop;
       scrollLeft = viewport.scrollLeft;
       scrollTop = viewport.scrollTop;
     });
 
-    viewport.addEventListener("mouseleave", () => { isDragging = false; });
-    viewport.addEventListener("mouseup", () => { isDragging = false; });
+    window.addEventListener("mouseup", () => {
+      if (isDragging) {
+        isDragging = false;
+        viewport.style.cursor = currentScale > 1.0 ? "grab" : "default";
+      }
+    });
 
     viewport.addEventListener("mousemove", (e) => {
       if (!isDragging) return;
@@ -189,20 +240,22 @@
 
     // Wheel zoom
     viewport.addEventListener("wheel", (e) => {
-      if (e.ctrlKey || e.metaKey || e.altKey) {
+      if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
-        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        const delta = e.deltaY > 0 ? -0.15 : 0.15;
         updateScale(currentScale + delta);
       }
     }, { passive: false });
   }
 
-  // Scan and initialize all diagram images in page content
+  /* --------------------------------------------------------------------------
+     4. Diagram Initialization & Scan
+     -------------------------------------------------------------------------- */
   function initDiagramZoom() {
-    const images = document.querySelectorAll(
-      '.md-content img[src*="diagrams/"], .md-content img[src$=".svg"]:not([src*="img.shields.io"]):not([src*="icons/"])'
-    );
+    // Strictly target architectural diagram images under diagrams/ (never emojis or badges)
+    const images = document.querySelectorAll('.md-content img[src*="diagrams/"]');
     images.forEach((img) => {
+      if (img.classList.contains("twemoji") || img.classList.contains("emoji") || img.closest(".twemoji")) return;
       attachDiagramControls(img);
     });
 
@@ -212,7 +265,9 @@
     });
   }
 
-  // Dynamic coverage report link adjuster
+  /* --------------------------------------------------------------------------
+     5. Dynamic Coverage Link Path Synchronization
+     -------------------------------------------------------------------------- */
   function adjustCoverageLink() {
     const link = document.getElementById("jacoco-direct-link");
     if (!link) return;
@@ -224,20 +279,20 @@
     }
   }
 
-  // Master setup function executing on initial load & instant navigation
+  /* --------------------------------------------------------------------------
+     6. Master Setup & SPA Lifecycle Subscription
+     -------------------------------------------------------------------------- */
   function setupAll() {
     initDiagramZoom();
     adjustCoverageLink();
   }
 
-  // Register with Material for MkDocs instant navigation observable
   function registerInstantObserver() {
     if (typeof document$ !== "undefined") {
       document$.subscribe(() => {
         setupAll();
       });
     } else {
-      // Poll briefly for document$ if MkDocs bundle.js is still initializing
       let attempts = 0;
       const interval = setInterval(() => {
         attempts++;
@@ -253,7 +308,6 @@
     }
   }
 
-  // Initial execution
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => {
       setupAll();
@@ -264,7 +318,6 @@
     registerInstantObserver();
   }
 
-  // Safety fallback for popstate and hash navigation
   window.addEventListener("popstate", () => {
     setTimeout(setupAll, 50);
   });

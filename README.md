@@ -146,8 +146,7 @@ service -> ai_resilience.r4j: "Rate Limiting Guard"
 | Document | Description |
 | :--- | :--- |
 | 🚀 **[Live Documentation Hub](https://shashankch.github.io/payflow-api/)** | Material for MkDocs documentation portal with full-text search, D2 diagram rendering, and dark mode |
-| 📊 **[Code Coverage & Quality Gates](https://shashankch.github.io/payflow-api/coverage/)** | Automated CI/CD quality gates, bundle-level line/branch thresholds, and SpotBugs audit |
-| 🚀 **[Interactive JaCoCo Report](https://shashankch.github.io/payflow-api/coverage-report/)** | Live interactive code coverage drilldown (90% Line, 73% Branch) generated per-build |
+| 📊 **[Code Coverage & Quality Gates](https://shashankch.github.io/payflow-api/coverage/)** | Automated CI/CD quality gates and live interactive JaCoCo coverage report (90% Line, 73% Branch) |
 | 📘 **[System Architecture](docs/ARCHITECTURE.md)** | Deep-dive concurrency models, pessimistic locking mechanics, test pyramid |
 | 🛡️ **[Security Architecture & Threat Model](docs/ARCHITECTURE.md#18-security-architecture-and-threat-model)** | Zero-Trust filter chain, STRIDE threat model, IAM policy matrix, financial concurrency controls |
 | 🔒 **[Security Policy](SECURITY.md)** | Open-source vulnerability reporting guidelines and project security posture |
