@@ -6,6 +6,7 @@ repo_name: shashankch/payflow-api
 
 theme:
   name: material
+  custom_dir: overrides
   language: en
   icon:
     logo: material/currency-inr
@@ -133,7 +134,6 @@ nav:
       - Contributing Guide: CONTRIBUTING.md
       - MIT License: LICENSE.md
   - Quality & Telemetry:
-      - 📊 Code Coverage & Quality Gates: coverage.md
-      - 🚀 Live JaCoCo Interactive Report: https://shashankch.github.io/payflow-api/coverage-report/
+      - 📊 Code Coverage: coverage.md
       - 🔄 CI Pipeline Status: https://github.com/shashankch/payflow-api/actions/workflows/ci.yml
       - 🐙 GitHub Repository: https://github.com/shashankch/payflow-api

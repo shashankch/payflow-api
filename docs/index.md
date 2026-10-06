@@ -130,8 +130,7 @@ service -> ai_resilience.r4j: "Rate Limiting Guard"
 
 | Document | Description |
 | :--- | :--- |
-| 📊 **[Code Coverage & Quality Gates](coverage.md)** | Automated CI/CD quality gates, bundle-level line/branch thresholds, and SpotBugs audit |
-| 🚀 **[Interactive JaCoCo Report](https://shashankch.github.io/payflow-api/coverage-report/)** | Live interactive code coverage drilldown (90% Line, 73% Branch) generated per-build |
+| 📊 **[Code Coverage](coverage.md)** | Automated CI/CD quality gates and live interactive JaCoCo coverage report (90% Line, 73% Branch) |
 | 📘 **[System Architecture](ARCHITECTURE.md)** | Deep-dive concurrency models, pessimistic locking mechanics, test pyramid |
 | 🛡️ **[Security Architecture & Threat Model](ARCHITECTURE.md#18-security-architecture-and-threat-model)** | Zero-Trust filter chain, STRIDE threat model, IAM policy matrix, financial concurrency controls |
 | 🌐 **[REST API Specification](API_SPECIFICATION.md)** | Complete REST endpoint contracts, schemas, RFC 9457 ProblemDetail payloads |
